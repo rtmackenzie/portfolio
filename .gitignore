@@ -1,0 +1,5 @@
+node_modules
+package-lock.json
+server/db/portfolio.db
+server/db/portfolio.db-wal
+server/db/portfolio.db-shm

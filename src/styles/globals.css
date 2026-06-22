@@ -1,0 +1,137 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: oklch(0.13 0.006 240);
+  --color-foreground: oklch(0.95 0.005 240);
+
+  --color-card: oklch(0.17 0.008 240);
+  --color-card-foreground: oklch(0.95 0.005 240);
+
+  --color-popover: oklch(0.17 0.008 240);
+  --color-popover-foreground: oklch(0.95 0.005 240);
+
+  --color-primary: oklch(0.62 0.19 250);
+  --color-primary-foreground: oklch(0.98 0 0);
+
+  --color-secondary: oklch(0.22 0.012 240);
+  --color-secondary-foreground: oklch(0.85 0.01 240);
+
+  --color-muted: oklch(0.22 0.012 240);
+  --color-muted-foreground: oklch(0.58 0.012 240);
+
+  --color-accent: oklch(0.25 0.015 240);
+  --color-accent-foreground: oklch(0.90 0.01 240);
+
+  --color-destructive: oklch(0.55 0.22 25);
+  --color-destructive-foreground: oklch(0.98 0 0);
+
+  --color-border: oklch(0.28 0.012 240);
+  --color-input: oklch(0.22 0.012 240);
+  --color-ring: oklch(0.62 0.19 250);
+
+  --color-success: oklch(0.60 0.18 142);
+  --color-warning: oklch(0.75 0.18 70);
+  --color-info: oklch(0.62 0.19 250);
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --radius: 0.5rem;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+}
+
+/* Light theme overrides */
+.light {
+  --color-background: oklch(0.98 0.002 240);
+  --color-foreground: oklch(0.12 0.012 240);
+
+  --color-card: oklch(1 0 0);
+  --color-card-foreground: oklch(0.12 0.012 240);
+
+  --color-popover: oklch(1 0 0);
+  --color-popover-foreground: oklch(0.12 0.012 240);
+
+  --color-primary: oklch(0.50 0.20 250);
+  --color-primary-foreground: oklch(0.98 0 0);
+
+  --color-secondary: oklch(0.94 0.005 240);
+  --color-secondary-foreground: oklch(0.20 0.012 240);
+
+  --color-muted: oklch(0.94 0.005 240);
+  --color-muted-foreground: oklch(0.48 0.012 240);
+
+  --color-accent: oklch(0.94 0.005 240);
+  --color-accent-foreground: oklch(0.20 0.012 240);
+
+  --color-border: oklch(0.88 0.008 240);
+  --color-input: oklch(0.94 0.005 240);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    min-height: 100vh;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-muted-foreground);
+  }
+}
+
+/* Utility classes for themed colours */
+@layer utilities {
+  .bg-background { background-color: var(--color-background); }
+  .bg-card { background-color: var(--color-card); }
+  .bg-primary { background-color: var(--color-primary); }
+  .bg-secondary { background-color: var(--color-secondary); }
+  .bg-muted { background-color: var(--color-muted); }
+  .bg-accent { background-color: var(--color-accent); }
+  .bg-destructive { background-color: var(--color-destructive); }
+  .bg-border { background-color: var(--color-border); }
+  .bg-input { background-color: var(--color-input); }
+
+  .text-foreground { color: var(--color-foreground); }
+  .text-card-foreground { color: var(--color-card-foreground); }
+  .text-primary { color: var(--color-primary); }
+  .text-primary-foreground { color: var(--color-primary-foreground); }
+  .text-secondary-foreground { color: var(--color-secondary-foreground); }
+  .text-muted-foreground { color: var(--color-muted-foreground); }
+  .text-accent-foreground { color: var(--color-accent-foreground); }
+  .text-destructive { color: var(--color-destructive); }
+  .text-success { color: var(--color-success); }
+  .text-warning { color: var(--color-warning); }
+
+  .border-border { border-color: var(--color-border); }
+  .border-input { border-color: var(--color-input); }
+  .border-primary { border-color: var(--color-primary); }
+
+  .ring-ring { --tw-ring-color: var(--color-ring); }
+
+  .rounded-sm { border-radius: var(--radius-sm); }
+  .rounded-md { border-radius: var(--radius-md); }
+  .rounded-lg { border-radius: var(--radius-lg); }
+}
