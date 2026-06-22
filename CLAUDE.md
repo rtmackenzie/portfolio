@@ -35,7 +35,7 @@ npm run client     # Vite only
 
 - **Frontend**: React 19 + TypeScript, Vite, Tailwind v4, React Router v7, TanStack Query v5
 - **Backend**: Express v5 via `tsx watch`, runs on :3001
-- **Database**: `better-sqlite3` — synchronous SQLite, no ORM. DB file is `portfolio.db` in project root (auto-created on first run)
+- **Database**: `better-sqlite3` — synchronous SQLite, no ORM. DB file is `server/db/portfolio.db` (auto-created on first run)
 - **Dev proxy**: Vite proxies `/api/*` → `http://localhost:3001`
 - **Production**: Express serves `dist/` statically; `npm run build` then `npm run server`
 
