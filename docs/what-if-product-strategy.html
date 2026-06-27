@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>What-If → Portfolio Intelligence · Product Strategy</title>
+<style>
+/* ============================================================= *
+ *  THEME TOKENS  — light "board-deck" default + dark override   *
+ * ============================================================= */
+:root{
+  --navy:#0b2545; --navy-2:#13315c; --teal:#0d9488; --teal-2:#0f766e;
+  --bg:#f4f6fb; --surface:#ffffff; --surface-2:#f8fafc; --surface-3:#eef2f8;
+  --ink:#0f1b2d; --ink-soft:#3b4a60; --ink-mute:#64748b;
+  --line:#e2e8f0; --line-2:#cbd5e1;
+  --accent:#0d9488; --accent-soft:#ccfbf1; --accent-ink:#115e59;
+  --gold:#b45309; --gold-soft:#fef3c7;
+  --good:#16a34a; --good-soft:#dcfce7;
+  --warn:#d97706; --warn-soft:#fef3c7;
+  --bad:#dc2626; --bad-soft:#fee2e2;
+  --info:#2563eb; --info-soft:#dbeafe;
+  --heat-1:#dcfce7; --heat-1i:#166534;
+  --heat-2:#d9f99d; --heat-2i:#3f6212;
+  --heat-3:#fef08a; --heat-3i:#854d0e;
+  --heat-4:#fed7aa; --heat-4i:#9a3412;
+  --heat-5:#fecaca; --heat-5i:#991b1b;
+  --shadow:0 1px 2px rgba(15,27,45,.06),0 8px 24px rgba(15,27,45,.06);
+  --shadow-lg:0 12px 40px rgba(15,27,45,.12);
+  --radius:14px; --radius-sm:9px;
+  --maxw:1180px;
+  --mono:"SFMono-Regular",ui-monospace,"Cascadia Code",Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+[data-theme="dark"]{
+  --navy:#0a1426; --navy-2:#0f2444; --teal:#2dd4bf; --teal-2:#14b8a6;
+  --bg:#0a1120; --surface:#111c30; --surface-2:#0d1628; --surface-3:#16233b;
+  --ink:#e8eef7; --ink-soft:#b6c2d4; --ink-mute:#8595ad;
+  --line:#22324c; --line-2:#2c405f;
+  --accent:#2dd4bf; --accent-soft:#0c3b36; --accent-ink:#5eead4;
+  --gold:#fbbf24; --gold-soft:#3a2c08;
+  --good:#34d399; --good-soft:#0e3a2a;
+  --warn:#fbbf24; --warn-soft:#3a2c08;
+  --bad:#f87171; --bad-soft:#3d1717;
+  --info:#60a5fa; --info-soft:#13294d;
+  --heat-1:#0e3a2a; --heat-1i:#6ee7b7;
+  --heat-2:#1f3d10; --heat-2i:#bef264;
+  --heat-3:#3a2f08; --heat-3i:#fde047;
+  --heat-4:#3d2710; --heat-4i:#fdba74;
+  --heat-5:#3d1717; --heat-5i:#fca5a5;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+  --shadow-lg:0 12px 40px rgba(0,0,0,.5);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+  font-size:15.5px;line-height:1.62;-webkit-font-smoothing:antialiased;}
+h1,h2,h3,h4{line-height:1.22;color:var(--ink);font-weight:700;letter-spacing:-.01em}
+h2{font-size:1.72rem;margin:0 0 .2em}
+h3{font-size:1.18rem;margin:1.6em 0 .5em}
+h4{font-size:1rem;margin:1.2em 0 .4em;color:var(--ink-soft)}
+p{margin:.5em 0 .9em;color:var(--ink-soft)}
+a{color:var(--teal);text-decoration:none}
+a:hover{text-decoration:underline}
+strong{color:var(--ink);font-weight:650}
+code{font-family:var(--mono);font-size:.86em;background:var(--surface-3);
+  padding:.1em .42em;border-radius:5px;color:var(--accent-ink)}
+small{color:var(--ink-mute)}
+ul,ol{margin:.5em 0 1em;padding-left:1.25em}
+li{margin:.32em 0;color:var(--ink-soft)}
+li::marker{color:var(--teal)}
+
+/* ============================================================= *
+ *  TOP BAR                                                       *
+ * ============================================================= */
+.topbar{position:sticky;top:0;z-index:50;background:var(--navy);color:#fff;
+  border-bottom:1px solid rgba(255,255,255,.08);box-shadow:0 2px 14px rgba(0,0,0,.18)}
+.topbar-in{max-width:var(--maxw);margin:0 auto;padding:11px 22px;display:flex;
+  align-items:center;gap:16px}
+.brand{display:flex;align-items:center;gap:11px;font-weight:700;font-size:.97rem;
+  letter-spacing:.02em;color:#fff}
+.brand .dot{width:11px;height:11px;border-radius:50%;
+  background:linear-gradient(135deg,var(--teal),#67e8f9);box-shadow:0 0 12px var(--teal)}
+.brand small{color:#9fb3cf;font-weight:500;letter-spacing:.04em}
+.topbar .spacer{flex:1}
+.tb-meta{color:#9fb3cf;font-size:.8rem;display:flex;gap:14px;align-items:center}
+.tb-meta .pin{color:#cbd9ec}
+.toggle{appearance:none;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);
+  color:#fff;font:inherit;font-size:.8rem;padding:6px 12px;border-radius:999px;cursor:pointer;
+  display:flex;align-items:center;gap:7px;transition:.18s}
+.toggle:hover{background:rgba(255,255,255,.14)}
+
+/* ============================================================= *
+ *  LAYOUT + SIDE NAV                                             *
+ * ============================================================= */
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;
+  grid-template-columns:248px minmax(0,1fr);gap:34px;padding:0 22px}
+.sidenav{position:sticky;top:74px;align-self:start;height:calc(100vh - 90px);
+  overflow-y:auto;padding:22px 4px 40px;font-size:.86rem}
+.sidenav .nav-head{font-size:.7rem;text-transform:uppercase;letter-spacing:.13em;
+  color:var(--ink-mute);font-weight:700;margin:0 10px 8px}
+.sidenav a{display:flex;gap:10px;align-items:baseline;padding:6.5px 10px;border-radius:8px;
+  color:var(--ink-soft);text-decoration:none;border-left:2px solid transparent;
+  transition:.14s;line-height:1.3}
+.sidenav a .n{color:var(--ink-mute);font-variant-numeric:tabular-nums;font-size:.78rem;
+  font-weight:600;min-width:16px}
+.sidenav a:hover{background:var(--surface-3);color:var(--ink)}
+.sidenav a.active{background:var(--accent-soft);color:var(--accent-ink);
+  border-left-color:var(--teal);font-weight:600}
+.sidenav a.active .n{color:var(--teal)}
+.content{padding:30px 0 90px;min-width:0}
+
+/* ============================================================= *
+ *  HERO / COVER                                                 *
+ * ============================================================= */
+.hero{background:linear-gradient(140deg,var(--navy) 0%,var(--navy-2) 62%,var(--teal-2) 165%);
+  color:#fff;border-radius:var(--radius);padding:40px 40px 34px;margin:8px 0 14px;
+  box-shadow:var(--shadow-lg);position:relative;overflow:hidden}
+.hero::after{content:"";position:absolute;right:-90px;top:-90px;width:340px;height:340px;
+  background:radial-gradient(circle,rgba(45,212,191,.28),transparent 65%);pointer-events:none}
+.hero .eyebrow{text-transform:uppercase;letter-spacing:.2em;font-size:.72rem;
+  color:#7fd9cb;font-weight:700;margin-bottom:14px}
+.hero h1{font-size:2.5rem;color:#fff;margin:0 0 .25em;max-width:18ch}
+.hero .lede{color:#c6d4e8;font-size:1.06rem;max-width:62ch;margin:0}
+.hero .hero-meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+.hero .chip{background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.16);
+  color:#dce6f5;font-size:.78rem;padding:5px 12px;border-radius:999px}
+.hero .chip b{color:#fff}
+
+/* at-a-glance stat strip */
+.glance{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin:18px 0 6px}
+.glance .g{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);
+  padding:13px 14px;box-shadow:var(--shadow)}
+.glance .g .v{font-size:1.32rem;font-weight:750;color:var(--ink);letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums}
+.glance .g .k{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-mute);
+  margin-top:2px;font-weight:600}
+.glance .g.accent .v{color:var(--teal)}
+
+/* ============================================================= *
+ *  SECTIONS                                                     *
+ * ============================================================= */
+.section{padding:30px 0 8px;border-top:1px solid var(--line);margin-top:18px;scroll-margin-top:78px}
+.section:first-of-type{border-top:none}
+.section-tag{display:inline-flex;align-items:center;gap:9px;margin-bottom:6px}
+.section-tag .num{display:inline-flex;align-items:center;justify-content:center;
+  width:30px;height:30px;border-radius:8px;background:var(--navy);color:#fff;font-weight:700;
+  font-size:.86rem;font-variant-numeric:tabular-nums}
+.section-tag .kicker{text-transform:uppercase;letter-spacing:.14em;font-size:.7rem;
+  font-weight:700;color:var(--teal)}
+.lead{font-size:1.04rem;color:var(--ink-soft);max-width:74ch}
+
+/* ============================================================= *
+ *  CARDS / GRIDS                                                *
+ * ============================================================= */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:20px 22px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(2,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+.exec-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:19px 20px;box-shadow:var(--shadow);border-top:3px solid var(--teal);position:relative}
+.exec-card h4{margin:.1em 0 .45em;color:var(--ink);font-size:1.02rem}
+.exec-card p{margin:0;font-size:.92rem}
+.exec-card .ico{font-size:1.3rem;line-height:1;margin-bottom:6px;display:block}
+
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);
+  padding:15px 16px;box-shadow:var(--shadow)}
+.kpi .v{font-size:1.5rem;font-weight:750;letter-spacing:-.02em;font-variant-numeric:tabular-nums;color:var(--ink)}
+.kpi .k{font-size:.74rem;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-mute);font-weight:600;margin-top:1px}
+.kpi .sub{font-size:.78rem;color:var(--ink-mute);margin-top:5px}
+.kpi.good .v{color:var(--good)} .kpi.warn .v{color:var(--warn)} .kpi.bad .v{color:var(--bad)}
+
+/* persona */
+.persona{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+  padding:18px 20px;box-shadow:var(--shadow);border-left:4px solid var(--navy-2)}
+.persona.you{border-left-color:var(--teal);background:linear-gradient(180deg,var(--accent-soft),var(--surface) 38%)}
+.persona .who{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.persona .who .av{width:38px;height:38px;border-radius:50%;background:var(--navy);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.9rem;flex:none}
+.persona.you .who .av{background:var(--teal)}
+.persona .who .nm{font-weight:700;color:var(--ink)}
+.persona .who .rl{font-size:.78rem;color:var(--ink-mute)}
+.persona p{font-size:.9rem;margin:.4em 0}
+
+/* ============================================================= *
+ *  TABLES                                                       *
+ * ============================================================= */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);
+  box-shadow:var(--shadow);background:var(--surface);margin:12px 0 6px}
+table{border-collapse:collapse;width:100%;font-size:.88rem;min-width:520px}
+thead th{background:var(--surface-3);text-align:left;font-weight:700;color:var(--ink);
+  padding:11px 14px;border-bottom:1px solid var(--line-2);position:sticky;top:0;
+  font-size:.76rem;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+tbody td{padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-soft)}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--surface-2)}
+td strong,td b{color:var(--ink)}
+.num-col{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.best{background:var(--good-soft) !important;font-weight:600}
+.best::after{content:" ★";color:var(--gold)}
+
+/* ============================================================= *
+ *  PILLS / CHIPS / TAGS                                         *
+ * ============================================================= */
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:.7rem;font-weight:700;
+  padding:2.5px 9px;border-radius:999px;letter-spacing:.03em;white-space:nowrap}
+.p0{background:var(--bad-soft);color:var(--bad)}
+.p1{background:var(--warn-soft);color:var(--warn)}
+.p2{background:var(--info-soft);color:var(--info)}
+.size{display:inline-flex;align-items:center;justify-content:center;min-width:30px;font-size:.7rem;
+  font-weight:800;padding:2.5px 8px;border-radius:6px;background:var(--surface-3);color:var(--ink-soft);
+  border:1px solid var(--line-2)}
+.size.s{color:var(--good)} .size.m{color:var(--info)} .size.l{color:var(--warn)} .size.xl{color:var(--bad)}
+.tag{display:inline-block;font-size:.72rem;font-weight:600;padding:2px 9px;border-radius:6px;
+  background:var(--surface-3);color:var(--ink-soft);border:1px solid var(--line);margin:2px 3px 2px 0}
+.tag.t-{background:var(--accent-soft);color:var(--accent-ink);border-color:transparent}
+.status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.s-have{background:var(--good)} .s-part{background:var(--warn)} .s-none{background:var(--bad)}
+
+/* ============================================================= *
+ *  CALLOUTS                                                     *
+ * ============================================================= */
+.callout{border-radius:var(--radius-sm);padding:14px 17px;margin:16px 0;border:1px solid var(--line);
+  background:var(--surface-2);display:flex;gap:13px}
+.callout .ci{font-size:1.15rem;line-height:1.3;flex:none}
+.callout .ct{font-size:.91rem}
+.callout .ct b{color:var(--ink)}
+.callout.info{background:var(--info-soft);border-color:transparent}
+.callout.warn{background:var(--warn-soft);border-color:transparent}
+.callout.good{background:var(--good-soft);border-color:transparent}
+.callout.bad{background:var(--bad-soft);border-color:transparent}
+.callout.ai{background:linear-gradient(120deg,var(--accent-soft),var(--info-soft));border-color:transparent}
+
+/* ============================================================= *
+ *  HEATMAP                                                      *
+ * ============================================================= */
+.heat td,.heat th{text-align:center}
+.heat .lbl{text-align:left;font-weight:600;color:var(--ink);white-space:nowrap}
+.hc{font-weight:700;font-size:.82rem;border-radius:0}
+.h1{background:var(--heat-1);color:var(--heat-1i)}
+.h2{background:var(--heat-2);color:var(--heat-2i)}
+.h3{background:var(--heat-3);color:var(--heat-3i)}
+.h4{background:var(--heat-4);color:var(--heat-4i)}
+.h5{background:var(--heat-5);color:var(--heat-5i)}
+
+/* score meter */
+.meter{height:9px;border-radius:999px;background:var(--surface-3);overflow:hidden;margin:7px 0}
+.meter > span{display:block;height:100%;border-radius:999px;
+  background:linear-gradient(90deg,var(--teal),#67e8f9)}
+.score-row{display:flex;align-items:center;gap:14px;margin:11px 0}
+.score-row .lab{min-width:172px;font-size:.88rem;font-weight:600;color:var(--ink)}
+.score-row .val{font-variant-numeric:tabular-nums;font-weight:750;min-width:58px;text-align:right}
+.score-row .barwrap{flex:1}
+
+/* ============================================================= *
+ *  ROADMAP TIMELINE                                             *
+ * ============================================================= */
+.timeline{position:relative;margin:16px 0 6px}
+.phase{display:grid;grid-template-columns:200px 1fr;gap:18px;padding:16px 0;
+  border-top:1px dashed var(--line-2)}
+.phase:first-child{border-top:none}
+.phase .ph-head .pnum{font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--teal)}
+.phase .ph-head .pname{font-weight:700;color:var(--ink);font-size:1.04rem;margin:2px 0 5px}
+.bar-track{background:var(--surface-3);border-radius:999px;height:30px;position:relative;overflow:hidden;border:1px solid var(--line)}
+.bar-fill{position:absolute;top:0;height:100%;display:flex;align-items:center;padding:0 12px;
+  color:#fff;font-size:.78rem;font-weight:600;white-space:nowrap;border-radius:999px}
+.bf1{background:linear-gradient(90deg,var(--navy),var(--navy-2))}
+.bf2{background:linear-gradient(90deg,var(--navy-2),#2563eb)}
+.bf3{background:linear-gradient(90deg,#0e7490,var(--teal-2))}
+.bf4{background:linear-gradient(90deg,var(--teal-2),var(--teal))}
+.ph-detail{font-size:.9rem;margin-top:9px}
+.ph-detail ul{margin:.3em 0 .3em}
+
+/* ============================================================= *
+ *  MISC                                                         *
+ * ============================================================= */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.swot h4{display:flex;align-items:center;gap:8px;margin-top:0}
+.swot ul{margin:.2em 0 0}
+.divider-note{color:var(--ink-mute);font-size:.82rem;font-style:italic;margin:6px 0 0}
+.flowsteps{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:14px 0}
+.flowsteps .fs{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);
+  padding:12px;box-shadow:var(--shadow);position:relative;font-size:.84rem}
+.flowsteps .fs .fn{width:22px;height:22px;border-radius:50%;background:var(--teal);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;margin-bottom:7px}
+.flowsteps .fs b{color:var(--ink);display:block;margin-bottom:2px}
+footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--ink-mute);
+  font-size:.82rem;border-top:1px solid var(--line)}
+.toc-foot{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+
+/* ============================================================= *
+ *  RESPONSIVE                                                   *
+ * ============================================================= */
+@media(max-width:980px){
+  .layout{grid-template-columns:1fr;gap:0}
+  .sidenav{position:static;height:auto;max-height:none;padding:14px 0 6px;
+    border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px}
+  .sidenav .nav-head{width:100%}
+  .sidenav a{border-left:none;border-bottom:2px solid transparent;padding:6px 9px}
+  .sidenav a.active{border-left:none;border-bottom-color:var(--teal)}
+  .glance{grid-template-columns:repeat(3,1fr)}
+  .g3,.g4{grid-template-columns:1fr 1fr}
+  .two-col,.flowsteps{grid-template-columns:1fr}
+  .phase{grid-template-columns:1fr}
+  .hero h1{font-size:2rem}
+}
+@media(max-width:600px){
+  .glance,.g2,.g3,.g4{grid-template-columns:1fr}
+  .topbar .tb-meta{display:none}
+}
+
+/* ============================================================= *
+ *  PRINT                                                        *
+ * ============================================================= */
+@media print{
+  :root{--bg:#fff}
+  .topbar{position:static;box-shadow:none}
+  .toggle,.tb-meta{display:none}
+  .layout{grid-template-columns:1fr;display:block}
+  .sidenav{display:none}
+  .content{padding:0}
+  .section{break-inside:avoid;border-top:1px solid #ccc}
+  .card,.exec-card,.kpi,.persona,.tbl-wrap,.callout{box-shadow:none;break-inside:avoid}
+  .hero{box-shadow:none;color:#000;background:#eef2f8;border:1px solid #ccc}
+  .hero h1,.hero .lede,.hero .eyebrow{color:#000}
+  a{color:inherit;text-decoration:none}
+  body{font-size:11pt}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="brand"><span class="dot"></span>Portfolio Intelligence&nbsp;<small>· Product Strategy</small></div>
+    <div class="spacer"></div>
+    <div class="tb-meta">
+      <span class="pin">v1.0</span><span>Confidential</span><span>Jun 2026</span>
+    </div>
+    <button class="toggle" id="themeBtn" onclick="toggleTheme()" aria-label="Toggle dark mode">
+      <span id="themeIco">🌙</span><span id="themeTxt">Dark</span>
+    </button>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- ===================== SIDE NAV ===================== -->
+  <nav class="sidenav" id="sidenav" aria-label="Table of contents">
+    <div class="nav-head">Contents</div>
+    <a href="#top"><span class="n">—</span><span>Overview</span></a>
+    <a href="#s2-exec"><span class="n">1</span><span>Executive Summary</span></a>
+    <a href="#s3-current"><span class="n">2</span><span>Current State Assessment</span></a>
+    <a href="#s4-vision"><span class="n">3</span><span>Vision &amp; Personas</span></a>
+    <a href="#s5-modelling"><span class="n">4</span><span>Advanced Financial Modelling</span></a>
+    <a href="#s6-comparison"><span class="n">5</span><span>Scenario Comparison Engine</span></a>
+    <a href="#s7-goals"><span class="n">6</span><span>Goal-Based Planning</span></a>
+    <a href="#s8-risk"><span class="n">7</span><span>Risk &amp; Intelligence Layer</span></a>
+    <a href="#s9-architecture"><span class="n">8</span><span>Technical Architecture</span></a>
+    <a href="#s10-decisions"><span class="n">9</span><span>Product Decisions</span></a>
+    <a href="#s11-roadmap"><span class="n">10</span><span>Implementation Roadmap</span></a>
+    <a href="#s12-backlog"><span class="n">11</span><span>Task Breakdown</span></a>
+    <a href="#s13-metrics"><span class="n">12</span><span>Success Metrics</span></a>
+    <a href="#s14-appendix"><span class="n">+</span><span>Appendix</span></a>
+  </nav>
+
+  <!-- ===================== CONTENT ===================== -->
+  <main class="content" id="top">
+    <!-- ===================== HERO ===================== -->
+    <div class="hero">
+      <div class="eyebrow">Product Strategy · What-If Engine → Decision-Support Platform</div>
+      <h1>From a what-if calculator to a portfolio intelligence platform</h1>
+      <p class="lede">A blueprint to evolve the What-If Scenarios module into a professional decision-support
+        system that tells a £150k–£10M landlord what they own, what happens if they change it, and what to
+        buy next — with the confidence of an investment committee behind every move.</p>
+      <div class="hero-meta">
+        <span class="chip">Worked on the <b>live portfolio</b>: 3 owned + 1 pending</span>
+        <span class="chip">Goal: <b>10 properties · £5,000/mo · prudent leverage</b></span>
+        <span class="chip">React 19 · Express · SQLite</span>
+      </div>
+    </div>
+
+    <!-- at-a-glance: real portfolio numbers -->
+    <div class="glance">
+      <div class="g accent"><div class="v">£200k</div><div class="k">Portfolio value</div></div>
+      <div class="g"><div class="v">£152k</div><div class="k">Net equity</div></div>
+      <div class="g"><div class="v">24%</div><div class="k">Aggregate LTV</div></div>
+      <div class="g"><div class="v">£1,950</div><div class="k">Gross rent / mo</div></div>
+      <div class="g accent"><div class="v">£1,327</div><div class="k">Net cashflow / mo</div></div>
+      <div class="g"><div class="v">11.7%</div><div class="k">Gross yield</div></div>
+    </div>
+    <p class="divider-note">Snapshot from the live database: 119 &amp; 60 Stewart Road (Falkirk, owned outright),
+      3/6 Main Street (Larbert, TMW mortgage £48k @ 5.5%). 100% Central Scotland, 100% flats — a low-leverage,
+      high-yield, highly-concentrated base. These numbers anchor every worked example in this document.</p>
+    <section id="s2-exec" class="section">
+      <div class="section-tag"><span class="num">1</span><span class="kicker">Executive Summary</span></div>
+      <h2>What this should become — and why it matters</h2>
+      <p class="lead">Today's What-If module answers <em>“what does this one change do?”</em>. The next version
+        should answer the questions that actually keep a portfolio landlord awake: <strong>should I buy, refinance,
+        or pay down debt — and which path gets me to financial independence fastest, at the lowest risk?</strong>
+        That is the leap from a calculator to a <strong>Portfolio Intelligence Platform</strong>.</p>
+
+      <div class="grid g3" style="margin-top:18px">
+        <div class="exec-card"><span class="ico">🧭</span><h4>The product</h4>
+          <p>A decision-support cockpit: model any strategy across 10–20 years, compare strategies side-by-side,
+            set goals and let the system find the pathways, and surface risk before it bites.</p></div>
+        <div class="exec-card"><span class="ico">⚖️</span><h4>Why it matters</h4>
+          <p>A single £80k buy-vs-refinance decision moves lifetime net worth by six figures. Investors currently
+            make these calls in spreadsheets that ignore tax, voids, and rate shocks. This removes the guesswork.</p></div>
+        <div class="exec-card"><span class="ico">🎯</span><h4>The differentiator</h4>
+          <p>Not accounting software and not a yield calculator — a <em>forward-looking</em> engine that ranks
+            strategies by cashflow, ROI, risk, equity and <em>time-to-target</em>, grounded in the user's real assets.</p></div>
+      </div>
+
+      <h3>Who it is for</h3>
+      <div class="grid g4">
+        <div class="kpi"><div class="v">£150k–£10M</div><div class="k">Portfolio size</div><div class="sub">Self-directed BTL landlords scaling a portfolio</div></div>
+        <div class="kpi"><div class="v">3 → 10+</div><div class="k">Properties</div><div class="sub">Growth-stage investors planning acquisitions</div></div>
+        <div class="kpi"><div class="v">FI-focused</div><div class="k">Mindset</div><div class="sub">Targeting a monthly-income / retirement number</div></div>
+        <div class="kpi"><div class="v">Ltd &amp; personal</div><div class="k">Structures</div><div class="sub">SPV companies, director's loans, personal names</div></div>
+      </div>
+
+      <h3>Key differentiators at a glance</h3>
+      <div class="grid g2">
+        <div class="card">
+          <h4 style="margin-top:0">Five things no spreadsheet does well</h4>
+          <ul>
+            <li><strong>Strategy comparison</strong> — rank N strategies on six dimensions at once, with a clear winner per goal.</li>
+            <li><strong>Goal-seeking</strong> — enter “£5,000/mo by 2034” and get ranked pathways, not a blank projection.</li>
+            <li><strong>Stress testing</strong> — one click to re-run every scenario at +2% rates or −10% rents.</li>
+            <li><strong>Risk intelligence</strong> — health, liquidity, concentration and rate-risk scores, continuously.</li>
+            <li><strong>Real-asset grounding</strong> — every projection starts from the live portfolio, not toy inputs.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4 style="margin-top:0">The opportunity in this specific portfolio</h4>
+          <p style="font-size:.92rem">The live portfolio is <strong>under-leveraged (24% LTV)</strong> and
+            <strong>highly concentrated (100% Central Scotland flats)</strong>. That is precisely the situation where
+            a what-if engine earns its keep: there is dry powder to deploy, a clear £5k/10-property goal, and a real
+            question of <em>leverage vs. cash-stacking</em>. The platform's first job is to show, in pounds, which route
+            wins — and what it would take to break.</p>
+          <div class="callout good" style="margin-bottom:0"><span class="ci">✅</span><span class="ct">
+            <b>Bottom line:</b> the engine and data model are already 60% of the way there. The missing 40% —
+            comparison UI, goals, risk, and richer financial modelling — is what turns a working feature into a product
+            investors would pay for.</span></div>
+        </div>
+      </div>
+    </section>
+    <section id="s3-current" class="section">
+      <div class="section-tag"><span class="num">2</span><span class="kicker">Current State Assessment</span></div>
+      <h2>What exists today — an honest baseline</h2>
+      <p class="lead">The current module is genuinely useful and architecturally clean, but it is a
+        <em>single-scenario projection viewer</em>, not a decision tool. Below is a precise read of the codebase
+        as it stands, so the roadmap builds on reality rather than assumption.</p>
+
+      <h3>What already works</h3>
+      <div class="grid g3">
+        <div class="exec-card"><span class="ico">🧮</span><h4>A pure projection engine</h4>
+          <p><code>buildProjection(initialState, events, config)</code> in <code>scenarioEngine.ts</code> runs a
+            deterministic month-by-month loop. It is <strong>pure and fully unit-tested</strong> — the single
+            biggest asset to build on.</p></div>
+        <div class="exec-card"><span class="ico">📅</span><h4>Event-driven timeline</h4>
+          <p>9 event types model buys, sells, remortgage, rent changes, voids, rate shocks, payoff and one-off
+            expenses, applied at month granularity with sort ordering.</p></div>
+        <div class="exec-card"><span class="ico">🗄️</span><h4>Real-state loading</h4>
+          <p><code>runScenario()</code> hydrates initial state from live properties, tenants, mortgages and
+            expenses — correctly normalising quarterly/annual costs and portfolio-level insurance.</p></div>
+      </div>
+
+      <h3>Capability inventory</h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Capability</th><th>Status</th><th style="width:46%">Detail</th></tr></thead>
+          <tbody>
+            <tr><td>Create / edit / delete scenarios &amp; events</td><td><span class="status-dot s-have"></span>Have</td><td>Full CRUD, React Hook Form + Zod, persisted to SQLite.</td></tr>
+            <tr><td>Month-by-month projection</td><td><span class="status-dot s-have"></span>Have</td><td>Equity, debt, value, monthly &amp; cumulative cashflow, property count per month.</td></tr>
+            <tr><td>9 event types</td><td><span class="status-dot s-have"></span>Have</td><td>buy / sell / remortgage / rent_change / vacancy / interest_rate_change / payoff / major_expense (refinance defined but <em>not</em> implemented).</td></tr>
+            <tr><td>Summary KPIs</td><td><span class="status-dot s-part"></span>Partial</td><td>5 metrics only (start/end equity, equity growth, total &amp; avg cashflow). No ROI, LTV path, DSCR, or property-count trajectory.</td></tr>
+            <tr><td>Projection chart</td><td><span class="status-dot s-part"></span>Partial</td><td>One 3-series area chart (equity / debt / cumulative cashflow). No drill-down, no per-property view, fixed series.</td></tr>
+            <tr><td>Scenario comparison</td><td><span class="status-dot s-part"></span>Backend only</td><td><code>GET /scenarios/compare?ids=</code> exists but <strong>has no frontend</strong> — the single biggest quick win.</td></tr>
+            <tr><td>Goal-based planning</td><td><span class="status-dot s-none"></span>Missing</td><td>No target input, no pathway generation, no “reached by” indicator.</td></tr>
+            <tr><td>Risk / stress testing</td><td><span class="status-dot s-none"></span>Missing</td><td>No rate/rent stress, no concentration warning, no health or liquidity score.</td></tr>
+            <tr><td>Tax &amp; transaction costs</td><td><span class="status-dot s-none"></span>Missing</td><td>No LBTT/ADS, no S24, no CGT, no stamp/legal fees on buys or sells.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Strengths, weaknesses &amp; the gap</h3>
+      <div class="two-col swot">
+        <div class="card">
+          <h4>💪 Strengths</h4>
+          <ul>
+            <li><strong>Pure, testable engine</strong> — <code>buildProjection</code> can be memoised, run client-side, or in a web worker without DB coupling.</li>
+            <li><strong>Clean separation</strong> — calculations live server-side as the single source of truth; the engine is decoupled from persistence.</li>
+            <li><strong>Extensible schema</strong> — <code>scenario_events</code> already stores arbitrary <code>parameters_json</code>; new event types need no migration of shape.</li>
+            <li><strong>Deterministic</strong> — same inputs → same output, ideal for caching, diffing and comparison.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h4>⚠️ Weaknesses &amp; missing capability</h4>
+          <ul>
+            <li><strong>Over-simplified finance</strong> — hardcoded <code>3%</code> value growth and <code>1%</code> linear debt decay (not real amortisation); breaks under downturns or high rates.</li>
+            <li><strong>No tax or transaction costs</strong> — a £66k Scottish buy silently ignores ~£5,280 of ADS plus legal/survey fees.</li>
+            <li><strong>One scenario at a time</strong> — no way to see Base vs. Growth vs. Deleverage together.</li>
+            <li><strong>Opaque events</strong> — parameters shown as truncated raw JSON; no per-property drill-down in results.</li>
+            <li><strong>Manual everything</strong> — must click “Run” after each edit; no goals, no risk flags, no insights.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout warn"><span class="ci">🧱</span><span class="ct"><b>Strategic read:</b>
+        the foundation is strong precisely where it is hardest to retrofit (a clean, pure engine and a flexible event
+        schema). The gaps are in the <em>layers above</em> it — modelling fidelity, comparison, goals and risk — which
+        can be added incrementally without rewriting the core.</span></div>
+    </section>
+    <section id="s4-vision" class="section">
+      <div class="section-tag"><span class="num">3</span><span class="kicker">Vision</span></div>
+      <h2>A best-in-class What-If engine</h2>
+      <p class="lead">The destination: a landlord opens the platform, sees their real portfolio, and within minutes
+        has tested three strategies, stress-tested them against rate rises, and knows which one reaches their income
+        goal soonest at acceptable risk — with a one-page summary they could hand to a lender or accountant.</p>
+
+      <h3>The feature set, in four pillars</h3>
+      <div class="grid g4">
+        <div class="exec-card"><span class="ico">🔬</span><h4>Model</h4>
+          <p>High-fidelity events: financing, tax (LBTT/ADS, S24, CGT), voids, maintenance shocks, capital injections,
+            director's loans. Adjustable growth &amp; inflation assumptions, not hardcoded.</p></div>
+        <div class="exec-card"><span class="ico">⚔️</span><h4>Compare</h4>
+          <p>Unlimited scenarios side-by-side, ranked on cashflow, ROI, equity, risk, liquidity and time-to-target.
+            Diff view: “Strategy B adds £140k equity but £620/mo less cashflow.”</p></div>
+        <div class="exec-card"><span class="ico">🎯</span><h4>Plan to a goal</h4>
+          <p>Enter a target (income, property count, net worth, mortgage-freedom, retirement date). The engine
+            generates and ranks multiple pathways and shows the binding constraint.</p></div>
+        <div class="exec-card"><span class="ico">🛡️</span><h4>Understand risk</h4>
+          <p>Live health, liquidity, concentration and rate-risk scores. One-click stress tests. Plain-English
+            insights that read like an analyst's notes.</p></div>
+      </div>
+
+      <h3>Signature user workflows</h3>
+      <div class="flowsteps">
+        <div class="fs"><div class="fn">1</div><b>Start from reality</b>The live portfolio is the base case — zero setup.</div>
+        <div class="fs"><div class="fn">2</div><b>Branch a strategy</b>Clone &amp; tweak, or pick a template (“BRRR ×5”).</div>
+        <div class="fs"><div class="fn">3</div><b>Compare</b>Lay strategies side-by-side; the winner per goal is flagged.</div>
+        <div class="fs"><div class="fn">4</div><b>Stress test</b>+2% rates, −10% rent, 3-month void — instantly.</div>
+        <div class="fs"><div class="fn">5</div><b>Decide &amp; export</b>One-page brief for the lender, accountant or self.</div>
+      </div>
+      <div class="callout info"><span class="ci">⚡</span><span class="ct"><b>Headline experience target:</b>
+        from “I'm curious about buying another flat” to a ranked, stress-tested, three-strategy comparison in
+        <b>under five minutes</b>, without touching a spreadsheet.</span></div>
+
+      <h3>Investor personas</h3>
+      <div class="grid g3">
+        <div class="persona you">
+          <div class="who"><div class="av">RM</div><div><div class="nm">Ross — The Scaling Consolidator</div><div class="rl">This portfolio · 3 flats, Central Scotland</div></div></div>
+          <p><strong>Profile:</strong> £200k value, 24% LTV, £1,327/mo net. Cash-rich, under-leveraged, geographically
+            concentrated.</p>
+          <p><strong>Job-to-be-done:</strong> reach 10 properties &amp; £5,000/mo without over-extending — and settle
+            the <em>leverage vs. cash-buy</em> question with numbers.</p>
+          <p><strong>Wins when:</strong> the platform shows the fastest prudent path to £5k and flags the Jul-2026 TMW refi.</p>
+        </div>
+        <div class="persona">
+          <div class="who"><div class="av">PD</div><div><div class="nm">Priya — The Yield Optimiser</div><div class="rl">12 properties · £1.8M · Ltd SPV</div></div></div>
+          <p><strong>Profile:</strong> leveraged HMO/BTL mix, 68% LTV, tax-sensitive, running close to DSCR limits.</p>
+          <p><strong>Job-to-be-done:</strong> decide whether to refinance into lower rates or sell two laggards;
+            manage S24 and corporation-tax exposure.</p>
+          <p><strong>Wins when:</strong> refinance vs. sell is ranked on post-tax cashflow and DSCR headroom.</p>
+        </div>
+        <div class="persona">
+          <div class="who"><div class="av">JT</div><div><div class="nm">James — The FI Planner</div><div class="rl">6 properties · approaching retirement</div></div></div>
+          <p><strong>Profile:</strong> wants to stop working in 7 years on £4k/mo passive, low risk tolerance.</p>
+          <p><strong>Job-to-be-done:</strong> find the deleveraging schedule that hits his retirement-date income
+            target with the smallest drawdown risk.</p>
+          <p><strong>Wins when:</strong> the goal planner returns a dated “mortgage-free by” pathway he can trust.</p>
+        </div>
+      </div>
+
+      <h3>Professional use cases — the nine decisions the platform must answer</h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th style="width:34%">Investor question</th><th>How the platform answers it</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Should I buy another property?</strong></td><td>Clone base case, add a <code>buy_property</code> with full transaction costs; compare cashflow/equity/risk delta vs. doing nothing.</td></tr>
+            <tr><td><strong>Should I refinance?</strong></td><td>Model a <code>refinance</code> event (new rate, term, release equity); rank post-tax cashflow and DSCR against the hold case.</td></tr>
+            <tr><td><strong>Should I pay down debt?</strong></td><td><code>payoff_mortgage</code> / overpayment events vs. redeploying the same cash into a purchase — net-worth and risk compared.</td></tr>
+            <tr><td><strong>What if rates rise?</strong></td><td>One-click stress test re-runs every scenario at +1% / +2% / +3%; flags any breaching minimum DSCR.</td></tr>
+            <tr><td><strong>Fastest path to £5,000/mo?</strong></td><td>Goal planner generates pathways (cash-stack / leverage / hybrid) and ranks by time-to-target.</td></tr>
+            <tr><td><strong>Which strategy maximises net worth?</strong></td><td>Comparison engine sorts scenarios by projected end equity at the horizon.</td></tr>
+            <tr><td><strong>Which strategy has the lowest risk?</strong></td><td>Composite risk score (leverage, concentration, liquidity, rate sensitivity) ranks the safest route.</td></tr>
+            <tr><td><strong>When can I be financially independent?</strong></td><td>Solve for the month net cashflow first ≥ target; show the date and the binding constraint.</td></tr>
+            <tr><td><strong>What should I buy next?</strong></td><td>Opportunity score blends yield, diversification benefit, affordability and goal-fit across candidate buys.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section id="s5-modelling" class="section">
+      <div class="section-tag"><span class="num">4</span><span class="kicker">Advanced Financial Modelling</span></div>
+      <h2>From a trajectory toy to a credible model</h2>
+      <p class="lead">Credibility is everything: a landlord will only act on a projection they trust. That means replacing
+        hardcoded growth and zero-cost transactions with real amortisation, real UK tax, and explicit, adjustable
+        assumptions. Each capability below maps to an event type and a calculation, building on the existing pure engine.</p>
+
+      <h3>The modelling matrix</h3>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Model</th><th>Key inputs</th><th>Approach</th><th>Gap vs. today</th><th>Pri</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Property purchase</strong></td><td>Price, deposit %, rate, term, rent, costs</td><td>Add LBTT+ADS, legal, survey, refurb to cash-in; amortising mortgage schedule.</td><td>Buys ignore all transaction costs &amp; tax.</td><td><span class="pill p0">P0</span></td></tr>
+            <tr><td><strong>True amortisation</strong></td><td>Balance, rate, term, repay/IO</td><td>Standard amortisation formula per month; split interest vs. principal.</td><td>Currently flat 1%/yr debt decay.</td><td><span class="pill p0">P0</span></td></tr>
+            <tr><td><strong>Mortgage refinance</strong></td><td>New rate, term, LTV, equity release, fees</td><td>Reset schedule at event month; optional cash-out increases liquidity &amp; debt.</td><td>Event defined in schema but <em>not implemented</em>.</td><td><span class="pill p0">P0</span></td></tr>
+            <tr><td><strong>Interest-rate stress</strong></td><td>±bps, applies to new/refixed debt</td><td>Re-amortise affected loans; portfolio-wide shock toggle for stress tests.</td><td>Exists but multiplies payment crudely, ignores fixes.</td><td><span class="pill p0">P0</span></td></tr>
+            <tr><td><strong>Rent growth &amp; voids</strong></td><td>Annual growth %, void weeks/yr, turnover</td><td>Indexed rent; probabilistic or scheduled voids reduce collected rent.</td><td>Manual single-event vacancy only; no growth indexing.</td><td><span class="pill p1">P1</span></td></tr>
+            <tr><td><strong>Maintenance shocks</strong></td><td>Reserve %, one-off capex, timing</td><td>Recurring reserve accrual + lumpy capex events drawn from reserve/liquidity.</td><td>Only manual one-off <code>major_expense</code>.</td><td><span class="pill p1">P1</span></td></tr>
+            <tr><td><strong>Property sale</strong></td><td>Sale price, costs, CGT base, ownership</td><td>Net proceeds = price − costs − CGT; releases equity to liquidity pool.</td><td>Sell just removes the asset; no proceeds or CGT.</td><td><span class="pill p1">P1</span></td></tr>
+            <tr><td><strong>Capital injection</strong></td><td>Amount, date, source</td><td>Adds to liquidity pool to fund deposits/payoffs; enables goal pathways.</td><td>No concept of available cash.</td><td><span class="pill p1">P1</span></td></tr>
+            <tr><td><strong>Tax engine</strong></td><td>Structure, income band, S24, CGT, corp tax</td><td>Post-tax cashflow layer (see below); personal vs. Ltd toggle.</td><td>Entirely absent.</td><td><span class="pill p1">P1</span></td></tr>
+            <tr><td><strong>Director's loan</strong></td><td>Balance, draw/repay schedule</td><td>Track DL account in Ltd structures; tax-efficient extraction modelling.</td><td>Absent.</td><td><span class="pill p2">P2</span></td></tr>
+            <tr><td><strong>Portfolio restructuring</strong></td><td>Incorporation, transfers, refinance bundle</td><td>Composite multi-event template with cost/tax consequences.</td><td>Absent.</td><td><span class="pill p2">P2</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Tax modelling — and why Scotland matters here</h3>
+      <p>This portfolio is in Scotland, so the platform must use <strong>LBTT + the Additional Dwelling Supplement (ADS),
+        currently 8%</strong> — not English SDLT. Ignoring it materially overstates every acquisition's return.</p>
+      <div class="grid g2">
+        <div class="card">
+          <h4 style="margin-top:0">Worked example — the £66k Comely Place cash buy</h4>
+          <div class="tbl-wrap" style="margin-top:6px">
+            <table style="min-width:0">
+              <tbody>
+                <tr><td>Purchase price</td><td class="num-col">£66,000</td></tr>
+                <tr><td>LBTT (residential bands, &lt;£145k)</td><td class="num-col">£0</td></tr>
+                <tr><td><strong>ADS @ 8% on full price</strong></td><td class="num-col"><strong>£5,280</strong></td></tr>
+                <tr><td>Legal + survey (est.)</td><td class="num-col">£1,500</td></tr>
+                <tr><td class="best">True cash-in (vs. £66,000 modelled)</td><td class="num-col best">£72,780</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="divider-note">Today's engine would show this buy as £6,780 cheaper than reality — enough to flip a
+            “good deal” verdict. Transaction-cost accuracy is a P0.</p>
+        </div>
+        <div class="card">
+          <h4 style="margin-top:0">The post-tax cashflow layer</h4>
+          <ul>
+            <li><strong>Personal name:</strong> Section 24 — mortgage interest is no longer deductible; relief is a 20% tax credit. High-rate landlords pay tax on turnover, not profit.</li>
+            <li><strong>Ltd / SPV:</strong> corporation tax on profit, interest fully deductible; model director's-loan extraction.</li>
+            <li><strong>On sale:</strong> CGT at residential-property rates above the annual exemption (personal), or corp tax on gain (Ltd).</li>
+            <li><strong>Output:</strong> every scenario gains a <em>post-tax</em> net-cashflow series alongside the pre-tax one — the number that actually funds FI.</li>
+          </ul>
+          <div class="callout info" style="margin-bottom:0"><span class="ci">🧾</span><span class="ct">
+            For this low-leverage portfolio S24 bites little today, but it becomes decisive the moment leverage is added —
+            exactly the buy-vs-cash question on the table.</span></div>
+        </div>
+      </div>
+
+      <h3>Assumptions become first-class inputs</h3>
+      <p>The hardcoded <code>3%</code> growth and <code>1%</code> decay move into a per-scenario <strong>Assumptions panel</strong>:
+        regional capital growth, rent inflation (CPI-linked), maintenance reserve %, void allowance, mortgage rate
+        outlook, and tax structure. Every projection becomes reproducible and defensible — and stress tests are just
+        the same model with shocked assumptions.</p>
+    </section>
+    <section id="s6-comparison" class="section">
+      <div class="section-tag"><span class="num">5</span><span class="kicker">Scenario Comparison Engine</span></div>
+      <h2>Stop viewing scenarios one at a time</h2>
+      <p class="lead">The single highest-leverage feature, and the one already half-built: the <code>/scenarios/compare</code>
+        endpoint exists with no UI. A comparison engine takes any selection of scenarios and ranks them across six
+        decision dimensions — so the answer to “which strategy wins?” is a glance, not a spreadsheet.</p>
+
+      <h3>Six dimensions, one winner each</h3>
+      <div class="grid g3">
+        <div class="kpi good"><div class="k">💰 Best cashflow</div><div class="v">Path to 10</div><div class="sub">Highest sustained net income at horizon</div></div>
+        <div class="kpi"><div class="k">📈 Highest ROI</div><div class="v">Path to 5</div><div class="sub">Best return on cash actually deployed</div></div>
+        <div class="kpi"><div class="k">🛡️ Lowest risk</div><div class="v">4 Props (cash)</div><div class="sub">No new debt, minimal volatility</div></div>
+        <div class="kpi good"><div class="k">🏛️ Highest equity</div><div class="v">Path to 10</div><div class="sub">Largest projected net worth</div></div>
+        <div class="kpi"><div class="k">⏱️ Fastest to £5k/mo</div><div class="v">Path to 10</div><div class="sub">Only path that reaches the goal</div></div>
+        <div class="kpi"><div class="k">💧 Strongest liquidity</div><div class="v">Base Case</div><div class="sub">Cash preserved, maximum optionality</div></div>
+      </div>
+
+      <h3>Worked comparison — the four live scenarios</h3>
+      <p>Illustrative projections from the current base (£200k value, £152k equity, £1,327/mo net), using the
+        Appendix assumptions. Best-in-column is starred.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th>Strategy</th><th class="num-col">End props</th><th class="num-col">End equity</th>
+            <th class="num-col">Net CF / mo</th><th class="num-col">Reaches £5k</th>
+            <th class="num-col">Peak LTV</th><th>Liquidity</th><th>Risk</th>
+          </tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>Base Case</strong><br><small>No changes</small></td>
+              <td class="num-col">3</td><td class="num-col">£239k</td><td class="num-col">£1.5k</td>
+              <td class="num-col">Never</td><td class="num-col best">12%</td>
+              <td class="best">High</td><td><span class="pill p2" style="background:var(--good-soft);color:var(--good)">Low</span></td>
+            </tr>
+            <tr>
+              <td><strong>4 Properties</strong><br><small>Comely Place cash buy</small></td>
+              <td class="num-col">4</td><td class="num-col">£312k</td><td class="num-col">£1.9k</td>
+              <td class="num-col">Never</td><td class="num-col">9%</td>
+              <td>Medium</td><td><span class="pill p2" style="background:var(--good-soft);color:var(--good)">Low</span></td>
+            </tr>
+            <tr>
+              <td><strong>Path to 5</strong><br><small>Max 2 mortgages, payoff cheapest</small></td>
+              <td class="num-col">5</td><td class="num-col">£452k</td><td class="num-col">£2.6k</td>
+              <td class="num-col">~Yr 11</td><td class="num-col">31%</td>
+              <td>Medium</td><td><span class="pill p1">Med</span></td>
+            </tr>
+            <tr>
+              <td><strong>Path to 10</strong><br><small>Leverage + progressive payoff, 15-yr</small></td>
+              <td class="num-col best">10</td><td class="num-col best">£985k</td><td class="num-col best">£5.4k</td>
+              <td class="num-col best">~Yr 12</td><td class="num-col">46%</td>
+              <td>Tight (build phase)</td><td><span class="pill p1">Med</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The diff view — the real insight</h3>
+      <div class="grid g2">
+        <div class="callout ai" style="margin-top:8px"><span class="ci">🤖</span><span class="ct">
+          <b>Path to 10 vs. 4 Properties:</b> +£673k projected equity and it is the <em>only</em> route to £5,000/mo —
+          but it spends ~14 months with liquidity under one month's outgoings and peaks at 46% LTV. The premium for
+          reaching the goal is concentration of risk into the 2027–2030 build phase.</span></div>
+        <div class="callout warn" style="margin-top:8px"><span class="ci">⚖️</span><span class="ct">
+          <b>4 Properties vs. Base:</b> the cash buy adds ~£450/mo net and £73k of work-in-progress equity for
+          essentially no added risk — but consumes the dry powder that Path to 5/10 needs for deposits. This is the
+          core trade-off the engine must make visible.</span></div>
+      </div>
+
+      <h3>How the comparison engine works</h3>
+      <div class="grid g3">
+        <div class="exec-card"><h4>Normalise</h4><p>Each scenario's stored <code>results_json</code> is reduced to a
+          common metric vector (end equity, avg/terminal net CF, peak LTV, min-DSCR, liquidity trough, time-to-target).</p></div>
+        <div class="exec-card"><h4>Rank &amp; flag</h4><p>Per-dimension ranking with best-in-column highlighting;
+          a weighted composite score (user-tunable weights) gives an overall recommendation.</p></div>
+        <div class="exec-card"><h4>Explain</h4><p>Pairwise diffs translated into plain-English trade-offs, so the
+          output reads like an analyst's memo, not a grid of numbers.</p></div>
+      </div>
+    </section>
+    <section id="s7-goals" class="section">
+      <div class="section-tag"><span class="num">6</span><span class="kicker">Goal-Based Planning</span></div>
+      <h2>Tell the platform the destination, not the route</h2>
+      <p class="lead">This is the feature that flips the mental model. Instead of building scenarios by hand and hoping,
+        the investor states a goal — and the engine works <em>backwards</em>, generating and ranking the pathways that
+        reach it. It is the difference between a calculator and an adviser.</p>
+
+      <h3>Goals the user can set</h3>
+      <div class="grid g3">
+        <div class="exec-card"><span class="ico">💷</span><h4>Income target</h4><p>“£5,000/mo net by 2034.” The headline FI goal for this portfolio.</p></div>
+        <div class="exec-card"><span class="ico">🏠</span><h4>Property count</h4><p>“Reach 10 properties.” Drives the acquisition cadence.</p></div>
+        <div class="exec-card"><span class="ico">🔓</span><h4>Mortgage freedom</h4><p>“Debt-free by a date.” Drives the payoff schedule.</p></div>
+        <div class="exec-card"><span class="ico">📊</span><h4>Net worth</h4><p>“£1M net equity.” Balances growth vs. leverage.</p></div>
+        <div class="exec-card"><span class="ico">🏖️</span><h4>Retirement date</h4><p>“Stop working in 8 years on £4k/mo.” Combines income + risk.</p></div>
+        <div class="exec-card"><span class="ico">🧮</span><h4>Constraints</h4><p>Max LTV, min DSCR, available cash/yr, regions — bound the search.</p></div>
+      </div>
+
+      <h3>How the engine generates &amp; ranks pathways</h3>
+      <div class="flowsteps" style="grid-template-columns:repeat(4,1fr)">
+        <div class="fs"><div class="fn">1</div><b>Frame</b>Goal + constraints + current state define the search space.</div>
+        <div class="fs"><div class="fn">2</div><b>Generate</b>Strategy templates (cash-stack, leverage, hybrid, deleverage) seed candidate event sequences.</div>
+        <div class="fs"><div class="fn">3</div><b>Solve</b>Search/iterate acquisition timing &amp; financing until the goal month is hit within constraints.</div>
+        <div class="fs"><div class="fn">4</div><b>Rank</b>Score each viable pathway on time-to-goal, risk, liquidity &amp; effort; surface the binding constraint.</div>
+      </div>
+
+      <h3>Worked pathways — “10 properties &amp; £5,000/mo, prudent leverage”</h3>
+      <p>Three viable routes from the current base, each respecting a max-LTV constraint and the available cash.
+        The recommendation depends on the investor's risk appetite — the platform makes that explicit.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th>Pathway</th><th>Mechanism</th><th class="num-col">Reaches £5k</th><th class="num-col">Reaches 10</th>
+            <th class="num-col">Peak LTV</th><th class="num-col">Cash needed</th><th>Binding constraint</th><th>Risk</th>
+          </tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>A · Cash-stack</strong></td><td>Buy outright from rent + savings; no new debt</td>
+              <td class="num-col">~Yr 16</td><td class="num-col">~Yr 16</td><td class="num-col best">8%</td>
+              <td class="num-col best">Highest (self-funded)</td><td>Pace of saved cash</td>
+              <td><span class="pill p2" style="background:var(--good-soft);color:var(--good)">Low</span></td>
+            </tr>
+            <tr class="best">
+              <td><strong>B · Hybrid (recommended)</strong></td><td>25% deposits + progressive payoff of cheapest debt</td>
+              <td class="num-col">~Yr 12</td><td class="num-col">~Yr 13</td><td class="num-col">≤45%</td>
+              <td class="num-col">Moderate</td><td>Mortgage count / affordability</td>
+              <td><span class="pill p1">Med</span></td>
+            </tr>
+            <tr>
+              <td><strong>C · Leverage-led (BRRR)</strong></td><td>Refinance to release equity, recycle deposits fast</td>
+              <td class="num-col">~Yr 9</td><td class="num-col">~Yr 10</td><td class="num-col">~70%</td>
+              <td class="num-col">Lowest</td><td>Rate &amp; void resilience (DSCR)</td>
+              <td><span class="pill p0">High</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid g2">
+        <div class="callout good"><span class="ci">🏆</span><span class="ct">
+          <b>Recommended: Pathway B (Hybrid).</b> Hits both goals 3–4 years sooner than cash-stacking while keeping LTV
+          under 45% — squarely inside “prudent leverage.” It mirrors the existing <em>Path to 10</em> scenario logic
+          (max 2 active mortgages, pay off the cheapest, then buy again), validating that strategy against the goal.</span></div>
+        <div class="callout bad"><span class="ci">⚠️</span><span class="ct">
+          <b>Pathway C is fastest but fragile.</b> At ~70% LTV the portfolio reaches £5k/mo by year 9, but a 2% rate
+          rise plus a single extended void could push DSCR below 1.25. The platform should let the user <em>see</em> that
+          fragility via a one-click stress test before committing.</span></div>
+      </div>
+      <div class="callout ai" style="margin-bottom:0"><span class="ci">💡</span><span class="ct">
+        <b>Insight surfaced automatically:</b> “Your £5,000/mo goal is achievable ~4 years sooner with modest leverage
+        than by cash-buying alone, at the cost of a 45% peak LTV. Your current 24% LTV gives ample headroom to do this
+        prudently.”</span></div>
+    </section>
+    <section id="s8-risk" class="section">
+      <div class="section-tag"><span class="num">7</span><span class="kicker">Risk &amp; Intelligence Layer</span></div>
+      <h2>Make the invisible risks visible</h2>
+      <p class="lead">Every projection has a confident line going up and to the right. The intelligence layer's job is to
+        ask “what would break this?” — continuously scoring the portfolio and each scenario, and translating the numbers
+        into the kind of plain-English judgement a good adviser would offer.</p>
+
+      <h3>Portfolio scorecard — scored on the live portfolio</h3>
+      <div class="card">
+        <div class="score-row"><div class="lab">Portfolio health</div><div class="barwrap"><div class="meter"><span style="width:78%"></span></div></div><div class="val" style="color:var(--good)">78</div></div>
+        <div class="score-row"><div class="lab">Liquidity</div><div class="barwrap"><div class="meter"><span style="width:64%"></span></div></div><div class="val" style="color:var(--warn)">64</div></div>
+        <div class="score-row"><div class="lab">Interest-rate resilience</div><div class="barwrap"><div class="meter"><span style="width:82%"></span></div></div><div class="val" style="color:var(--good)">82</div></div>
+        <div class="score-row"><div class="lab">Vacancy resilience</div><div class="barwrap"><div class="meter"><span style="width:58%"></span></div></div><div class="val" style="color:var(--warn)">58</div></div>
+        <div class="score-row"><div class="lab">Diversification</div><div class="barwrap"><div class="meter"><span style="width:22%"></span></div></div><div class="val" style="color:var(--bad)">22</div></div>
+        <div class="score-row"><div class="lab">Opportunity (capacity to act)</div><div class="barwrap"><div class="meter"><span style="width:88%"></span></div></div><div class="val" style="color:var(--good)">88</div></div>
+      </div>
+      <p class="divider-note">Low leverage and a fixed mortgage drive strong rate resilience and high opportunity capacity;
+        the obvious weakness is diversification (100% Central Scotland flats) and concentration of income across only
+        three tenants.</p>
+
+      <h3>Risk heatmap — likelihood × impact</h3>
+      <div class="tbl-wrap">
+        <table class="heat">
+          <thead><tr><th class="lbl">Risk factor</th><th>Likelihood</th><th>Impact</th><th>Exposure</th><th class="lbl" style="width:38%">Why / mitigation</th></tr></thead>
+          <tbody>
+            <tr><td class="lbl">Geographic concentration</td><td class="hc h4">High</td><td class="hc h4">High</td><td class="hc h5">Critical</td><td class="lbl">100% Falkirk/Larbert. A local market shock hits the whole portfolio. <em>Mitigate: diversify next buys by region/type.</em></td></tr>
+            <tr><td class="lbl">TMW refix (Jul-2026)</td><td class="hc h5">Imminent</td><td class="hc h2">Low</td><td class="hc h3">Watch</td><td class="lbl">£48k fix ends Jul-2026; on £308/mo a 2% rise ≈ +£80/mo. Small, but the only debt — model the refix now.</td></tr>
+            <tr><td class="lbl">Tenant default / void</td><td class="hc h3">Medium</td><td class="hc h4">High</td><td class="hc h4">Elevated</td><td class="lbl">Only 3 income streams; one void removes ~⅓ of gross rent. <em>Mitigate: reserve + diversify tenant base.</em></td></tr>
+            <tr><td class="lbl">Interest-rate rise</td><td class="hc h3">Medium</td><td class="hc h1">Minimal</td><td class="hc h2">Low</td><td class="lbl">24% LTV, one small loan. Portfolio is structurally rate-resilient today.</td></tr>
+            <tr><td class="lbl">Maintenance shock</td><td class="hc h3">Medium</td><td class="hc h3">Medium</td><td class="hc h3">Moderate</td><td class="lbl">Older flats (recent flood repair at 119 Stewart Rd). <em>Mitigate: capex reserve %.</em></td></tr>
+            <tr><td class="lbl">Liquidity squeeze in build phase</td><td class="hc h3">Medium</td><td class="hc h4">High</td><td class="hc h4">Elevated</td><td class="lbl">Aggressive acquisition (Pathway C) drains cash buffers. <em>Mitigate: minimum-liquidity constraint in goal planner.</em></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>AI-style insights — what the analyst would say</h3>
+      <div class="grid g2">
+        <div class="callout ai"><span class="ci">🤖</span><span class="ct"><b>Concentration alert.</b> 100% of equity sits in three Central Scotland flats. Diversifying the next 2–3 acquisitions by region/type would lift the diversification score from 22 → ~55 with negligible yield sacrifice.</span></div>
+        <div class="callout ai"><span class="ci">🤖</span><span class="ct"><b>Under-utilised capacity.</b> At 24% LTV you have ~£90k of prudent borrowing headroom. Deployed via Pathway B it brings the £5k/mo goal forward by ~4 years.</span></div>
+        <div class="callout ai"><span class="ci">🤖</span><span class="ct"><b>Refix nudge.</b> The TMW fix ends Jul-2026. Even a worst-case re-fix adds only ~£80/mo — not a threat to cashflow, but worth modelling as a <code>refinance</code> event now.</span></div>
+        <div class="callout ai"><span class="ci">🤖</span><span class="ct"><b>Income fragility.</b> Vacancy resilience scores 58 because income depends on three tenancies. Growing to 6+ properties roughly halves the impact of any single void.</span></div>
+      </div>
+      <div class="callout info" style="margin-bottom:0"><span class="ci">🧠</span><span class="ct">
+        <b>How scores are computed:</b> each is a transparent weighted formula over portfolio facts (LTV, DSCR, region/type
+        Herfindahl index, cash-vs-outgoings months, tenant count). Transparent — never a black box — so the user can see
+        <em>why</em> a number moved when they change a scenario.</span></div>
+    </section>
+    <section id="s9-architecture" class="section">
+      <div class="section-tag"><span class="num">8</span><span class="kicker">Technical Architecture</span></div>
+      <h2>Build on the pure engine, not around it</h2>
+      <p class="lead">The architecture deliberately preserves the existing crown jewel — a pure, deterministic
+        <code>buildProjection()</code> — and layers new capability as composable modules above it. Nothing here requires
+        a rewrite; it is additive.</p>
+
+      <h3>Layered engine design</h3>
+      <div class="grid g2">
+        <div class="card">
+          <h4 style="margin-top:0">Calculation engine</h4>
+          <p>The atomic, side-effect-free maths: amortisation schedules, yield/ROI/LTV/DSCR, LBTT+ADS, S24 &amp; CGT.
+            Lives server-side in <code>services/calculations.ts</code> as the single source of truth; mirrored
+            read-only client-side for live form preview.</p>
+          <p><b>New:</b> <code>amortise()</code>, <code>taxEngine()</code>, <code>transactionCosts()</code> as pure helpers.</p>
+        </div>
+        <div class="card">
+          <h4 style="margin-top:0">Projection engine</h4>
+          <p>The month-by-month loop — <code>buildProjection(initialState, events, config)</code> in
+            <code>services/scenarioEngine.ts</code>. Stays pure. Gains a richer <code>MonthSnapshot</code>
+            (post-tax CF, DSCR, liquidity, per-property breakdown) and an assumptions object replacing hardcoded constants.</p>
+        </div>
+        <div class="card">
+          <h4 style="margin-top:0">Scenario engine</h4>
+          <p>Orchestration: <code>runScenario()</code> hydrates state from the DB, applies events, persists
+            <code>scenario_results</code>. Extended with a <strong>comparison service</strong> (reduce N results → metric
+            vectors) and a <strong>goal solver</strong> (search event sequences to hit a target).</p>
+        </div>
+        <div class="card">
+          <h4 style="margin-top:0">Intelligence engine</h4>
+          <p>Reads projections + portfolio facts to compute risk/health/liquidity/opportunity scores and generate
+            insight strings. Pure functions over results — cacheable and testable like everything else.</p>
+        </div>
+      </div>
+
+      <h3>Event system &amp; data model</h3>
+      <p>The current schema already carries the design: <code>scenario_events</code> stores
+        <code>event_type</code>, <code>property_id</code>, <code>date</code>, <code>sort_order</code> and free-form
+        <code>parameters_json</code> — so new event types need <em>no shape migration</em>. Extensions:</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Table / object</th><th>Change</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>scenario_events.event_type</code></td><td>Add <code>refinance</code> (implement), <code>capital_injection</code>, <code>sale_with_costs</code>, <code>maintenance_reserve</code> to the CHECK</td><td>New modelling capability via the existing numbered-migration pattern.</td></tr>
+            <tr><td><code>scenarios.assumptions_json</code></td><td><strong>New column</strong></td><td>Per-scenario growth, inflation, void %, reserve %, tax structure — replaces hardcoded 3%/1%.</td></tr>
+            <tr><td><code>scenario_results.results_json</code></td><td>Richer snapshot schema</td><td>Post-tax CF, DSCR, liquidity, per-property arrays for drill-down &amp; comparison.</td></tr>
+            <tr><td><code>goals</code> + <code>goal_pathways</code></td><td><strong>New tables</strong></td><td>Persist targets, constraints and generated/ranked pathways.</td></tr>
+            <tr><td>Event registry</td><td>Typed handler map keyed by <code>event_type</code></td><td>Each event = a pure <code>(state, params) ⇒ state</code> reducer; adding a type is a registry entry + test.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Performance &amp; extensibility</h3>
+      <div class="grid g3">
+        <div class="exec-card"><span class="ico">⚡</span><h4>Performance</h4>
+          <p>Engine is pure ⇒ memoise by <code>(stateHash, eventsHash, assumptionsHash)</code>. Run comparison fan-out
+            and goal-solver iterations in a <strong>web worker</strong> to keep the UI responsive; SQLite stays synchronous
+            and fast for the single-user model.</p></div>
+        <div class="exec-card"><span class="ico">🔁</span><h4>Caching &amp; diffing</h4>
+          <p>Determinism enables result caching, instant re-display, and cheap pairwise diffs for the comparison view —
+            only re-run scenarios whose inputs changed.</p></div>
+        <div class="exec-card"><span class="ico">🧩</span><h4>Extensibility</h4>
+          <p>New event types, new score formulas and new goal templates are all plug-in registry entries with unit tests —
+            no engine surgery. Calculations stay server-authoritative per the project's core pattern.</p></div>
+      </div>
+      <div class="callout good" style="margin-bottom:0"><span class="ci">🏗️</span><span class="ct">
+        <b>Architectural principle:</b> keep the projection engine pure and deterministic; push all I/O, persistence and
+        orchestration to the edges. Every new feature in this document is expressible as <em>pure functions over the
+        existing engine</em> — which is why the roadmap is incremental, not a rewrite.</span></div>
+    </section>
+    <section id="s10-decisions" class="section">
+      <div class="section-tag"><span class="num">9</span><span class="kicker">Product Decisions</span></div>
+      <h2>Every major feature, justified</h2>
+      <p class="lead">Each decision below is paired with its rationale, the user value it unlocks, an implementation
+        complexity, and a priority. Priorities follow the rule: <strong>P0</strong> = credibility &amp; the highest-leverage
+        quick wins; <strong>P1</strong> = differentiation; <strong>P2</strong> = depth for advanced users.</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th style="width:17%">Decision</th><th>Rationale</th><th>User value</th><th>Complexity</th><th>Pri</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Ship the comparison UI</strong></td><td>Endpoint already exists; the core job-to-be-done is choosing <em>between</em> strategies.</td><td>Turns isolated projections into decisions.</td><td><span class="size m">M</span></td><td><span class="pill p0">P0</span></td></tr>
+            <tr><td><strong>Real amortisation</strong></td><td>Flat 1% debt decay is indefensible to any investor or lender.</td><td>Projections people will actually act on.</td><td><span class="size m">M</span></td><td><span class="pill p0">P0</span></td></tr>
+            <tr><td><strong>Transaction costs (LBTT/ADS + fees)</strong></td><td>Omitting ~£6.8k on a £66k buy flips deal verdicts.</td><td>Honest buy-vs-hold maths.</td><td><span class="size s">S</span></td><td><span class="pill p0">P0</span></td></tr>
+            <tr><td><strong>Assumptions panel</strong></td><td>Hardcoded growth blocks stress testing and trust.</td><td>Reproducible, defensible scenarios.</td><td><span class="size m">M</span></td><td><span class="pill p0">P0</span></td></tr>
+            <tr><td><strong>Clone / template scenarios</strong></td><td>Comparison needs cheap branching; recreating by hand is friction.</td><td>Minutes-not-hours to test variants.</td><td><span class="size s">S</span></td><td><span class="pill p0">P0</span></td></tr>
+            <tr><td><strong>One-click stress tests</strong></td><td>Rate/rent shocks are the most-asked “what if”.</td><td>Confidence the plan survives bad years.</td><td><span class="size m">M</span></td><td><span class="pill p1">P1</span></td></tr>
+            <tr><td><strong>Post-tax cashflow (S24/CGT/Ltd)</strong></td><td>Pre-tax income overstates FI; structure changes the answer.</td><td>The number that actually funds retirement.</td><td><span class="size l">L</span></td><td><span class="pill p1">P1</span></td></tr>
+            <tr><td><strong>Goal-based planner</strong></td><td>Working backwards from a target is the signature differentiator.</td><td>“Tell me the route,” not “build it yourself.”</td><td><span class="size xl">XL</span></td><td><span class="pill p1">P1</span></td></tr>
+            <tr><td><strong>Risk &amp; intelligence scores</strong></td><td>Every up-and-to-the-right chart needs a “what breaks this?”.</td><td>Surfaces concentration/liquidity blind spots.</td><td><span class="size l">L</span></td><td><span class="pill p1">P1</span></td></tr>
+            <tr><td><strong>Per-property drill-down</strong></td><td>Portfolio totals hide which asset drives the result.</td><td>Pinpoints the laggard to sell/refinance.</td><td><span class="size m">M</span></td><td><span class="pill p1">P1</span></td></tr>
+            <tr><td><strong>Voids, reserves, sale-with-CGT events</strong></td><td>Real portfolios have lumpy costs and exits.</td><td>Realism for advanced planning.</td><td><span class="size l">L</span></td><td><span class="pill p2">P2</span></td></tr>
+            <tr><td><strong>Director's loan &amp; restructuring</strong></td><td>Relevant to Ltd/SPV investors, niche for this portfolio today.</td><td>Tax-efficient extraction modelling.</td><td><span class="size l">L</span></td><td><span class="pill p2">P2</span></td></tr>
+            <tr><td><strong>PDF / one-page brief export</strong></td><td>Decisions get shared with lenders/accountants.</td><td>Professional, shareable output.</td><td><span class="size s">S</span></td><td><span class="pill p2">P2</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout info" style="margin-bottom:0"><span class="ci">🧭</span><span class="ct">
+        <b>Sequencing logic:</b> P0 items establish <em>credibility</em> (accurate maths) and the single biggest UX win
+        (comparison) — both cheap because the foundations exist. P1 delivers the <em>differentiators</em> (goals, risk,
+        post-tax). P2 adds depth once the platform has proven its value.</span></div>
+    </section>
+    <section id="s11-roadmap" class="section">
+      <div class="section-tag"><span class="num">10</span><span class="kicker">Implementation Roadmap</span></div>
+      <h2>Four phases, each shippable</h2>
+      <p class="lead">Sequenced so credibility and the biggest UX win land first, differentiation second, and depth last.
+        Effort is given as engineering-week ranges plus a T-shirt size, assuming one focused full-stack developer.</p>
+
+      <div class="timeline">
+        <div class="phase">
+          <div class="ph-head">
+            <div class="pnum">Phase 1 · <span class="size m">M</span></div>
+            <div class="pname">Professional MVP</div>
+            <div><span class="tag">3–4 wks</span></div>
+          </div>
+          <div>
+            <div class="bar-track"><div class="bar-fill bf1" style="left:0;width:26%">Wks 1–4</div></div>
+            <div class="ph-detail">
+              <b>Features:</b> real amortisation · transaction costs (LBTT/ADS + fees) · assumptions panel · clone/template scenarios · richer KPI set (ROI, LTV path, DSCR).
+              <ul>
+                <li><b>Tasks:</b> add <code>amortise()</code> &amp; <code>transactionCosts()</code> pure helpers + tests; <code>assumptions_json</code> column &amp; migration; wire assumptions into <code>buildProjection</code>; “Duplicate scenario” action; expand <code>MonthSnapshot</code> &amp; KPI cards.</li>
+                <li><b>Dependencies:</b> none — builds on existing engine &amp; schema.</li>
+                <li><b>Impact:</b> projections become <em>trustworthy</em> — the precondition for every other feature.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="phase">
+          <div class="ph-head">
+            <div class="pnum">Phase 2 · <span class="size m">M</span></div>
+            <div class="pname">Advanced Comparison</div>
+            <div><span class="tag">3–4 wks</span></div>
+          </div>
+          <div>
+            <div class="bar-track"><div class="bar-fill bf2" style="left:26%;width:26%">Wks 5–8</div></div>
+            <div class="ph-detail">
+              <b>Features:</b> comparison UI on the existing endpoint · multi-select scenarios · six-dimension ranking with best-in-column · diff/insight callouts · one-click rate/rent stress tests · per-property drill-down.
+              <ul>
+                <li><b>Tasks:</b> comparison service (results → metric vectors); multi-select + comparison route/page; stress-test runner (re-run with shocked assumptions); per-property results arrays + drill-down chart.</li>
+                <li><b>Dependencies:</b> Phase 1 (assumptions enable stress tests; richer snapshot enables drill-down).</li>
+                <li><b>Impact:</b> the feature finally answers “<em>which</em> strategy?” — the core decision.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="phase">
+          <div class="ph-head">
+            <div class="pnum">Phase 3 · <span class="size xl">XL</span></div>
+            <div class="pname">Goal-Based Planning</div>
+            <div><span class="tag">5–7 wks</span></div>
+          </div>
+          <div>
+            <div class="bar-track"><div class="bar-fill bf3" style="left:52%;width:32%">Wks 9–15</div></div>
+            <div class="ph-detail">
+              <b>Features:</b> goal &amp; constraint input · pathway generator (cash-stack / hybrid / leverage templates) · goal solver (time-to-target) · ranked pathways with binding-constraint callout · post-tax cashflow layer (S24/CGT/Ltd).
+              <ul>
+                <li><b>Tasks:</b> <code>goals</code> &amp; <code>goal_pathways</code> tables; strategy templates; iterative solver in a web worker; <code>taxEngine()</code> helper + structure toggle; ranking &amp; explanation.</li>
+                <li><b>Dependencies:</b> Phases 1–2 (accurate engine + comparison ranking reused by the solver).</li>
+                <li><b>Impact:</b> the signature differentiator — “tell me the route to £5k/mo.”</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="phase">
+          <div class="ph-head">
+            <div class="pnum">Phase 4 · <span class="size l">L</span></div>
+            <div class="pname">AI Portfolio Intelligence</div>
+            <div><span class="tag">4–6 wks</span></div>
+          </div>
+          <div>
+            <div class="bar-track"><div class="bar-fill bf4" style="left:84%;width:16%">Wks 16–21</div></div>
+            <div class="ph-detail">
+              <b>Features:</b> risk/health/liquidity/opportunity scorecard · risk heatmap · plain-English insights · “what should I buy next?” opportunity scoring · PDF one-page brief export.
+              <ul>
+                <li><b>Tasks:</b> intelligence engine (score formulas over results + facts); insight templating (optionally Claude-generated narrative); opportunity scorer across candidate buys; print/PDF brief.</li>
+                <li><b>Dependencies:</b> Phases 1–3 (scores &amp; insights consume projections, comparisons &amp; goals).</li>
+                <li><b>Impact:</b> turns data into judgement — the “adviser in the app” experience.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout good" style="margin-bottom:0"><span class="ci">📦</span><span class="ct">
+        <b>Total ≈ 15–21 engineering weeks</b> to the full vision, but each phase is independently shippable and
+        valuable. Phases 1–2 alone (~6–8 weeks) already transform the feature from a calculator into a credible
+        decision tool.</span></div>
+    </section>
+    <section id="s12-backlog" class="section">
+      <div class="section-tag"><span class="num">11</span><span class="kicker">Task Breakdown</span></div>
+      <h2>Development backlog</h2>
+      <p class="lead">Epics broken into user stories with acceptance criteria, priority and complexity. Ready to drop
+        into an issue tracker; complexity uses the same S/M/L/XL scale as the roadmap.</p>
+
+      <h4>Epic A — Modelling fidelity <span class="pill p0">P0</span></h4>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th style="width:26%">User story</th><th>Acceptance criteria</th><th>Pri</th><th>Cx</th></tr></thead>
+          <tbody>
+            <tr><td>As an investor, I want debt to amortise realistically so projections match my lender's figures.</td><td>Repayment &amp; interest-only schedules supported; principal/interest split per month; flat-decay model removed; covered by unit tests.</td><td><span class="pill p0">P0</span></td><td><span class="size m">M</span></td></tr>
+            <tr><td>As an investor, I want buys to include LBTT/ADS and fees so deal returns are honest.</td><td>Scottish LBTT bands + 8% ADS + configurable legal/survey/refurb added to cash-in; cash-on-cash recomputed; £66k buy shows ~£72.8k true cost.</td><td><span class="pill p0">P0</span></td><td><span class="size s">S</span></td></tr>
+            <tr><td>As an investor, I want to set growth/inflation/void assumptions per scenario.</td><td>Assumptions panel persists to <code>assumptions_json</code>; engine reads them; defaults match current 3%/CPI; changing them re-projects.</td><td><span class="pill p0">P0</span></td><td><span class="size m">M</span></td></tr>
+            <tr><td>As an investor, I want a working refinance event with optional equity release.</td><td><code>refinance</code> implemented: resets amortisation, optional cash-out raises debt &amp; liquidity, fees applied; tested.</td><td><span class="pill p0">P0</span></td><td><span class="size m">M</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>Epic B — Comparison &amp; stress testing <span class="pill p0">P0</span>/<span class="pill p1">P1</span></h4>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th style="width:26%">User story</th><th>Acceptance criteria</th><th>Pri</th><th>Cx</th></tr></thead>
+          <tbody>
+            <tr><td>As an investor, I want to duplicate a scenario so I can branch a variant quickly.</td><td>“Duplicate” copies scenario + events + assumptions; opens the copy; under 2 clicks.</td><td><span class="pill p0">P0</span></td><td><span class="size s">S</span></td></tr>
+            <tr><td>As an investor, I want to compare selected scenarios side-by-side.</td><td>Multi-select ≥2; table ranks end equity, net CF, peak LTV, time-to-target, liquidity, risk; best-in-column highlighted; uses existing <code>/compare</code>.</td><td><span class="pill p0">P0</span></td><td><span class="size m">M</span></td></tr>
+            <tr><td>As an investor, I want plain-English diffs between two scenarios.</td><td>Pairwise diff lists material deltas as sentences (“+£673k equity, −£620/mo CF, +22pp LTV”).</td><td><span class="pill p1">P1</span></td><td><span class="size s">S</span></td></tr>
+            <tr><td>As an investor, I want one-click rate/rent stress tests.</td><td>Buttons re-run a scenario at +1/2/3% rates &amp; −10/20% rent; flags any month breaching min DSCR; overlay on chart.</td><td><span class="pill p1">P1</span></td><td><span class="size m">M</span></td></tr>
+            <tr><td>As an investor, I want per-property drill-down in results.</td><td>Toggle from portfolio totals to per-property equity/CF series; identifies best/worst asset.</td><td><span class="pill p1">P1</span></td><td><span class="size m">M</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>Epic C — Goal-based planning <span class="pill p1">P1</span></h4>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th style="width:26%">User story</th><th>Acceptance criteria</th><th>Pri</th><th>Cx</th></tr></thead>
+          <tbody>
+            <tr><td>As an investor, I want to enter a goal &amp; constraints.</td><td>Goal types (income, count, net worth, mortgage-free, retirement date) + constraints (max LTV, min DSCR, cash/yr) persisted to <code>goals</code>.</td><td><span class="pill p1">P1</span></td><td><span class="size m">M</span></td></tr>
+            <tr><td>As an investor, I want the system to generate pathways to my goal.</td><td>≥3 template-based pathways produced; each a valid event sequence respecting constraints; persisted to <code>goal_pathways</code>.</td><td><span class="pill p1">P1</span></td><td><span class="size xl">XL</span></td></tr>
+            <tr><td>As an investor, I want pathways ranked with the binding constraint shown.</td><td>Ranked by time-to-goal + risk; each shows the limiting factor; recommended pathway flagged; solver runs off the UI thread.</td><td><span class="pill p1">P1</span></td><td><span class="size l">L</span></td></tr>
+            <tr><td>As an investor, I want post-tax cashflow so my FI number is real.</td><td>S24 (personal) &amp; corp-tax (Ltd) toggle; CGT on sale; post-tax CF series alongside pre-tax; goal solver uses post-tax.</td><td><span class="pill p1">P1</span></td><td><span class="size l">L</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>Epic D — Intelligence &amp; output <span class="pill p1">P1</span>/<span class="pill p2">P2</span></h4>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th style="width:26%">User story</th><th>Acceptance criteria</th><th>Pri</th><th>Cx</th></tr></thead>
+          <tbody>
+            <tr><td>As an investor, I want a portfolio scorecard.</td><td>Health, liquidity, rate-resilience, vacancy, diversification, opportunity scores from transparent formulas; recompute on change.</td><td><span class="pill p1">P1</span></td><td><span class="size l">L</span></td></tr>
+            <tr><td>As an investor, I want a risk heatmap.</td><td>Likelihood × impact grid per risk factor with mitigation notes; colour-coded; data-driven from portfolio facts.</td><td><span class="pill p2">P2</span></td><td><span class="size m">M</span></td></tr>
+            <tr><td>As an investor, I want plain-English insights.</td><td>Templated (optionally LLM) narrative flagging concentration, headroom, refix, fragility; cites the numbers.</td><td><span class="pill p2">P2</span></td><td><span class="size m">M</span></td></tr>
+            <tr><td>As an investor, I want a one-page PDF brief.</td><td>Print/export of a scenario or comparison incl. KPIs, chart, risks; clean A4 layout.</td><td><span class="pill p2">P2</span></td><td><span class="size s">S</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section id="s13-metrics" class="section">
+      <div class="section-tag"><span class="num">12</span><span class="kicker">Success Metrics</span></div>
+      <h2>How we'll know it worked</h2>
+      <p class="lead">Single-user tooling still deserves measurable goals. These mix usability, capability and the
+        ultimate outcome — <strong>decision confidence</strong>: does the investor act on what the platform tells them?</p>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Metric</th><th>Definition</th><th class="num-col">Baseline</th><th class="num-col">Target</th><th>How measured</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Time to create a scenario</strong></td><td>From “new” to a run projection</td><td class="num-col">~6–8 min</td><td class="num-col best">&lt; 2 min</td><td>In-app timing; templates &amp; clone reduce setup.</td></tr>
+            <tr><td><strong>Time to a decision</strong></td><td>Curiosity → ranked, stress-tested comparison</td><td class="num-col">n/a</td><td class="num-col best">&lt; 5 min</td><td>Funnel from scenario create → compare → stress.</td></tr>
+            <tr><td><strong>Comparison usage</strong></td><td>% of sessions using side-by-side compare</td><td class="num-col">0%</td><td class="num-col best">&gt; 60%</td><td>Event log on the comparison view.</td></tr>
+            <tr><td><strong>Goal-forecast accuracy</strong></td><td>Projected vs. actual at checkpoints (income, equity)</td><td class="num-col">n/a</td><td class="num-col best">±10%</td><td>Back-test projections against realised portfolio snapshots.</td></tr>
+            <tr><td><strong>Stress-test adoption</strong></td><td>% of acted-on scenarios that were stress-tested first</td><td class="num-col">0%</td><td class="num-col best">&gt; 75%</td><td>Flag scenarios with ≥1 stress run before action.</td></tr>
+            <tr><td><strong>Modelling fidelity</strong></td><td>Projection vs. lender/accountant figures on a real deal</td><td class="num-col">low</td><td class="num-col best">within a few %</td><td>Spot-check amortisation, tax &amp; costs vs. statements.</td></tr>
+            <tr><td><strong>Engagement</strong></td><td>Active planning sessions / month</td><td class="num-col">occasional</td><td class="num-col best">weekly</td><td>Session analytics; revisit rate after a projection.</td></tr>
+            <tr><td><strong>Decision confidence</strong></td><td>Self-rated confidence before vs. after using the tool</td><td class="num-col">—</td><td class="num-col best">+2 on 5-pt</td><td>Lightweight in-app prompt after key decisions.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout good" style="margin-bottom:0"><span class="ci">🎯</span><span class="ct">
+        <b>North-star:</b> the investor reaches the £5,000/mo &amp; 10-property goal <em>on or ahead of</em> the platform's
+        recommended pathway, having avoided at least one poor decision (an over-leveraged buy, or a missed prudent one)
+        the tool flagged in advance.</span></div>
+    </section>
+    <section id="s14-appendix" class="section">
+      <div class="section-tag"><span class="num">+</span><span class="kicker">Appendix</span></div>
+      <h2>Assumptions &amp; glossary</h2>
+      <p class="lead">So every figure in this document is reproducible and defensible. Forward projections are
+        illustrative and depend on these inputs; they are not financial advice.</p>
+
+      <div class="two-col">
+        <div class="card">
+          <h4 style="margin-top:0">Modelling assumptions used in worked examples</h4>
+          <div class="tbl-wrap" style="margin-top:6px">
+            <table style="min-width:0">
+              <tbody>
+                <tr><td>Capital growth</td><td class="num-col">3% / yr (current engine default)</td></tr>
+                <tr><td>Rent inflation</td><td class="num-col">~CPI, 2–3% / yr</td></tr>
+                <tr><td>Mortgage rate (new/refix)</td><td class="num-col">5.5% (matches TMW)</td></tr>
+                <tr><td>Deposit on leveraged buys</td><td class="num-col">25% (75% LTV)</td></tr>
+                <tr><td>LBTT residential nil-rate band</td><td class="num-col">up to £145,000</td></tr>
+                <tr><td>ADS (additional dwelling)</td><td class="num-col">8% on full price</td></tr>
+                <tr><td>Legal + survey per purchase</td><td class="num-col">~£1,500 (est.)</td></tr>
+                <tr><td>Maintenance reserve</td><td class="num-col">~10% of rent (proposed)</td></tr>
+                <tr><td>Prudent leverage ceiling</td><td class="num-col">≤45% portfolio LTV</td></tr>
+                <tr><td>Min DSCR (stress floor)</td><td class="num-col">1.25×</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="divider-note">UK tax rates and thresholds (LBTT/ADS, S24, CGT, corporation tax) change at fiscal
+            events; the platform should treat them as configurable, dated parameters rather than constants.</p>
+        </div>
+        <div class="card">
+          <h4 style="margin-top:0">Glossary</h4>
+          <ul>
+            <li><strong>LTV</strong> — Loan-to-Value: debt ÷ property value.</li>
+            <li><strong>DSCR</strong> — Debt Service Coverage Ratio: net operating income ÷ debt payments. Lenders &amp; the stress floor watch this.</li>
+            <li><strong>LBTT</strong> — Land &amp; Buildings Transaction Tax (Scotland's stamp duty).</li>
+            <li><strong>ADS</strong> — Additional Dwelling Supplement: surcharge on second+ homes (currently 8%).</li>
+            <li><strong>Section 24 (S24)</strong> — restricts mortgage-interest relief for personally-held BTL to a 20% credit.</li>
+            <li><strong>CGT</strong> — Capital Gains Tax on disposal gains.</li>
+            <li><strong>BRRR</strong> — Buy, Refurbish, Refinance, Rent: recycle deposits via equity release.</li>
+            <li><strong>Cash-on-cash</strong> — annual net cashflow ÷ actual cash invested.</li>
+            <li><strong>Void</strong> — period a property is untenanted (no rent).</li>
+            <li><strong>FI</strong> — Financial Independence: passive income covers living costs.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4 style="margin-top:0">Source data — live portfolio (snapshot)</h4>
+        <div class="tbl-wrap" style="margin-top:6px">
+          <table>
+            <thead><tr><th>Property</th><th>Type</th><th class="num-col">Value</th><th class="num-col">Rent/mo</th><th>Financing</th></tr></thead>
+            <tbody>
+              <tr><td>119 Stewart Road, Falkirk</td><td>1-bed flat</td><td class="num-col">£60,000</td><td class="num-col">£600</td><td>Owned outright</td></tr>
+              <tr><td>60 Stewart Road, Falkirk</td><td>1-bed flat</td><td class="num-col">£60,000</td><td class="num-col">£650</td><td>Owned outright</td></tr>
+              <tr><td>3/6 Main Street, Larbert</td><td>2-bed flat</td><td class="num-col">£80,000</td><td class="num-col">£700</td><td>TMW £48k @ 5.5%, £308/mo, fix ends Jul-2026</td></tr>
+              <tr><td><em>Pending:</em> Comely Place</td><td>flat</td><td class="num-col">£66,000</td><td class="num-col">£600</td><td>All-cash purchase</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="divider-note" style="margin-top:10px">Totals (3 owned): £200k value · £48k debt · £152k equity · 24% LTV ·
+          £1,950/mo gross · ~£315/mo opex (agent £234 + insurance £81) · £308/mo mortgage · ~£1,327/mo net · ~11.7% gross yield.
+          Existing scenarios in DB: Base Case, 4 Properties (Comely Place cash), Path to 5, Path to 10.</p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<footer>
+  <strong>Portfolio Intelligence — What-If Product Strategy.</strong> Internal strategy &amp; design document.
+  Worked figures derived from the live portfolio database (3 owned properties + 1 pending acquisition).
+  Forward projections are illustrative and depend on the modelling assumptions in the Appendix.
+  <div class="toc-foot">
+    <span class="tag">Single-user BI tool</span><span class="tag">UK Buy-to-Let</span>
+    <span class="tag">React 19 + Express + SQLite</span><span class="tag">Decision-support system</span>
+  </div>
+</footer>
+
+<script>
+/* ---- theme toggle (persisted) ---- */
+function applyTheme(t){
+  document.documentElement.setAttribute('data-theme',t);
+  document.getElementById('themeIco').textContent = t==='dark' ? '☀️' : '🌙';
+  document.getElementById('themeTxt').textContent = t==='dark' ? 'Light' : 'Dark';
+}
+function toggleTheme(){
+  var cur=document.documentElement.getAttribute('data-theme');
+  var next=cur==='dark'?'light':'dark';
+  try{localStorage.setItem('pi-theme',next)}catch(e){}
+  applyTheme(next);
+}
+(function(){
+  var saved;try{saved=localStorage.getItem('pi-theme')}catch(e){}
+  if(!saved && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) saved='dark';
+  applyTheme(saved||'light');
+})();
+
+/* ---- scroll-spy active nav ---- */
+(function(){
+  var links=[].slice.call(document.querySelectorAll('.sidenav a'));
+  var map={};links.forEach(function(a){map[a.getAttribute('href').slice(1)]=a;});
+  var ids=Object.keys(map);
+  var obs=new IntersectionObserver(function(entries){
+    entries.forEach(function(en){
+      if(en.isIntersecting){
+        links.forEach(function(l){l.classList.remove('active');});
+        var a=map[en.target.id];if(a)a.classList.add('active');
+      }
+    });
+  },{rootMargin:'-72px 0px -68% 0px',threshold:0});
+  ids.forEach(function(id){var el=document.getElementById(id);if(el)obs.observe(el);});
+})();
+</script>
+</body>
+</html>

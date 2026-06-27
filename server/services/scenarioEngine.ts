@@ -123,6 +123,28 @@ export function buildProjection(
           }
           break
         }
+        case 'payoff_mortgage': {
+          let state = ev.property_id ? stateMap.get(ev.property_id) : null
+          if (!state) {
+            // No specific property targeted — pay off the one with the smallest debt
+            let cheapestId: number | null = null
+            let cheapestDebt = Infinity
+            for (const [id, s] of stateMap) {
+              if (s.monthly_mortgage > 0 && s.debt < cheapestDebt) {
+                cheapestDebt = s.debt
+                cheapestId = id
+              }
+            }
+            if (cheapestId !== null) state = stateMap.get(cheapestId) ?? null
+          }
+          if (state) {
+            // Capital event — funded from savings/equity outside this cashflow model.
+            // buy_property follows the same convention (deposit not deducted).
+            state.monthly_mortgage = 0
+            state.debt = 0
+          }
+          break
+        }
         case 'major_expense': {
           cumulativeCashflow -= params.amount ?? 0
           break
@@ -201,30 +223,42 @@ export function runScenario(scenario: ScenarioConfig, events: ScenarioEvent[]) {
     'SELECT property_id, amount, frequency, active FROM expenses WHERE active=1'
   )
 
+  const toMonthly = (e: { amount: number; frequency: string }) => {
+    if (e.frequency === 'monthly') return e.amount
+    if (e.frequency === 'quarterly') return e.amount / 3
+    if (e.frequency === 'annually') return e.amount / 12
+    return 0
+  }
+
+  // Portfolio-wide expenses (property_id = null) must be summed once and
+  // distributed evenly — not added inside the per-property loop (which would
+  // multiply them by the number of properties).
+  const portfolioExpensesMonthly = dbExpenses
+    .filter(e => e.property_id === null)
+    .reduce((s, e) => s + toMonthly(e), 0)
+  const perPropertyShare = dbProperties.length > 0 ? portfolioExpensesMonthly / dbProperties.length : 0
+
   const initialState = new Map<number, PropertyState>()
 
   for (const p of dbProperties) {
     const tenant = dbTenants.find(t => t.property_id === p.id)
-    const mortgage = dbMortgages.find(m => m.property_id === p.id)
 
-    const otherExpenses = dbExpenses
-      .filter(e => e.property_id === p.id || e.property_id === null)
-      .reduce((s, e) => {
-        switch (e.frequency) {
-          case 'monthly': return s + e.amount
-          case 'quarterly': return s + e.amount / 3
-          case 'annually': return s + e.amount / 12
-          default: return s
-        }
-      }, 0)
+    // Sum ALL active mortgages for this property (not just the first)
+    const propertyMortgages = dbMortgages.filter(m => m.property_id === p.id)
+    const monthly_mortgage = propertyMortgages.reduce((s, m) => s + m.monthly_payment, 0)
+    const debt = propertyMortgages.reduce((s, m) => s + m.current_balance, 0)
+
+    const propertyExpensesMonthly = dbExpenses
+      .filter(e => e.property_id === p.id)
+      .reduce((s, e) => s + toMonthly(e), 0)
 
     initialState.set(p.id, {
       id: p.id,
       value: p.current_value ?? p.purchase_price ?? 0,
       monthly_rent: tenant?.rent_amount ?? 0,
-      monthly_mortgage: mortgage?.monthly_payment ?? 0,
-      monthly_other_expenses: otherExpenses,
-      debt: mortgage?.current_balance ?? 0,
+      monthly_mortgage,
+      monthly_other_expenses: propertyExpensesMonthly + perPropertyShare,
+      debt,
       is_vacant: !tenant,
     })
   }

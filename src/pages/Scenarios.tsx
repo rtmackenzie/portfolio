@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Play, X, Trash2 } from 'lucide-react'
+import { Plus, Play, X, Trash2, Pencil } from 'lucide-react'
 import { api } from '@/services/api'
 import { PageLoader } from '@/components/shared/LoadingSpinner'
 import { ScenarioAreaChart, CHART_COLORS } from '@/components/charts'
@@ -29,6 +29,7 @@ const EVENT_TYPES = [
   { value: 'vacancy_period', label: 'Vacancy Period' },
   { value: 'major_expense', label: 'Major Expense' },
   { value: 'interest_rate_change', label: 'Interest Rate Change' },
+  { value: 'payoff_mortgage', label: 'Pay Off Mortgage' },
 ]
 
 export default function Scenarios() {
@@ -40,6 +41,8 @@ export default function Scenarios() {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [showAddEvent, setShowAddEvent] = useState(false)
+  const [showEdit, setShowEdit] = useState(false)
+  const [editingEvent, setEditingEvent] = useState<import('@/types').ScenarioEvent | null>(null)
 
   const { data: selected } = useQuery({
     queryKey: ['scenarios', selectedId],
@@ -121,6 +124,9 @@ export default function Scenarios() {
                     >
                       <Play size={12} /> {calculate.isPending ? 'Running...' : 'Run Projection'}
                     </button>
+                    <button onClick={() => setShowEdit(true)} title="Edit scenario" className="px-3 py-1.5 border border-border rounded-md text-xs text-muted-foreground hover:bg-accent">
+                      <Pencil size={12} />
+                    </button>
                     <button onClick={() => deleteScenario.mutate(selected.id)} className="px-3 py-1.5 border border-red-500/40 text-red-400 rounded-md text-xs hover:bg-red-500/10">
                       <Trash2 size={12} />
                     </button>
@@ -156,12 +162,17 @@ export default function Scenarios() {
                               <span className="text-xs text-muted-foreground">{JSON.stringify(params).slice(0, 60)}</span>
                             )}
                           </div>
-                          <button
-                            onClick={() => deleteEvent.mutate({ scenarioId: selected.id, eventId: ev.id })}
-                            className="text-muted-foreground hover:text-red-400"
-                          >
-                            <X size={13} />
-                          </button>
+                          <div className="flex gap-1">
+                            <button onClick={() => setEditingEvent(ev)} className="text-muted-foreground hover:text-foreground">
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              onClick={() => deleteEvent.mutate({ scenarioId: selected.id, eventId: ev.id })}
+                              className="text-muted-foreground hover:text-red-400"
+                            >
+                              <X size={13} />
+                            </button>
+                          </div>
                         </div>
                       )
                     })}
@@ -206,7 +217,14 @@ export default function Scenarios() {
       </div>
 
       {showCreate && <CreateScenarioModal onClose={() => setShowCreate(false)} onCreated={id => { setSelectedId(id); setShowCreate(false) }} />}
-      {showAddEvent && selectedId && <AddEventModal scenarioId={selectedId} onClose={() => setShowAddEvent(false)} />}
+      {showEdit && selected && <EditScenarioModal scenario={selected} onClose={() => setShowEdit(false)} />}
+      {(showAddEvent || editingEvent) && selectedId && (
+        <EventModal
+          scenarioId={selectedId}
+          event={editingEvent ?? undefined}
+          onClose={() => { setShowAddEvent(false); setEditingEvent(null) }}
+        />
+      )}
     </div>
   )
 }
@@ -236,35 +254,118 @@ function CreateScenarioModal({ onClose, onCreated }: { onClose: () => void; onCr
   )
 }
 
-function AddEventModal({ scenarioId, onClose }: { scenarioId: number; onClose: () => void }) {
+function EditScenarioModal({ scenario, onClose }: { scenario: Scenario; onClose: () => void }) {
   const qc = useQueryClient()
-  const [eventType, setEventType] = useState('buy_property')
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
-  const [params, setParams] = useState('{}')
-  const add = useMutation({
-    mutationFn: () => api.post(`/scenarios/${scenarioId}/events`, { event_type: eventType, date, parameters: JSON.parse(params || '{}') }),
+  const update = useMutation({
+    mutationFn: (data: z.infer<typeof scenarioSchema>) => api.put(`/scenarios/${scenario.id}`, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['scenarios'] }); qc.invalidateQueries({ queryKey: ['scenarios', scenario.id] }); onClose() },
+  })
+  const { register, handleSubmit } = useForm({
+    resolver: zodResolver(scenarioSchema) as any,
+    defaultValues: { name: scenario.name, description: scenario.description ?? '', base_date: scenario.base_date, projection_years: scenario.projection_years },
+  })
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="bg-card rounded-xl shadow-2xl w-full max-w-md p-6">
+        <h2 className="text-base font-semibold mb-4">Edit Scenario</h2>
+        <form onSubmit={handleSubmit(d => update.mutateAsync(d))} className="space-y-4">
+          <div><label className={labelCls}>Name *</label><input {...register('name')} className={inputCls} /></div>
+          <div><label className={labelCls}>Description</label><textarea {...register('description')} className={inputCls} rows={2} /></div>
+          <div className="grid grid-cols-2 gap-4">
+            <div><label className={labelCls}>Base Date</label><input type="date" {...register('base_date')} className={inputCls} /></div>
+            <div><label className={labelCls}>Projection Years</label><input type="number" {...register('projection_years')} className={inputCls} /></div>
+          </div>
+          <div className="flex gap-3">
+            <button type="button" onClick={onClose} className="flex-1 px-4 py-2 border border-border rounded-md text-sm text-muted-foreground">Cancel</button>
+            <button type="submit" disabled={update.isPending} className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium disabled:opacity-50">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function EventModal({ scenarioId, event, onClose }: { scenarioId: number; event?: import('@/types').ScenarioEvent; onClose: () => void }) {
+  const qc = useQueryClient()
+  const isEdit = !!event
+  const [eventType, setEventType] = useState(event?.event_type ?? 'buy_property')
+  const [date, setDate] = useState(event?.date ?? new Date().toISOString().slice(0, 10))
+  const [propertyId, setPropertyId] = useState<number | ''>(event?.property_id ?? '')
+  const [params, setParams] = useState<Record<string, string | number>>(() => JSON.parse(event?.parameters_json ?? '{}'))
+
+  const { data: properties } = useQuery({
+    queryKey: ['properties'],
+    queryFn: () => api.get<{ id: number; address_line1: string; town: string }[]>('/properties'),
+  })
+
+  const setParam = (key: string, val: string) =>
+    setParams(prev => ({ ...prev, [key]: val === '' ? '' : Number(val) }))
+
+  const save = useMutation({
+    mutationFn: () => {
+      const body = { event_type: eventType, date, property_id: propertyId || null, parameters: params }
+      return isEdit
+        ? api.put(`/scenarios/${scenarioId}/events/${event!.id}`, body)
+        : api.post(`/scenarios/${scenarioId}/events`, body)
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['scenarios', scenarioId] }); onClose() },
   })
 
-  const paramHints: Record<string, string> = {
-    buy_property: '{"purchase_price": 200000, "monthly_rent": 1000, "deposit_percent": 25, "mortgage_rate": 5.5}',
-    sell_property: '{"sale_price": 250000}',
-    rent_change: '{"change_percent": 5}',
-    remortgage: '{"new_monthly_payment": 600}',
-    major_expense: '{"amount": 5000}',
-    interest_rate_change: '{"change_basis_points": 25}',
-    vacancy_period: '{"months": 2}',
+  const needsProperty = ['sell_property', 'remortgage', 'vacancy_period', 'rent_change', 'payoff_mortgage'].includes(eventType)
+
+  const numField = (key: string, label: string, placeholder?: string) => (
+    <div key={key}>
+      <label className={labelCls}>{label}</label>
+      <input
+        type="number"
+        step="any"
+        value={params[key] ?? ''}
+        onChange={e => setParam(key, e.target.value)}
+        placeholder={placeholder}
+        className={inputCls}
+      />
+    </div>
+  )
+
+  const renderParams = () => {
+    switch (eventType) {
+      case 'buy_property':
+        return (
+          <div className="grid grid-cols-2 gap-3">
+            {numField('purchase_price', 'Purchase Price (£)', '200000')}
+            {numField('monthly_rent', 'Monthly Rent (£)', '1000')}
+            {numField('deposit_percent', 'Deposit (%)', '25')}
+            {numField('mortgage_rate', 'Interest Rate (%)', '5.5')}
+            {numField('monthly_expenses', 'Monthly Expenses (£)', '200')}
+          </div>
+        )
+      case 'remortgage':
+        return numField('new_monthly_payment', 'New Monthly Payment (£)', '600')
+      case 'rent_change':
+        return (
+          <div className="grid grid-cols-2 gap-3">
+            {numField('change_percent', 'Change (%)', '5')}
+            {numField('new_rent', 'Fixed Rent Amount (£, optional)')}
+          </div>
+        )
+      case 'major_expense':
+        return numField('amount', 'Amount (£)', '5000')
+      case 'interest_rate_change':
+        return numField('change_basis_points', 'Basis Points (e.g. 25 = +0.25%)', '25')
+      default:
+        return null
+    }
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-card rounded-xl shadow-2xl w-full max-w-lg p-6">
-        <h2 className="text-base font-semibold mb-4">Add Event</h2>
+        <h2 className="text-base font-semibold mb-4">{isEdit ? 'Edit Event' : 'Add Event'}</h2>
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Event Type</label>
-              <select value={eventType} onChange={e => { setEventType(e.target.value); setParams(paramHints[e.target.value] ?? '{}') }} className={inputCls}>
+              <select value={eventType} onChange={e => { setEventType(e.target.value); setParams({}) }} className={inputCls}>
                 {EVENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
@@ -273,14 +374,24 @@ function AddEventModal({ scenarioId, onClose }: { scenarioId: number; onClose: (
               <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} />
             </div>
           </div>
-          <div>
-            <label className={labelCls}>Parameters (JSON)</label>
-            <textarea value={params} onChange={e => setParams(e.target.value)} className={`${inputCls} font-mono text-xs`} rows={4} />
-            <p className="text-xs text-muted-foreground mt-1">Hint: {paramHints[eventType]}</p>
-          </div>
+
+          {needsProperty && (
+            <div>
+              <label className={labelCls}>{eventType === 'rent_change' ? 'Apply to property (blank = all)' : 'Property *'}</label>
+              <select value={propertyId} onChange={e => setPropertyId(e.target.value === '' ? '' : Number(e.target.value))} className={inputCls}>
+                {eventType === 'rent_change' && <option value="">All properties</option>}
+                {properties?.map(p => <option key={p.id} value={p.id}>{p.address_line1}, {p.town}</option>)}
+              </select>
+            </div>
+          )}
+
+          {renderParams()}
+
           <div className="flex gap-3">
             <button onClick={onClose} className="flex-1 px-4 py-2 border border-border rounded-md text-sm text-muted-foreground">Cancel</button>
-            <button onClick={() => add.mutate()} disabled={add.isPending} className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium disabled:opacity-50">Add Event</button>
+            <button onClick={() => save.mutate()} disabled={save.isPending} className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium disabled:opacity-50">
+              {isEdit ? 'Save' : 'Add Event'}
+            </button>
           </div>
         </div>
       </div>

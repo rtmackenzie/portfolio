@@ -17,7 +17,7 @@ router.get('/:id', (req, res) => {
     const id = Number(req.params.id)
     const scenario = queryOne('SELECT * FROM scenarios WHERE id=?', [id])
     if (!scenario) return res.status(404).json({ message: 'Not found' })
-    const events = queryAll('SELECT * FROM scenario_events WHERE scenario_id=? ORDER BY sort_order, date', [id])
+    const events = queryAll('SELECT * FROM scenario_events WHERE scenario_id=? ORDER BY date, sort_order', [id])
     const results = queryOne<{ results_json: string }>('SELECT results_json FROM scenario_results WHERE scenario_id=? ORDER BY calculated_at DESC LIMIT 1', [id])
     res.json({
       ...scenario,
@@ -112,7 +112,7 @@ router.post('/:id/calculate', async (req, res) => {
     const id = Number(req.params.id)
     const scenario = queryOne<{ base_date: string; projection_years: number }>('SELECT * FROM scenarios WHERE id=?', [id])
     if (!scenario) return res.status(404).json({ message: 'Not found' })
-    const events = queryAll('SELECT * FROM scenario_events WHERE scenario_id=? ORDER BY sort_order, date', [id])
+    const events = queryAll('SELECT * FROM scenario_events WHERE scenario_id=? ORDER BY date, sort_order', [id])
     const results = runScenario(scenario, events as any)
     execute('INSERT INTO scenario_results (scenario_id, results_json) VALUES (?, ?)', [id, JSON.stringify(results)])
     res.json(results)

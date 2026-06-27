@@ -210,7 +210,8 @@ CREATE TABLE IF NOT EXISTS scenario_events (
   scenario_id INTEGER NOT NULL REFERENCES scenarios(id) ON DELETE CASCADE,
   event_type TEXT CHECK(event_type IN (
     'buy_property','sell_property','remortgage','rent_change',
-    'vacancy_period','major_expense','refinance','interest_rate_change'
+    'vacancy_period','major_expense','refinance','interest_rate_change',
+    'payoff_mortgage'
   )) NOT NULL,
   property_id INTEGER REFERENCES properties(id) ON DELETE SET NULL,
   date TEXT NOT NULL,

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio Intelligence — Documentation</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --panel2: #1c2230; --border: #2d333b;
+    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --orange: #ff9f40; --yellow: #e3b341;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 14px; line-height: 1.5; }
+
+  .page { max-width: 960px; margin: 0 auto; padding: 40px 40px 80px; }
+
+  header { margin-bottom: 40px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
+  header h1 { font-size: 26px; font-weight: 700; margin-bottom: 6px; }
+  header .sub { color: var(--muted); font-size: 13px; }
+
+  .section { margin-bottom: 40px; }
+  .section-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--muted); margin-bottom: 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px 20px; text-decoration: none; color: var(--text);
+    display: flex; flex-direction: column; gap: 6px;
+    transition: border-color .15s, background .15s;
+  }
+  .card:hover { border-color: var(--accent); background: var(--panel2); }
+
+  .card-title { font-size: 14px; font-weight: 600; color: var(--accent); }
+  .card-file  { font-size: 11px; color: var(--muted); font-family: ui-monospace, "Cascadia Code", monospace; }
+  .card-desc  { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 20px;
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+    align-self: flex-start; margin-top: 4px;
+  }
+  .badge-html { background: #1f2d1f; color: var(--green);  border: 1px solid var(--green); }
+  .badge-md   { background: #1f2228; color: var(--accent); border: 1px solid var(--accent); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <h1>Portfolio Intelligence — Documentation</h1>
+    <div class="sub">All project documents in one place</div>
+  </header>
+
+  <div class="section">
+    <div class="section-title">Reports &amp; Strategy</div>
+    <div class="grid">
+
+      <a class="card" href="what-if-product-strategy.html">
+        <div class="card-title">What-If Product Strategy</div>
+        <div class="card-file">what-if-product-strategy.html</div>
+        <div class="card-desc">Blueprint to evolve the What-If module into a portfolio intelligence platform — vision, financial modelling, comparison engine, goals, risk, roadmap, and backlog</div>
+        <span class="badge badge-html">HTML</span>
+      </a>
+
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Reference</div>
+    <div class="grid">
+
+      <a class="card" href="../README.md">
+        <div class="card-title">README</div>
+        <div class="card-file">README.md</div>
+        <div class="card-desc">Project overview, feature summary, and getting-started guide</div>
+        <span class="badge badge-md">Markdown</span>
+      </a>
+
+      <a class="card" href="../CLAUDE.md">
+        <div class="card-title">Project Context</div>
+        <div class="card-file">CLAUDE.md</div>
+        <div class="card-desc">Architecture, project layout, key patterns, schema, and dev/test commands</div>
+        <span class="badge badge-md">Markdown</span>
+      </a>
+
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

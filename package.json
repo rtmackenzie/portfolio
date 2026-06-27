@@ -10,6 +10,7 @@
     "server": "tsx watch server/index.ts",
     "client": "vite",
     "db:seed": "tsx server/db/seeds/seed.ts",
+    "create-scenarios": "tsx server/db/seeds/create-scenarios.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
