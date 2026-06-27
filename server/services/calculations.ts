@@ -1,3 +1,14 @@
+// Standard amortising monthly payment: P * r*(1+r)^n / ((1+r)^n - 1)
+// Returns interest-only payment when termMonths is 0.
+export function calcMonthlyPayment(balance: number, annualRate: number, termMonths: number): number {
+  if (balance <= 0) return 0
+  if (termMonths <= 0) return (balance * annualRate / 100) / 12
+  const r = annualRate / 100 / 12
+  if (r === 0) return balance / termMonths
+  const factor = Math.pow(1 + r, termMonths)
+  return balance * (r * factor) / (factor - 1)
+}
+
 export interface PropertyFinancials {
   monthly_gross_income: number
   monthly_mortgage: number

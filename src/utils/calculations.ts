@@ -11,8 +11,12 @@ export function calcDepositRequired(purchasePrice: number, depositPercent: numbe
   return purchasePrice * (depositPercent / 100) + repairCosts
 }
 
-export function calcMonthlyMortgage(loanAmount: number, annualRate: number): number {
-  return (loanAmount * (annualRate / 100)) / 12
+export function calcMonthlyMortgage(loanAmount: number, annualRate: number, termMonths?: number): number {
+  if (!termMonths) return (loanAmount * (annualRate / 100)) / 12
+  const r = annualRate / 100 / 12
+  if (r === 0) return loanAmount / termMonths
+  const factor = Math.pow(1 + r, termMonths)
+  return loanAmount * (r * factor) / (factor - 1)
 }
 
 export function calcAcquisitionMetrics(params: {

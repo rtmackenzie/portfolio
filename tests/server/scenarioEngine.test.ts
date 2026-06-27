@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildProjection, type PropertyState, type ScenarioEvent } from '../../server/services/scenarioEngine.ts'
+import { calcMonthlyPayment } from '../../server/services/calculations.ts'
 
 // Helpers
 function makeState(overrides: Partial<PropertyState> = {}): PropertyState {
@@ -11,6 +12,8 @@ function makeState(overrides: Partial<PropertyState> = {}): PropertyState {
     monthly_other_expenses: 100,
     debt: 120000,
     is_vacant: false,
+    mortgage_rate: 5.5,
+    is_interest_only: false,
     ...overrides,
   }
 }
@@ -89,9 +92,75 @@ describe('buildProjection — growth model', () => {
     expect(months[11].total_value).toBeGreaterThan(months[0].total_value)
   })
 
-  it('total_debt in month 12 is lower than month 1 (1% annual decay)', () => {
+  it('total_debt is constant when payment does not cover interest (no principal reduction)', () => {
+    // Default makeState: debt=120000, rate=5.5% → interest=£550/mo > payment=£500/mo
     const { months } = buildProjection(makeMap(makeState()), [], BASE_CONFIG)
+    expect(months[11].total_debt).toBe(months[0].total_debt)
+  })
+})
+
+// ─── Amortisation ─────────────────────────────────────────────────────────────
+
+describe('buildProjection — amortisation', () => {
+  it('repayment mortgage: debt falls each month', () => {
+    const debt = 60000
+    const rate = 6
+    const termMonths = 300
+    const payment = calcMonthlyPayment(debt, rate, termMonths)
+    const state = makeState({ debt, mortgage_rate: rate, monthly_mortgage: payment, is_interest_only: false })
+    const { months } = buildProjection(makeMap(state), [], BASE_CONFIG)
     expect(months[11].total_debt).toBeLessThan(months[0].total_debt)
+  })
+
+  it('repayment mortgage: balance after 12 months matches amortisation formula', () => {
+    const debt = 60000
+    const rate = 6
+    const termMonths = 300
+    const payment = calcMonthlyPayment(debt, rate, termMonths)
+    const state = makeState({ debt, mortgage_rate: rate, monthly_mortgage: payment, is_interest_only: false })
+    const { months } = buildProjection(makeMap(state), [], BASE_CONFIG)
+    // Expected from standard remaining-balance formula
+    const r = rate / 100 / 12
+    const expected = debt * (Math.pow(1 + r, termMonths) - Math.pow(1 + r, 12)) / (Math.pow(1 + r, termMonths) - 1)
+    expect(Math.abs(months[11].total_debt - Math.round(expected))).toBeLessThanOrEqual(1)
+  })
+
+  it('interest-only mortgage: debt stays constant', () => {
+    const debt = 120000
+    const rate = 5.5
+    const state = makeState({
+      debt,
+      mortgage_rate: rate,
+      monthly_mortgage: (debt * rate / 100) / 12,
+      is_interest_only: true,
+    })
+    const { months } = buildProjection(makeMap(state), [], BASE_CONFIG)
+    expect(months[11].total_debt).toBe(months[0].total_debt)
+  })
+
+  it('buy_property with mortgage_term_years uses amortising payment (debt falls after buy)', () => {
+    const { months } = buildProjection(
+      makeMap(makeState({ debt: 0, monthly_mortgage: 0, mortgage_rate: 0 })),
+      [makeEvent({
+        event_type: 'buy_property',
+        date: '2026-01-01',
+        parameters_json: JSON.stringify({ purchase_price: 80000, monthly_rent: 700, deposit_percent: 25, mortgage_rate: 5.5, mortgage_term_years: 25 }),
+      })],
+      BASE_CONFIG
+    )
+    // Debt introduced in month 0 should fall by month 11
+    expect(months[11].total_debt).toBeLessThan(months[0].total_debt)
+  })
+
+  it('payoff_mortgage: total_debt is 0 from payoff month onward', () => {
+    const state = makeState({ id: 1 })
+    const { months } = buildProjection(
+      makeMap(state),
+      [makeEvent({ event_type: 'payoff_mortgage', date: '2026-06-01', property_id: 1, parameters_json: '{}' })],
+      BASE_CONFIG
+    )
+    expect(months[5].total_debt).toBe(0)
+    expect(months[11].total_debt).toBe(0)
   })
 })
 

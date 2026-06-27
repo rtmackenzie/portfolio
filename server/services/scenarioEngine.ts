@@ -1,4 +1,5 @@
 import { queryAll } from '../db/database.ts'
+import { calcMonthlyPayment } from './calculations.ts'
 
 interface ScenarioConfig {
   base_date: string
@@ -20,6 +21,8 @@ export interface PropertyState {
   monthly_other_expenses: number
   debt: number
   is_vacant: boolean
+  mortgage_rate: number      // annual %, 0 = no mortgage
+  is_interest_only: boolean  // if true, principal is never reduced
 }
 
 interface MonthSnapshot {
@@ -51,6 +54,13 @@ export function buildProjection(
     eventsByDate.get(key)!.push(ev)
   }
 
+  // Mutable running debt balances — updated iteratively each month via amortisation.
+  // Separate from stateMap so events can read the live balance (e.g. payoff cheapest).
+  const debtMap = new Map<number, number>()
+  for (const [id, state] of stateMap) {
+    debtMap.set(id, state.debt)
+  }
+
   const snapshots: MonthSnapshot[] = []
   let cumulativeCashflow = 0
   let nextId = Math.max(...Array.from(stateMap.keys()), 0) + 1
@@ -75,25 +85,39 @@ export function buildProjection(
         case 'buy_property': {
           const depositPct = params.deposit_percent ?? 25
           const price = params.purchase_price ?? 0
+          const rate = params.mortgage_rate ?? 5.5
+          const termYears = params.mortgage_term_years ?? 25
           const debt = price * (1 - depositPct / 100)
-          stateMap.set(nextId++, {
-            id: nextId - 1,
+          const isIO = params.interest_only ?? false
+          const monthly_mortgage = isIO
+            ? (debt * rate / 100) / 12
+            : calcMonthlyPayment(debt, rate, termYears * 12)
+          const newId = nextId++
+          stateMap.set(newId, {
+            id: newId,
             value: price,
             monthly_rent: params.monthly_rent ?? 0,
-            monthly_mortgage: (debt * (params.mortgage_rate ?? 5.5) / 100) / 12,
+            monthly_mortgage,
             monthly_other_expenses: params.monthly_expenses ?? 200,
             debt,
             is_vacant: false,
+            mortgage_rate: rate,
+            is_interest_only: isIO,
           })
+          debtMap.set(newId, debt)
           break
         }
         case 'sell_property': {
-          if (ev.property_id) stateMap.delete(ev.property_id)
+          if (ev.property_id) {
+            stateMap.delete(ev.property_id)
+            debtMap.delete(ev.property_id)
+          }
           break
         }
         case 'remortgage': {
           const state = ev.property_id ? stateMap.get(ev.property_id) : null
           if (state) {
+            // TODO: Phase 2 — extend to accept new_rate / new_balance for equity-release refi
             state.monthly_mortgage = params.new_monthly_payment ?? state.monthly_mortgage
           }
           break
@@ -120,28 +144,32 @@ export function buildProjection(
           const bps = params.change_basis_points ?? 0
           for (const state of stateMap.values()) {
             state.monthly_mortgage *= (1 + bps / 10000)
+            state.mortgage_rate += bps / 100
           }
           break
         }
         case 'payoff_mortgage': {
-          let state = ev.property_id ? stateMap.get(ev.property_id) : null
-          if (!state) {
-            // No specific property targeted — pay off the one with the smallest debt
-            let cheapestId: number | null = null
+          let targetId: number | null = null
+          if (ev.property_id) {
+            targetId = ev.property_id
+          } else {
+            // No specific property targeted — pay off the one with the smallest current balance
             let cheapestDebt = Infinity
             for (const [id, s] of stateMap) {
-              if (s.monthly_mortgage > 0 && s.debt < cheapestDebt) {
-                cheapestDebt = s.debt
-                cheapestId = id
+              const currentDebt = debtMap.get(id) ?? 0
+              if (s.monthly_mortgage > 0 && currentDebt < cheapestDebt) {
+                cheapestDebt = currentDebt
+                targetId = id
               }
             }
-            if (cheapestId !== null) state = stateMap.get(cheapestId) ?? null
           }
-          if (state) {
+          const state = targetId !== null ? stateMap.get(targetId) : null
+          if (state && targetId !== null) {
             // Capital event — funded from savings/equity outside this cashflow model.
             // buy_property follows the same convention (deposit not deducted).
             state.monthly_mortgage = 0
             state.debt = 0
+            debtMap.set(targetId, 0)
           }
           break
         }
@@ -156,14 +184,21 @@ export function buildProjection(
     let totalDebt = 0
     let monthlyCashflow = 0
 
-    for (const state of stateMap.values()) {
+    for (const [propId, state] of stateMap) {
       // Approximate 3% annual property growth
       const growthFactor = Math.pow(1.03, i / 12)
       const currentValue = state.value * growthFactor
 
-      // Approximate 1% annual debt decay
-      const debtDecay = Math.pow(0.99, i / 12)
-      const currentDebt = state.debt * debtDecay
+      // Iterative amortisation: subtract principal portion of payment from running balance.
+      // Interest-only and no-mortgage properties keep their balance constant.
+      let currentDebt = debtMap.get(propId) ?? 0
+      if (currentDebt > 0 && !state.is_interest_only && state.mortgage_rate > 0) {
+        const monthlyRate = state.mortgage_rate / 100 / 12
+        const interest = currentDebt * monthlyRate
+        const principal = Math.max(0, state.monthly_mortgage - interest)
+        currentDebt = Math.max(0, currentDebt - principal)
+        debtMap.set(propId, currentDebt)
+      }
 
       totalValue += currentValue
       totalDebt += currentDebt
@@ -215,8 +250,11 @@ export function runScenario(scenario: ScenarioConfig, events: ScenarioEvent[]) {
     "SELECT property_id, rent_amount, status FROM tenants WHERE status='active'"
   )
 
-  const dbMortgages = queryAll<{ property_id: number; monthly_payment: number; current_balance: number; is_active: number }>(
-    'SELECT property_id, monthly_payment, current_balance, is_active FROM mortgages WHERE is_active=1'
+  const dbMortgages = queryAll<{
+    property_id: number; monthly_payment: number; current_balance: number;
+    is_active: number; interest_rate: number; type: string;
+  }>(
+    'SELECT property_id, monthly_payment, current_balance, is_active, interest_rate, type FROM mortgages WHERE is_active=1'
   )
 
   const dbExpenses = queryAll<{ property_id: number | null; amount: number; frequency: string; active: number }>(
@@ -243,10 +281,11 @@ export function runScenario(scenario: ScenarioConfig, events: ScenarioEvent[]) {
   for (const p of dbProperties) {
     const tenant = dbTenants.find(t => t.property_id === p.id)
 
-    // Sum ALL active mortgages for this property (not just the first)
+    // Sum ALL active mortgages for this property; use highest-balance one for rate/type
     const propertyMortgages = dbMortgages.filter(m => m.property_id === p.id)
     const monthly_mortgage = propertyMortgages.reduce((s, m) => s + m.monthly_payment, 0)
     const debt = propertyMortgages.reduce((s, m) => s + m.current_balance, 0)
+    const primaryMortgage = propertyMortgages.sort((a, b) => b.current_balance - a.current_balance)[0]
 
     const propertyExpensesMonthly = dbExpenses
       .filter(e => e.property_id === p.id)
@@ -260,6 +299,8 @@ export function runScenario(scenario: ScenarioConfig, events: ScenarioEvent[]) {
       monthly_other_expenses: propertyExpensesMonthly + perPropertyShare,
       debt,
       is_vacant: !tenant,
+      mortgage_rate: primaryMortgage?.interest_rate ?? 0,
+      is_interest_only: primaryMortgage?.type === 'interest_only',
     })
   }
 
