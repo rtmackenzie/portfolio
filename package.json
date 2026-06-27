@@ -11,9 +11,9 @@
     "client": "vite",
     "db:seed": "tsx server/db/seeds/seed.ts",
     "create-scenarios": "tsx server/db/seeds/create-scenarios.ts",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test": "vitest run --config vitest.config.ts",
+    "test:watch": "vitest --config vitest.config.ts",
+    "test:coverage": "vitest run --config vitest.config.ts --coverage"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

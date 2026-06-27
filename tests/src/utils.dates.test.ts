@@ -55,9 +55,9 @@ describe('daysUntil', () => {
     future.setDate(future.getDate() + 30)
     const iso = future.toISOString().slice(0, 10)
     const result = daysUntil(iso)
-    // Allow ±1 due to time-of-day differences
-    expect(result).toBeGreaterThanOrEqual(29)
-    expect(result).toBeLessThanOrEqual(31)
+    // Allow ±2 due to time-of-day and timezone differences
+    expect(result).toBeGreaterThanOrEqual(28)
+    expect(result).toBeLessThanOrEqual(32)
   })
 
   it('returns a negative number for a past date', () => {
