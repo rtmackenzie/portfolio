@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8" />
@@ -208,6 +208,8 @@ td strong,td b{color:var(--ink)}
 .p0{background:var(--bad-soft);color:var(--bad)}
 .p1{background:var(--warn-soft);color:var(--warn)}
 .p2{background:var(--info-soft);color:var(--info)}
+.done{background:var(--good-soft);color:var(--good)}
+.todo{background:var(--surface-3);color:var(--ink-mute)}
 .size{display:inline-flex;align-items:center;justify-content:center;min-width:30px;font-size:.7rem;
   font-weight:800;padding:2.5px 8px;border-radius:6px;background:var(--surface-3);color:var(--ink-soft);
   border:1px solid var(--line-2)}
@@ -395,7 +397,7 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
     <section id="s2-exec" class="section">
       <div class="section-tag"><span class="num">1</span><span class="kicker">Executive Summary</span></div>
       <h2>What this should become — and why it matters</h2>
-      <p class="lead">Today's What-If module answers <em>“what does this one change do?”</em>. The next version
+      <p class="lead">Today's What-If module answers <em>"what does this one change do?"</em>. The next version
         should answer the questions that actually keep a portfolio landlord awake: <strong>should I buy, refinance,
         or pay down debt — and which path gets me to financial independence fastest, at the lowest risk?</strong>
         That is the leap from a calculator to a <strong>Portfolio Intelligence Platform</strong>.</p>
@@ -426,7 +428,7 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
           <h4 style="margin-top:0">Five things no spreadsheet does well</h4>
           <ul>
             <li><strong>Strategy comparison</strong> — rank N strategies on six dimensions at once, with a clear winner per goal.</li>
-            <li><strong>Goal-seeking</strong> — enter “£5,000/mo by 2034” and get ranked pathways, not a blank projection.</li>
+            <li><strong>Goal-seeking</strong> — enter "£5,000/mo by 2034" and get ranked pathways, not a blank projection.</li>
             <li><strong>Stress testing</strong> — one click to re-run every scenario at +2% rates or −10% rents.</li>
             <li><strong>Risk intelligence</strong> — health, liquidity, concentration and rate-risk scores, continuously.</li>
             <li><strong>Real-asset grounding</strong> — every projection starts from the live portfolio, not toy inputs.</li>
@@ -478,7 +480,7 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
             <tr><td>Summary KPIs</td><td><span class="status-dot s-part"></span>Partial</td><td>5 metrics only (start/end equity, equity growth, total &amp; avg cashflow). No ROI, LTV path, DSCR, or property-count trajectory.</td></tr>
             <tr><td>Projection chart</td><td><span class="status-dot s-part"></span>Partial</td><td>One 3-series area chart (equity / debt / cumulative cashflow). No drill-down, no per-property view, fixed series.</td></tr>
             <tr><td>Scenario comparison</td><td><span class="status-dot s-part"></span>Backend only</td><td><code>GET /scenarios/compare?ids=</code> exists but <strong>has no frontend</strong> — the single biggest quick win.</td></tr>
-            <tr><td>Goal-based planning</td><td><span class="status-dot s-none"></span>Missing</td><td>No target input, no pathway generation, no “reached by” indicator.</td></tr>
+            <tr><td>Goal-based planning</td><td><span class="status-dot s-none"></span>Missing</td><td>No target input, no pathway generation, no "reached by" indicator.</td></tr>
             <tr><td>Risk / stress testing</td><td><span class="status-dot s-none"></span>Missing</td><td>No rate/rent stress, no concentration warning, no health or liquidity score.</td></tr>
             <tr><td>Tax &amp; transaction costs</td><td><span class="status-dot s-none"></span>Missing</td><td>No LBTT/ADS, no S24, no CGT, no stamp/legal fees on buys or sells.</td></tr>
           </tbody>
@@ -503,7 +505,7 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
             <li><strong>No tax or transaction costs</strong> — a £66k Scottish buy silently ignores ~£5,280 of ADS plus legal/survey fees.</li>
             <li><strong>One scenario at a time</strong> — no way to see Base vs. Growth vs. Deleverage together.</li>
             <li><strong>Opaque events</strong> — parameters shown as truncated raw JSON; no per-property drill-down in results.</li>
-            <li><strong>Manual everything</strong> — must click “Run” after each edit; no goals, no risk flags, no insights.</li>
+            <li><strong>Manual everything</strong> — must click "Run" after each edit; no goals, no risk flags, no insights.</li>
           </ul>
         </div>
       </div>
@@ -526,7 +528,7 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
             director's loans. Adjustable growth &amp; inflation assumptions, not hardcoded.</p></div>
         <div class="exec-card"><span class="ico">⚔️</span><h4>Compare</h4>
           <p>Unlimited scenarios side-by-side, ranked on cashflow, ROI, equity, risk, liquidity and time-to-target.
-            Diff view: “Strategy B adds £140k equity but £620/mo less cashflow.”</p></div>
+            Diff view: "Strategy B adds £140k equity but £620/mo less cashflow."</p></div>
         <div class="exec-card"><span class="ico">🎯</span><h4>Plan to a goal</h4>
           <p>Enter a target (income, property count, net worth, mortgage-freedom, retirement date). The engine
             generates and ranks multiple pathways and shows the binding constraint.</p></div>
@@ -538,13 +540,13 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
       <h3>Signature user workflows</h3>
       <div class="flowsteps">
         <div class="fs"><div class="fn">1</div><b>Start from reality</b>The live portfolio is the base case — zero setup.</div>
-        <div class="fs"><div class="fn">2</div><b>Branch a strategy</b>Clone &amp; tweak, or pick a template (“BRRR ×5”).</div>
+        <div class="fs"><div class="fn">2</div><b>Branch a strategy</b>Clone &amp; tweak, or pick a template ("BRRR ×5").</div>
         <div class="fs"><div class="fn">3</div><b>Compare</b>Lay strategies side-by-side; the winner per goal is flagged.</div>
         <div class="fs"><div class="fn">4</div><b>Stress test</b>+2% rates, −10% rent, 3-month void — instantly.</div>
         <div class="fs"><div class="fn">5</div><b>Decide &amp; export</b>One-page brief for the lender, accountant or self.</div>
       </div>
       <div class="callout info"><span class="ci">⚡</span><span class="ct"><b>Headline experience target:</b>
-        from “I'm curious about buying another flat” to a ranked, stress-tested, three-strategy comparison in
+        from "I'm curious about buying another flat" to a ranked, stress-tested, three-strategy comparison in
         <b>under five minutes</b>, without touching a spreadsheet.</span></div>
 
       <h3>Investor personas</h3>
@@ -569,7 +571,7 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
           <p><strong>Profile:</strong> wants to stop working in 7 years on £4k/mo passive, low risk tolerance.</p>
           <p><strong>Job-to-be-done:</strong> find the deleveraging schedule that hits his retirement-date income
             target with the smallest drawdown risk.</p>
-          <p><strong>Wins when:</strong> the goal planner returns a dated “mortgage-free by” pathway he can trust.</p>
+          <p><strong>Wins when:</strong> the goal planner returns a dated "mortgage-free by" pathway he can trust.</p>
         </div>
       </div>
 
@@ -636,7 +638,7 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
             </table>
           </div>
           <p class="divider-note">Today's engine would show this buy as £6,780 cheaper than reality — enough to flip a
-            “good deal” verdict. Transaction-cost accuracy is a P0.</p>
+            "good deal" verdict. Transaction-cost accuracy is a P0.</p>
         </div>
         <div class="card">
           <h4 style="margin-top:0">The post-tax cashflow layer</h4>
@@ -663,7 +665,7 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
       <h2>Stop viewing scenarios one at a time</h2>
       <p class="lead">The single highest-leverage feature, and the one already half-built: the <code>/scenarios/compare</code>
         endpoint exists with no UI. A comparison engine takes any selection of scenarios and ranks them across six
-        decision dimensions — so the answer to “which strategy wins?” is a glance, not a spreadsheet.</p>
+        decision dimensions — so the answer to "which strategy wins?" is a glance, not a spreadsheet.</p>
 
       <h3>Six dimensions, one winner each</h3>
       <div class="grid g3">
@@ -745,11 +747,11 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
 
       <h3>Goals the user can set</h3>
       <div class="grid g3">
-        <div class="exec-card"><span class="ico">💷</span><h4>Income target</h4><p>“£5,000/mo net by 2034.” The headline FI goal for this portfolio.</p></div>
-        <div class="exec-card"><span class="ico">🏠</span><h4>Property count</h4><p>“Reach 10 properties.” Drives the acquisition cadence.</p></div>
-        <div class="exec-card"><span class="ico">🔓</span><h4>Mortgage freedom</h4><p>“Debt-free by a date.” Drives the payoff schedule.</p></div>
-        <div class="exec-card"><span class="ico">📊</span><h4>Net worth</h4><p>“£1M net equity.” Balances growth vs. leverage.</p></div>
-        <div class="exec-card"><span class="ico">🏖️</span><h4>Retirement date</h4><p>“Stop working in 8 years on £4k/mo.” Combines income + risk.</p></div>
+        <div class="exec-card"><span class="ico">💷</span><h4>Income target</h4><p>"£5,000/mo net by 2034." The headline FI goal for this portfolio.</p></div>
+        <div class="exec-card"><span class="ico">🏠</span><h4>Property count</h4><p>"Reach 10 properties." Drives the acquisition cadence.</p></div>
+        <div class="exec-card"><span class="ico">🔓</span><h4>Mortgage freedom</h4><p>"Debt-free by a date." Drives the payoff schedule.</p></div>
+        <div class="exec-card"><span class="ico">📊</span><h4>Net worth</h4><p>"£1M net equity." Balances growth vs. leverage.</p></div>
+        <div class="exec-card"><span class="ico">🏖️</span><h4>Retirement date</h4><p>"Stop working in 8 years on £4k/mo." Combines income + risk.</p></div>
         <div class="exec-card"><span class="ico">🧮</span><h4>Constraints</h4><p>Max LTV, min DSCR, available cash/yr, regions — bound the search.</p></div>
       </div>
 
@@ -761,7 +763,7 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
         <div class="fs"><div class="fn">4</div><b>Rank</b>Score each viable pathway on time-to-goal, risk, liquidity &amp; effort; surface the binding constraint.</div>
       </div>
 
-      <h3>Worked pathways — “10 properties &amp; £5,000/mo, prudent leverage”</h3>
+      <h3>Worked pathways — "10 properties &amp; £5,000/mo, prudent leverage"</h3>
       <p>Three viable routes from the current base, each respecting a max-LTV constraint and the available cash.
         The recommendation depends on the investor's risk appetite — the platform makes that explicit.</p>
       <div class="tbl-wrap">
@@ -796,7 +798,7 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
       <div class="grid g2">
         <div class="callout good"><span class="ci">🏆</span><span class="ct">
           <b>Recommended: Pathway B (Hybrid).</b> Hits both goals 3–4 years sooner than cash-stacking while keeping LTV
-          under 45% — squarely inside “prudent leverage.” It mirrors the existing <em>Path to 10</em> scenario logic
+          under 45% — squarely inside "prudent leverage." It mirrors the existing <em>Path to 10</em> scenario logic
           (max 2 active mortgages, pay off the cheapest, then buy again), validating that strategy against the goal.</span></div>
         <div class="callout bad"><span class="ci">⚠️</span><span class="ct">
           <b>Pathway C is fastest but fragile.</b> At ~70% LTV the portfolio reaches £5k/mo by year 9, but a 2% rate
@@ -804,15 +806,15 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
           fragility via a one-click stress test before committing.</span></div>
       </div>
       <div class="callout ai" style="margin-bottom:0"><span class="ci">💡</span><span class="ct">
-        <b>Insight surfaced automatically:</b> “Your £5,000/mo goal is achievable ~4 years sooner with modest leverage
+        <b>Insight surfaced automatically:</b> "Your £5,000/mo goal is achievable ~4 years sooner with modest leverage
         than by cash-buying alone, at the cost of a 45% peak LTV. Your current 24% LTV gives ample headroom to do this
-        prudently.”</span></div>
+        prudently."</span></div>
     </section>
     <section id="s8-risk" class="section">
       <div class="section-tag"><span class="num">7</span><span class="kicker">Risk &amp; Intelligence Layer</span></div>
       <h2>Make the invisible risks visible</h2>
       <p class="lead">Every projection has a confident line going up and to the right. The intelligence layer's job is to
-        ask “what would break this?” — continuously scoring the portfolio and each scenario, and translating the numbers
+        ask "what would break this?" — continuously scoring the portfolio and each scenario, and translating the numbers
         into the kind of plain-English judgement a good adviser would offer.</p>
 
       <h3>Portfolio scorecard — scored on the live portfolio</h3>
@@ -940,10 +942,10 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
             <tr><td><strong>Transaction costs (LBTT/ADS + fees)</strong></td><td>Omitting ~£6.8k on a £66k buy flips deal verdicts.</td><td>Honest buy-vs-hold maths.</td><td><span class="size s">S</span></td><td><span class="pill p0">P0</span></td></tr>
             <tr><td><strong>Assumptions panel</strong></td><td>Hardcoded growth blocks stress testing and trust.</td><td>Reproducible, defensible scenarios.</td><td><span class="size m">M</span></td><td><span class="pill p0">P0</span></td></tr>
             <tr><td><strong>Clone / template scenarios</strong></td><td>Comparison needs cheap branching; recreating by hand is friction.</td><td>Minutes-not-hours to test variants.</td><td><span class="size s">S</span></td><td><span class="pill p0">P0</span></td></tr>
-            <tr><td><strong>One-click stress tests</strong></td><td>Rate/rent shocks are the most-asked “what if”.</td><td>Confidence the plan survives bad years.</td><td><span class="size m">M</span></td><td><span class="pill p1">P1</span></td></tr>
+            <tr><td><strong>One-click stress tests</strong></td><td>Rate/rent shocks are the most-asked "what if".</td><td>Confidence the plan survives bad years.</td><td><span class="size m">M</span></td><td><span class="pill p1">P1</span></td></tr>
             <tr><td><strong>Post-tax cashflow (S24/CGT/Ltd)</strong></td><td>Pre-tax income overstates FI; structure changes the answer.</td><td>The number that actually funds retirement.</td><td><span class="size l">L</span></td><td><span class="pill p1">P1</span></td></tr>
-            <tr><td><strong>Goal-based planner</strong></td><td>Working backwards from a target is the signature differentiator.</td><td>“Tell me the route,” not “build it yourself.”</td><td><span class="size xl">XL</span></td><td><span class="pill p1">P1</span></td></tr>
-            <tr><td><strong>Risk &amp; intelligence scores</strong></td><td>Every up-and-to-the-right chart needs a “what breaks this?”.</td><td>Surfaces concentration/liquidity blind spots.</td><td><span class="size l">L</span></td><td><span class="pill p1">P1</span></td></tr>
+            <tr><td><strong>Goal-based planner</strong></td><td>Working backwards from a target is the signature differentiator.</td><td>"Tell me the route," not "build it yourself."</td><td><span class="size xl">XL</span></td><td><span class="pill p1">P1</span></td></tr>
+            <tr><td><strong>Risk &amp; intelligence scores</strong></td><td>Every up-and-to-the-right chart needs a "what breaks this?".</td><td>Surfaces concentration/liquidity blind spots.</td><td><span class="size l">L</span></td><td><span class="pill p1">P1</span></td></tr>
             <tr><td><strong>Per-property drill-down</strong></td><td>Portfolio totals hide which asset drives the result.</td><td>Pinpoints the laggard to sell/refinance.</td><td><span class="size m">M</span></td><td><span class="pill p1">P1</span></td></tr>
             <tr><td><strong>Voids, reserves, sale-with-CGT events</strong></td><td>Real portfolios have lumpy costs and exits.</td><td>Realism for advanced planning.</td><td><span class="size l">L</span></td><td><span class="pill p2">P2</span></td></tr>
             <tr><td><strong>Director's loan &amp; restructuring</strong></td><td>Relevant to Ltd/SPV investors, niche for this portfolio today.</td><td>Tax-efficient extraction modelling.</td><td><span class="size l">L</span></td><td><span class="pill p2">P2</span></td></tr>
@@ -974,7 +976,7 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
             <div class="ph-detail">
               <b>Features:</b> real amortisation · transaction costs (LBTT/ADS + fees) · assumptions panel · clone/template scenarios · richer KPI set (ROI, LTV path, DSCR).
               <ul>
-                <li><b>Tasks:</b> add <code>amortise()</code> &amp; <code>transactionCosts()</code> pure helpers + tests; <code>assumptions_json</code> column &amp; migration; wire assumptions into <code>buildProjection</code>; “Duplicate scenario” action; expand <code>MonthSnapshot</code> &amp; KPI cards.</li>
+                <li><b>Tasks:</b> add <code>amortise()</code> &amp; <code>transactionCosts()</code> pure helpers + tests; <code>assumptions_json</code> column &amp; migration; wire assumptions into <code>buildProjection</code>; "Duplicate scenario" action; expand <code>MonthSnapshot</code> &amp; KPI cards.</li>
                 <li><b>Dependencies:</b> none — builds on existing engine &amp; schema.</li>
                 <li><b>Impact:</b> projections become <em>trustworthy</em> — the precondition for every other feature.</li>
               </ul>
@@ -995,7 +997,7 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
               <ul>
                 <li><b>Tasks:</b> comparison service (results → metric vectors); multi-select + comparison route/page; stress-test runner (re-run with shocked assumptions); per-property results arrays + drill-down chart.</li>
                 <li><b>Dependencies:</b> Phase 1 (assumptions enable stress tests; richer snapshot enables drill-down).</li>
-                <li><b>Impact:</b> the feature finally answers “<em>which</em> strategy?” — the core decision.</li>
+                <li><b>Impact:</b> the feature finally answers "<em>which</em> strategy?" — the core decision.</li>
               </ul>
             </div>
           </div>
@@ -1014,7 +1016,7 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
               <ul>
                 <li><b>Tasks:</b> <code>goals</code> &amp; <code>goal_pathways</code> tables; strategy templates; iterative solver in a web worker; <code>taxEngine()</code> helper + structure toggle; ranking &amp; explanation.</li>
                 <li><b>Dependencies:</b> Phases 1–2 (accurate engine + comparison ranking reused by the solver).</li>
-                <li><b>Impact:</b> the signature differentiator — “tell me the route to £5k/mo.”</li>
+                <li><b>Impact:</b> the signature differentiator — "tell me the route to £5k/mo."</li>
               </ul>
             </div>
           </div>
@@ -1029,11 +1031,11 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
           <div>
             <div class="bar-track"><div class="bar-fill bf4" style="left:84%;width:16%">Wks 16–21</div></div>
             <div class="ph-detail">
-              <b>Features:</b> risk/health/liquidity/opportunity scorecard · risk heatmap · plain-English insights · “what should I buy next?” opportunity scoring · PDF one-page brief export.
+              <b>Features:</b> risk/health/liquidity/opportunity scorecard · risk heatmap · plain-English insights · "what should I buy next?" opportunity scoring · PDF one-page brief export.
               <ul>
                 <li><b>Tasks:</b> intelligence engine (score formulas over results + facts); insight templating (optionally Claude-generated narrative); opportunity scorer across candidate buys; print/PDF brief.</li>
                 <li><b>Dependencies:</b> Phases 1–3 (scores &amp; insights consume projections, comparisons &amp; goals).</li>
-                <li><b>Impact:</b> turns data into judgement — the “adviser in the app” experience.</li>
+                <li><b>Impact:</b> turns data into judgement — the "adviser in the app" experience.</li>
               </ul>
             </div>
           </div>
@@ -1054,12 +1056,12 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
       <h4>Epic A — Modelling fidelity <span class="pill p0">P0</span></h4>
       <div class="tbl-wrap">
         <table>
-          <thead><tr><th style="width:26%">User story</th><th>Acceptance criteria</th><th>Pri</th><th>Cx</th></tr></thead>
+          <thead><tr><th style="width:26%">User story</th><th>Acceptance criteria</th><th>Pri</th><th>Cx</th><th>Status</th></tr></thead>
           <tbody>
-            <tr><td>As an investor, I want debt to amortise realistically so projections match my lender's figures.</td><td>Repayment &amp; interest-only schedules supported; principal/interest split per month; flat-decay model removed; covered by unit tests.</td><td><span class="pill p0">P0</span></td><td><span class="size m">M</span></td></tr>
-            <tr><td>As an investor, I want buys to include LBTT/ADS and fees so deal returns are honest.</td><td>Scottish LBTT bands + 8% ADS + configurable legal/survey/refurb added to cash-in; cash-on-cash recomputed; £66k buy shows ~£72.8k true cost.</td><td><span class="pill p0">P0</span></td><td><span class="size s">S</span></td></tr>
-            <tr><td>As an investor, I want to set growth/inflation/void assumptions per scenario.</td><td>Assumptions panel persists to <code>assumptions_json</code>; engine reads them; defaults match current 3%/CPI; changing them re-projects.</td><td><span class="pill p0">P0</span></td><td><span class="size m">M</span></td></tr>
-            <tr><td>As an investor, I want a working refinance event with optional equity release.</td><td><code>refinance</code> implemented: resets amortisation, optional cash-out raises debt &amp; liquidity, fees applied; tested.</td><td><span class="pill p0">P0</span></td><td><span class="size m">M</span></td></tr>
+            <tr><td>As an investor, I want debt to amortise realistically so projections match my lender's figures.</td><td>Repayment &amp; interest-only schedules supported; principal/interest split per month; flat-decay model removed; covered by unit tests.</td><td><span class="pill p0">P0</span></td><td><span class="size m">M</span></td><td><span class="pill done">✓ Done</span></td></tr>
+            <tr><td>As an investor, I want buys to include LBTT/ADS and fees so deal returns are honest.</td><td>Scottish LBTT bands + 8% ADS + configurable legal/survey/refurb added to cash-in; cash-on-cash recomputed; £66k buy shows ~£72.8k true cost.</td><td><span class="pill p0">P0</span></td><td><span class="size s">S</span></td><td><span class="pill todo">To do</span></td></tr>
+            <tr><td>As an investor, I want to set growth/inflation/void assumptions per scenario.</td><td>Assumptions panel persists to <code>assumptions_json</code>; engine reads them; defaults match current 3%/CPI; changing them re-projects.</td><td><span class="pill p0">P0</span></td><td><span class="size m">M</span></td><td><span class="pill todo">To do</span></td></tr>
+            <tr><td>As an investor, I want a working refinance event with optional equity release.</td><td><code>refinance</code> implemented: resets amortisation, optional cash-out raises debt &amp; liquidity, fees applied; tested.</td><td><span class="pill p0">P0</span></td><td><span class="size m">M</span></td><td><span class="pill todo">To do</span></td></tr>
           </tbody>
         </table>
       </div>
@@ -1067,13 +1069,13 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
       <h4>Epic B — Comparison &amp; stress testing <span class="pill p0">P0</span>/<span class="pill p1">P1</span></h4>
       <div class="tbl-wrap">
         <table>
-          <thead><tr><th style="width:26%">User story</th><th>Acceptance criteria</th><th>Pri</th><th>Cx</th></tr></thead>
+          <thead><tr><th style="width:26%">User story</th><th>Acceptance criteria</th><th>Pri</th><th>Cx</th><th>Status</th></tr></thead>
           <tbody>
-            <tr><td>As an investor, I want to duplicate a scenario so I can branch a variant quickly.</td><td>“Duplicate” copies scenario + events + assumptions; opens the copy; under 2 clicks.</td><td><span class="pill p0">P0</span></td><td><span class="size s">S</span></td></tr>
-            <tr><td>As an investor, I want to compare selected scenarios side-by-side.</td><td>Multi-select ≥2; table ranks end equity, net CF, peak LTV, time-to-target, liquidity, risk; best-in-column highlighted; uses existing <code>/compare</code>.</td><td><span class="pill p0">P0</span></td><td><span class="size m">M</span></td></tr>
-            <tr><td>As an investor, I want plain-English diffs between two scenarios.</td><td>Pairwise diff lists material deltas as sentences (“+£673k equity, −£620/mo CF, +22pp LTV”).</td><td><span class="pill p1">P1</span></td><td><span class="size s">S</span></td></tr>
-            <tr><td>As an investor, I want one-click rate/rent stress tests.</td><td>Buttons re-run a scenario at +1/2/3% rates &amp; −10/20% rent; flags any month breaching min DSCR; overlay on chart.</td><td><span class="pill p1">P1</span></td><td><span class="size m">M</span></td></tr>
-            <tr><td>As an investor, I want per-property drill-down in results.</td><td>Toggle from portfolio totals to per-property equity/CF series; identifies best/worst asset.</td><td><span class="pill p1">P1</span></td><td><span class="size m">M</span></td></tr>
+            <tr><td>As an investor, I want to duplicate a scenario so I can branch a variant quickly.</td><td>"Duplicate" copies scenario + events + assumptions; opens the copy; under 2 clicks.</td><td><span class="pill p0">P0</span></td><td><span class="size s">S</span></td><td><span class="pill" style="background:var(--surface-3);color:var(--ink-mute)">To do</span></td></tr>
+            <tr><td>As an investor, I want to compare selected scenarios side-by-side.</td><td>Multi-select ≥2; table ranks end equity, net CF, peak LTV, time-to-target, liquidity, risk; best-in-column highlighted; uses existing <code>/compare</code>.</td><td><span class="pill p0">P0</span></td><td><span class="size m">M</span></td><td><span class="pill" style="background:var(--surface-3);color:var(--ink-mute)">To do</span></td></tr>
+            <tr><td>As an investor, I want plain-English diffs between two scenarios.</td><td>Pairwise diff lists material deltas as sentences ("+£673k equity, −£620/mo CF, +22pp LTV").</td><td><span class="pill p1">P1</span></td><td><span class="size s">S</span></td><td><span class="pill" style="background:var(--surface-3);color:var(--ink-mute)">To do</span></td></tr>
+            <tr><td>As an investor, I want one-click rate/rent stress tests.</td><td>Buttons re-run a scenario at +1/2/3% rates &amp; −10/20% rent; flags any month breaching min DSCR; overlay on chart.</td><td><span class="pill p1">P1</span></td><td><span class="size m">M</span></td><td><span class="pill" style="background:var(--surface-3);color:var(--ink-mute)">To do</span></td></tr>
+            <tr><td>As an investor, I want per-property drill-down in results.</td><td>Toggle from portfolio totals to per-property equity/CF series; identifies best/worst asset.</td><td><span class="pill p1">P1</span></td><td><span class="size m">M</span></td><td><span class="pill" style="background:var(--surface-3);color:var(--ink-mute)">To do</span></td></tr>
           </tbody>
         </table>
       </div>
@@ -1081,12 +1083,12 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
       <h4>Epic C — Goal-based planning <span class="pill p1">P1</span></h4>
       <div class="tbl-wrap">
         <table>
-          <thead><tr><th style="width:26%">User story</th><th>Acceptance criteria</th><th>Pri</th><th>Cx</th></tr></thead>
+          <thead><tr><th style="width:26%">User story</th><th>Acceptance criteria</th><th>Pri</th><th>Cx</th><th>Status</th></tr></thead>
           <tbody>
-            <tr><td>As an investor, I want to enter a goal &amp; constraints.</td><td>Goal types (income, count, net worth, mortgage-free, retirement date) + constraints (max LTV, min DSCR, cash/yr) persisted to <code>goals</code>.</td><td><span class="pill p1">P1</span></td><td><span class="size m">M</span></td></tr>
-            <tr><td>As an investor, I want the system to generate pathways to my goal.</td><td>≥3 template-based pathways produced; each a valid event sequence respecting constraints; persisted to <code>goal_pathways</code>.</td><td><span class="pill p1">P1</span></td><td><span class="size xl">XL</span></td></tr>
-            <tr><td>As an investor, I want pathways ranked with the binding constraint shown.</td><td>Ranked by time-to-goal + risk; each shows the limiting factor; recommended pathway flagged; solver runs off the UI thread.</td><td><span class="pill p1">P1</span></td><td><span class="size l">L</span></td></tr>
-            <tr><td>As an investor, I want post-tax cashflow so my FI number is real.</td><td>S24 (personal) &amp; corp-tax (Ltd) toggle; CGT on sale; post-tax CF series alongside pre-tax; goal solver uses post-tax.</td><td><span class="pill p1">P1</span></td><td><span class="size l">L</span></td></tr>
+            <tr><td>As an investor, I want to enter a goal &amp; constraints.</td><td>Goal types (income, count, net worth, mortgage-free, retirement date) + constraints (max LTV, min DSCR, cash/yr) persisted to <code>goals</code>.</td><td><span class="pill p1">P1</span></td><td><span class="size m">M</span></td><td><span class="pill" style="background:var(--surface-3);color:var(--ink-mute)">To do</span></td></tr>
+            <tr><td>As an investor, I want the system to generate pathways to my goal.</td><td>≥3 template-based pathways produced; each a valid event sequence respecting constraints; persisted to <code>goal_pathways</code>.</td><td><span class="pill p1">P1</span></td><td><span class="size xl">XL</span></td><td><span class="pill" style="background:var(--surface-3);color:var(--ink-mute)">To do</span></td></tr>
+            <tr><td>As an investor, I want pathways ranked with the binding constraint shown.</td><td>Ranked by time-to-goal + risk; each shows the limiting factor; recommended pathway flagged; solver runs off the UI thread.</td><td><span class="pill p1">P1</span></td><td><span class="size l">L</span></td><td><span class="pill" style="background:var(--surface-3);color:var(--ink-mute)">To do</span></td></tr>
+            <tr><td>As an investor, I want post-tax cashflow so my FI number is real.</td><td>S24 (personal) &amp; corp-tax (Ltd) toggle; CGT on sale; post-tax CF series alongside pre-tax; goal solver uses post-tax.</td><td><span class="pill p1">P1</span></td><td><span class="size l">L</span></td><td><span class="pill" style="background:var(--surface-3);color:var(--ink-mute)">To do</span></td></tr>
           </tbody>
         </table>
       </div>
@@ -1094,12 +1096,12 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
       <h4>Epic D — Intelligence &amp; output <span class="pill p1">P1</span>/<span class="pill p2">P2</span></h4>
       <div class="tbl-wrap">
         <table>
-          <thead><tr><th style="width:26%">User story</th><th>Acceptance criteria</th><th>Pri</th><th>Cx</th></tr></thead>
+          <thead><tr><th style="width:26%">User story</th><th>Acceptance criteria</th><th>Pri</th><th>Cx</th><th>Status</th></tr></thead>
           <tbody>
-            <tr><td>As an investor, I want a portfolio scorecard.</td><td>Health, liquidity, rate-resilience, vacancy, diversification, opportunity scores from transparent formulas; recompute on change.</td><td><span class="pill p1">P1</span></td><td><span class="size l">L</span></td></tr>
-            <tr><td>As an investor, I want a risk heatmap.</td><td>Likelihood × impact grid per risk factor with mitigation notes; colour-coded; data-driven from portfolio facts.</td><td><span class="pill p2">P2</span></td><td><span class="size m">M</span></td></tr>
-            <tr><td>As an investor, I want plain-English insights.</td><td>Templated (optionally LLM) narrative flagging concentration, headroom, refix, fragility; cites the numbers.</td><td><span class="pill p2">P2</span></td><td><span class="size m">M</span></td></tr>
-            <tr><td>As an investor, I want a one-page PDF brief.</td><td>Print/export of a scenario or comparison incl. KPIs, chart, risks; clean A4 layout.</td><td><span class="pill p2">P2</span></td><td><span class="size s">S</span></td></tr>
+            <tr><td>As an investor, I want a portfolio scorecard.</td><td>Health, liquidity, rate-resilience, vacancy, diversification, opportunity scores from transparent formulas; recompute on change.</td><td><span class="pill p1">P1</span></td><td><span class="size l">L</span></td><td><span class="pill" style="background:var(--surface-3);color:var(--ink-mute)">To do</span></td></tr>
+            <tr><td>As an investor, I want a risk heatmap.</td><td>Likelihood × impact grid per risk factor with mitigation notes; colour-coded; data-driven from portfolio facts.</td><td><span class="pill p2">P2</span></td><td><span class="size m">M</span></td><td><span class="pill" style="background:var(--surface-3);color:var(--ink-mute)">To do</span></td></tr>
+            <tr><td>As an investor, I want plain-English insights.</td><td>Templated (optionally LLM) narrative flagging concentration, headroom, refix, fragility; cites the numbers.</td><td><span class="pill p2">P2</span></td><td><span class="size m">M</span></td><td><span class="pill" style="background:var(--surface-3);color:var(--ink-mute)">To do</span></td></tr>
+            <tr><td>As an investor, I want a one-page PDF brief.</td><td>Print/export of a scenario or comparison incl. KPIs, chart, risks; clean A4 layout.</td><td><span class="pill p2">P2</span></td><td><span class="size s">S</span></td><td><span class="pill" style="background:var(--surface-3);color:var(--ink-mute)">To do</span></td></tr>
           </tbody>
         </table>
       </div>
@@ -1113,7 +1115,7 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
         <table>
           <thead><tr><th>Metric</th><th>Definition</th><th class="num-col">Baseline</th><th class="num-col">Target</th><th>How measured</th></tr></thead>
           <tbody>
-            <tr><td><strong>Time to create a scenario</strong></td><td>From “new” to a run projection</td><td class="num-col">~6–8 min</td><td class="num-col best">&lt; 2 min</td><td>In-app timing; templates &amp; clone reduce setup.</td></tr>
+            <tr><td><strong>Time to create a scenario</strong></td><td>From "new" to a run projection</td><td class="num-col">~6–8 min</td><td class="num-col best">&lt; 2 min</td><td>In-app timing; templates &amp; clone reduce setup.</td></tr>
             <tr><td><strong>Time to a decision</strong></td><td>Curiosity → ranked, stress-tested comparison</td><td class="num-col">n/a</td><td class="num-col best">&lt; 5 min</td><td>Funnel from scenario create → compare → stress.</td></tr>
             <tr><td><strong>Comparison usage</strong></td><td>% of sessions using side-by-side compare</td><td class="num-col">0%</td><td class="num-col best">&gt; 60%</td><td>Event log on the comparison view.</td></tr>
             <tr><td><strong>Goal-forecast accuracy</strong></td><td>Projected vs. actual at checkpoints (income, equity)</td><td class="num-col">n/a</td><td class="num-col best">±10%</td><td>Back-test projections against realised portfolio snapshots.</td></tr>
