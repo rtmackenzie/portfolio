@@ -1,3 +1,36 @@
+export function calcLBTT(price: number): number {
+  if (price <= 0) return 0
+  const bands = [
+    { limit: 145000, rate: 0.00 },
+    { limit: 250000, rate: 0.02 },
+    { limit: 325000, rate: 0.05 },
+    { limit: 750000, rate: 0.10 },
+    { limit: Infinity, rate: 0.12 },
+  ]
+  let tax = 0, prev = 0
+  for (const { limit, rate } of bands) {
+    if (price <= prev) break
+    tax += (Math.min(price, limit) - prev) * rate
+    prev = limit
+  }
+  return Math.round(tax)
+}
+
+export function calcADS(price: number): number {
+  return price > 40000 ? Math.round(price * 0.08) : 0
+}
+
+export function calcTransactionCosts(
+  price: number,
+  legalFees = 2000,
+  refurbCosts = 0
+): { lbtt: number; ads: number; fees: number; total: number } {
+  const lbtt = calcLBTT(price)
+  const ads = calcADS(price)
+  const fees = legalFees + refurbCosts
+  return { lbtt, ads, fees, total: lbtt + ads + fees }
+}
+
 export function calcGrossYield(annualRent: number, propertyValue: number): number {
   if (!propertyValue) return 0
   return Math.round((annualRent / propertyValue) * 1000) / 10

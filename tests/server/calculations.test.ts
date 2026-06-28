@@ -1,9 +1,43 @@
 import { describe, it, expect } from 'vitest'
 import {
+  calcLBTT,
+  calcADS,
+  calcTransactionCosts,
   calculatePropertyFinancials,
   calculateAcquisitionMetrics,
   calculatePortfolioKPIs,
 } from '../../server/services/calculations.ts'
+
+// ─── calcLBTT / calcADS / calcTransactionCosts ───────────────────────────────
+
+describe('calcLBTT', () => {
+  it('returns 0 for £0', () => expect(calcLBTT(0)).toBe(0))
+  it('returns 0 below £145k threshold (additional dwelling)', () => expect(calcLBTT(66000)).toBe(0))
+  it('applies 2% band: £200k → (200k−145k) × 2% = £1,100', () => expect(calcLBTT(200000)).toBe(1100))
+  it('applies 2% + 5% bands: £300k → (250k−145k)×2% + (300k−250k)×5% = £4,600', () => expect(calcLBTT(300000)).toBe(4600))
+  it('applies all bands up to 10%: £400k → 2100+3750+7500 = £13,350', () => expect(calcLBTT(400000)).toBe(13350))
+})
+
+describe('calcADS', () => {
+  it('returns 0 for property ≤ £40k', () => expect(calcADS(40000)).toBe(0))
+  it('returns 8% of full price for £66k', () => expect(calcADS(66000)).toBe(5280))
+  it('returns 8% of full price for £200k', () => expect(calcADS(200000)).toBe(16000))
+})
+
+describe('calcTransactionCosts', () => {
+  it('£66k with default fees: LBTT=0, ADS=5280, fees=2000, total=7280', () => {
+    const result = calcTransactionCosts(66000)
+    expect(result).toEqual({ lbtt: 0, ads: 5280, fees: 2000, total: 7280 })
+  })
+  it('£200k with £1500 legal, £5000 refurb: total = 1100+16000+6500 = 23600', () => {
+    const result = calcTransactionCosts(200000, 1500, 5000)
+    expect(result.total).toBe(23600)
+  })
+  it('£0 purchase returns all zeros', () => {
+    const result = calcTransactionCosts(0)
+    expect(result).toEqual({ lbtt: 0, ads: 0, fees: 2000, total: 2000 })
+  })
+})
 
 // ─── calculatePropertyFinancials ─────────────────────────────────────────────
 

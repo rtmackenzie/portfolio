@@ -222,6 +222,24 @@ describe('buildProjection — buy_property event', () => {
     )
     expect(months[1].total_value).toBeGreaterThan(months[0].total_value)
   })
+
+  it('deducts LBTT+ADS+fees from cumulative cashflow at buy month', () => {
+    // £66k cash buy: ADS=£5,280, LBTT=£0, legal=£2,000 → txCosts=£7,280
+    // monthly_expenses=0 so cashflow = £700 rent; cumulative = 700 − 7280 = −6580
+    const { months } = buildProjection(
+      new Map(),
+      [makeEvent({
+        event_type: 'buy_property',
+        date: '2026-01-01',
+        parameters_json: JSON.stringify({
+          purchase_price: 66000, monthly_rent: 700, deposit_percent: 100,
+          monthly_expenses: 0, legal_fees: 2000, refurb_costs: 0,
+        }),
+      })],
+      BASE_CONFIG
+    )
+    expect(months[0].cumulative_cashflow).toBe(700 - 7280)
+  })
 })
 
 describe('buildProjection — sell_property event', () => {

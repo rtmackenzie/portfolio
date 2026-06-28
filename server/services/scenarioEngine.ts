@@ -1,5 +1,5 @@
 import { queryAll } from '../db/database.ts'
-import { calcMonthlyPayment } from './calculations.ts'
+import { calcMonthlyPayment, calcTransactionCosts } from './calculations.ts'
 
 interface ScenarioConfig {
   base_date: string
@@ -105,6 +105,12 @@ export function buildProjection(
             is_interest_only: isIO,
           })
           debtMap.set(newId, debt)
+          const { total: txCosts } = calcTransactionCosts(
+            price,
+            params.legal_fees ?? 2000,
+            params.refurb_costs ?? 0
+          )
+          cumulativeCashflow -= txCosts
           break
         }
         case 'sell_property': {

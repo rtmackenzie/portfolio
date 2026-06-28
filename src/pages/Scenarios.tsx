@@ -6,6 +6,7 @@ import { PageLoader } from '@/components/shared/LoadingSpinner'
 import { ScenarioAreaChart, CHART_COLORS } from '@/components/charts'
 import { formatCurrency, formatPercent } from '@/utils/currency'
 import { formatDate } from '@/utils/dates'
+import { calcTransactionCosts } from '@/utils/calculations'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -369,6 +370,24 @@ function EventModal({ scenarioId, event, onClose }: { scenarioId: number; event?
             {!isCash && numField('mortgage_rate', 'Interest Rate (%)', '5.5')}
             {!isCash && numField('mortgage_term_years', 'Mortgage Term (years)', '25')}
             {numField('monthly_expenses', 'Monthly Expenses (£)', '200')}
+            {numField('legal_fees', 'Legal & Survey Fees (£)', '2000')}
+            {numField('refurb_costs', 'Refurbishment Costs (£)', '0')}
+            {(() => {
+              const price = Number(params.purchase_price) || 0
+              if (!price) return null
+              const { lbtt, ads, total } = calcTransactionCosts(
+                price,
+                Number(params.legal_fees ?? 2000),
+                Number(params.refurb_costs ?? 0)
+              )
+              return (
+                <div className="col-span-2 rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                  LBTT: <strong className="text-foreground">£{lbtt.toLocaleString()}</strong>
+                  {' · '}ADS (8%): <strong className="text-foreground">£{ads.toLocaleString()}</strong>
+                  {' · '}Total acquisition costs: <strong className="text-foreground">£{total.toLocaleString()}</strong>
+                </div>
+              )
+            })()}
           </div>
         )
       }
