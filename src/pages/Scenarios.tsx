@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Play, X, Trash2, Pencil, Copy } from 'lucide-react'
+import { Plus, Play, X, Trash2, Pencil, Copy, ChevronDown } from 'lucide-react'
 import { api } from '@/services/api'
 import { PageLoader } from '@/components/shared/LoadingSpinner'
 import { ScenarioAreaChart, CHART_COLORS } from '@/components/charts'
@@ -50,6 +50,7 @@ export default function Scenarios() {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [showAddEvent, setShowAddEvent] = useState(false)
+  const [timelineOpen, setTimelineOpen] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
   const [editingEvent, setEditingEvent] = useState<import('@/types').ScenarioEvent | null>(null)
   const [compareIds, setCompareIds] = useState<Set<number>>(new Set())
@@ -164,7 +165,7 @@ export default function Scenarios() {
                     className="rounded border-border accent-primary flex-none"
                   />
                   <button
-                    onClick={() => { setSelectedId(s.id); setCompareMode(false); setStressResults(null); setActiveRateShock(null); setActiveRentShock(null); setViewMode('portfolio') }}
+                    onClick={() => { setSelectedId(s.id); setCompareMode(false); setStressResults(null); setActiveRateShock(null); setActiveRentShock(null); setViewMode('portfolio'); setTimelineOpen(false) }}
                     className={`flex-1 text-left px-3 py-2.5 rounded-md text-sm transition-colors ${selectedId === s.id && !compareMode ? 'bg-primary/15 text-primary' : 'bg-card text-foreground hover:bg-accent'}`}
                   >
                     <div className="font-medium">{s.name}</div>
@@ -231,42 +232,65 @@ export default function Scenarios() {
               </div>
 
               {/* Events */}
-              <div className="bg-card rounded-lg p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold">Events Timeline</h3>
-                  <button onClick={() => setShowAddEvent(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-muted text-foreground rounded-md text-xs">
-                    <Plus size={12} /> Add Event
-                  </button>
-                </div>
-                {!selected.events || selected.events.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No events added. Run projection to use current portfolio as baseline.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {selected.events.map(ev => {
-                      const params = JSON.parse(ev.parameters_json || '{}')
-                      return (
-                        <div key={ev.id} className="flex items-center justify-between bg-background rounded-md px-3 py-2">
-                          <div className="flex items-center gap-3">
-                            <span className="text-xs font-medium text-primary">{formatDate(ev.date)}</span>
-                            <span className="text-sm capitalize">{ev.event_type.replace(/_/g, ' ')}</span>
-                            {Object.keys(params).length > 0 && (
-                              <span className="text-xs text-muted-foreground">{JSON.stringify(params).slice(0, 60)}</span>
-                            )}
-                          </div>
-                          <div className="flex gap-1">
-                            <button onClick={() => setEditingEvent(ev)} className="text-muted-foreground hover:text-foreground">
-                              <Pencil size={13} />
-                            </button>
-                            <button
-                              onClick={() => deleteEvent.mutate({ scenarioId: selected.id, eventId: ev.id })}
-                              className="text-muted-foreground hover:text-red-400"
-                            >
-                              <X size={13} />
-                            </button>
-                          </div>
-                        </div>
-                      )
-                    })}
+              <div className="bg-card rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => setTimelineOpen(o => !o)}
+                  className="w-full flex items-center justify-between px-5 py-4 text-left"
+                >
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold">Events Timeline</h3>
+                    <span className="text-xs text-muted-foreground">({selected.events?.length ?? 0})</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={e => { e.stopPropagation(); setTimelineOpen(true); setShowAddEvent(true) }}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.stopPropagation(); setTimelineOpen(true); setShowAddEvent(true) } }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-muted text-foreground rounded-md text-xs hover:bg-accent"
+                    >
+                      <Plus size={12} /> Add Event
+                    </span>
+                    <ChevronDown
+                      size={15}
+                      className={`text-muted-foreground transition-transform duration-200 ${timelineOpen ? 'rotate-180' : ''}`}
+                    />
+                  </div>
+                </button>
+                {timelineOpen && (
+                  <div className="px-5 pb-5">
+                    {!selected.events || selected.events.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No events added. Run projection to use current portfolio as baseline.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {selected.events.map(ev => {
+                          const params = JSON.parse(ev.parameters_json || '{}')
+                          return (
+                            <div key={ev.id} className="flex items-center justify-between bg-background rounded-md px-3 py-2">
+                              <div className="flex items-center gap-3">
+                                <span className="text-xs font-medium text-primary">{formatDate(ev.date)}</span>
+                                <span className="text-sm capitalize">{ev.event_type.replace(/_/g, ' ')}</span>
+                                {Object.keys(params).length > 0 && (
+                                  <span className="text-xs text-muted-foreground">{JSON.stringify(params).slice(0, 60)}</span>
+                                )}
+                              </div>
+                              <div className="flex gap-1">
+                                <button onClick={() => setEditingEvent(ev)} className="text-muted-foreground hover:text-foreground">
+                                  <Pencil size={13} />
+                                </button>
+                                <button
+                                  onClick={() => deleteEvent.mutate({ scenarioId: selected.id, eventId: ev.id })}
+                                  className="text-muted-foreground hover:text-red-400"
+                                >
+                                  <X size={13} />
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -385,7 +409,8 @@ export default function Scenarios() {
                         { label: 'Ending Equity',    value: formatCurrency(results.summary.end_equity, true),   tooltip: 'Projected total equity at the end of the projection period, after property value growth and mortgage amortisation.' },
                         { label: 'Equity Growth',    value: `+${formatCurrency(results.summary.equity_growth, true)} (${formatPercent(results.summary.equity_growth_pct)})`, tooltip: 'Net increase in equity over the projection: property appreciation plus principal repaid, minus any new debt taken on.' },
                         { label: 'Total Cashflow',   value: formatCurrency(results.summary.total_cashflow, true), tooltip: 'Cumulative net cashflow over the full projection period — rent received minus mortgage payments, expenses, and one-off acquisition costs.' },
-                        { label: 'Avg Monthly CF',   value: formatCurrency(results.summary.avg_monthly_cashflow), tooltip: 'Average monthly net cashflow across all properties and all months in the projection. Negative values indicate the portfolio is loss-making on average.' },
+                        { label: 'Avg Monthly CF',   value: formatCurrency(results.summary.avg_monthly_cashflow), tooltip: 'Average monthly net cashflow across all properties and all months in the projection. Lower than the ending figure because the early years hold fewer properties.' },
+                        { label: 'Ending Monthly CF', value: formatCurrency(results.summary.ending_monthly_cashflow ?? 0), tooltip: 'Net monthly cashflow in the final month of the projection — the steady-state income once the full portfolio is built and mortgages have amortised. This is the figure to compare against an income goal. Re-run the projection if this reads £0 on an older scenario.' },
                         { label: 'Min DSCR',         value: (results.summary.min_dscr ?? 0).toFixed(2), tooltip: 'Lowest Debt Service Coverage Ratio recorded in any month (total rent ÷ total mortgage payments). Below 1.25× indicates cashflow stress relative to the standard lender threshold.' },
                         { label: 'DSCR Breaches',    value: `${results.summary.months_below_dscr ?? '—'} mo`, tooltip: 'Number of months where the portfolio DSCR fell below 1.25×. A high breach count under stress scenarios suggests vulnerability to rate rises or void periods.' },
                       ].map(k => (

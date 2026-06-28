@@ -36,13 +36,16 @@ router.post('/', (req, res) => {
     const d = req.body
     const result = execute(
       `INSERT INTO goals (name, goal_type, target_monthly_income, target_property_count, target_equity,
-        target_date, max_ltv_pct, min_dscr, min_annual_cashflow, scenario_id, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        target_date, max_ltv_pct, min_dscr, min_annual_cashflow, scenario_id,
+        director_loan_annual, director_loan_start_date, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [d.name, d.goal_type,
        d.target_monthly_income ?? null, d.target_property_count ?? null,
        d.target_equity ?? null, d.target_date ?? null,
        d.max_ltv_pct ?? null, d.min_dscr ?? null, d.min_annual_cashflow ?? null,
-       d.scenario_id ?? null, d.notes ?? null]
+       d.scenario_id ?? null,
+       d.director_loan_annual ?? null, d.director_loan_start_date ?? null,
+       d.notes ?? null]
     )
     const goal = queryOne(GOAL_SELECT + 'WHERE g.id = ?', [result.lastInsertRowid])
     logActivity('goal_created', 'goal', Number(result.lastInsertRowid), `Goal created: ${d.name}`)
@@ -59,12 +62,15 @@ router.put('/:id', (req, res) => {
     execute(
       `UPDATE goals SET name=?, goal_type=?, target_monthly_income=?, target_property_count=?,
         target_equity=?, target_date=?, max_ltv_pct=?, min_dscr=?, min_annual_cashflow=?,
-        scenario_id=?, notes=?, updated_at=datetime('now') WHERE id=?`,
+        scenario_id=?, director_loan_annual=?, director_loan_start_date=?,
+        notes=?, updated_at=datetime('now') WHERE id=?`,
       [d.name, d.goal_type,
        d.target_monthly_income ?? null, d.target_property_count ?? null,
        d.target_equity ?? null, d.target_date ?? null,
        d.max_ltv_pct ?? null, d.min_dscr ?? null, d.min_annual_cashflow ?? null,
-       d.scenario_id ?? null, d.notes ?? null, id]
+       d.scenario_id ?? null,
+       d.director_loan_annual ?? null, d.director_loan_start_date ?? null,
+       d.notes ?? null, id]
     )
     const goal = queryOne(GOAL_SELECT + 'WHERE g.id = ?', [id])
     if (!goal) return res.status(404).json({ message: 'Not found' })
@@ -120,6 +126,7 @@ router.post('/:id/pathways/generate', (req, res) => {
       target_monthly_income: number | null; target_property_count: number | null;
       target_equity: number | null; target_date: string | null;
       max_ltv_pct: number | null; min_dscr: number | null; min_annual_cashflow: number | null;
+      director_loan_annual: number | null; director_loan_start_date: string | null;
     }>('SELECT * FROM goals WHERE id=?', [id])
     if (!goal) return res.status(404).json({ message: 'Goal not found' })
 
@@ -146,6 +153,17 @@ router.post('/:id/pathways/generate', (req, res) => {
 
     const created = transaction(() => {
       const results: unknown[] = []
+
+      // Replace previous generation — delete stale scenarios and pathway rows
+      const existing = queryAll<{ scenario_id: number }>(
+        'SELECT scenario_id FROM goal_pathways WHERE goal_id = ? AND scenario_id IS NOT NULL',
+        [id]
+      )
+      for (const row of existing) {
+        execute('DELETE FROM scenarios WHERE id = ?', [row.scenario_id])
+      }
+      execute('DELETE FROM goal_pathways WHERE goal_id = ?', [id])
+
       for (const pw of pathways) {
         // Create scenario
         const scenarioResult = execute(

@@ -261,6 +261,8 @@ export interface Goal {
   min_annual_cashflow?: number | null
   scenario_id?: number | null
   scenario_name?: string | null
+  director_loan_annual?: number | null
+  director_loan_start_date?: string | null
   notes?: string | null
   created_at: string
   updated_at: string
@@ -273,6 +275,7 @@ export interface ScenarioSummary {
   equity_growth_pct: number
   total_cashflow: number
   avg_monthly_cashflow: number
+  ending_monthly_cashflow: number
   min_dscr: number
   months_below_dscr: number
   min_cumulative_cashflow: number
@@ -350,6 +353,7 @@ export interface ScenarioResults {
     equity_growth_pct: number
     total_cashflow: number
     avg_monthly_cashflow: number
+    ending_monthly_cashflow: number
     min_dscr: number
     months_below_dscr: number
     min_cumulative_cashflow: number

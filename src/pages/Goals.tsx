@@ -20,6 +20,8 @@ const goalSchema = z.object({
   max_ltv_pct:            z.coerce.number().min(0).max(100).optional(),
   min_dscr:               z.coerce.number().min(0).optional(),
   min_annual_cashflow:    z.coerce.number().optional(),
+  director_loan_annual:       z.coerce.number().min(0).optional(),
+  director_loan_start_date:   z.string().optional(),
   scenario_id:            z.coerce.number().optional(),
   notes: z.string().optional(),
 })
@@ -93,6 +95,8 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
       max_ltv_pct:           goal.max_ltv_pct ?? undefined,
       min_dscr:              goal.min_dscr ?? undefined,
       min_annual_cashflow:   goal.min_annual_cashflow ?? undefined,
+      director_loan_annual:      goal.director_loan_annual ?? undefined,
+      director_loan_start_date:  goal.director_loan_start_date ?? undefined,
       scenario_id:           goal.scenario_id ?? undefined,
       notes:                 goal.notes ?? '',
     } : { goal_type: 'net_worth' },
@@ -109,6 +113,8 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
       max_ltv_pct:           goal.max_ltv_pct ?? undefined,
       min_dscr:              goal.min_dscr ?? undefined,
       min_annual_cashflow:   goal.min_annual_cashflow ?? undefined,
+      director_loan_annual:      goal.director_loan_annual ?? undefined,
+      director_loan_start_date:  goal.director_loan_start_date ?? undefined,
       scenario_id:           goal.scenario_id ?? undefined,
       notes:                 goal.notes ?? '',
     } : { goal_type: 'net_worth' })
@@ -129,6 +135,8 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
       max_ltv_pct:          d.max_ltv_pct ?? null,
       min_dscr:             d.min_dscr ?? null,
       min_annual_cashflow:  d.min_annual_cashflow ?? null,
+      director_loan_annual:      d.director_loan_annual ?? null,
+      director_loan_start_date:  d.director_loan_start_date || null,
       scenario_id:          d.scenario_id || null,
       notes:                d.notes || null,
     }
@@ -197,6 +205,22 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
           <div>
             <label className={labelCls}>Min cash/yr (£)</label>
             <input type="number" {...register('min_annual_cashflow')} className={inputCls} placeholder="e.g. 12000" />
+          </div>
+        </div>
+      </div>
+
+      {/* Director loans */}
+      <div className="border border-border rounded-lg p-4 space-y-3">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Director loans <span className="font-normal normal-case text-muted-foreground/70">(optional)</span></p>
+        <p className="text-xs text-muted-foreground">Cash injected annually from the company. Accumulates toward deposits and mortgage payoffs when generating pathways.</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className={labelCls}>Annual loan amount (£/yr)</label>
+            <input type="number" {...register('director_loan_annual')} className={inputCls} placeholder="e.g. 15000" />
+          </div>
+          <div>
+            <label className={labelCls}>First loan date</label>
+            <input type="date" {...register('director_loan_start_date')} className={inputCls} />
           </div>
         </div>
       </div>
@@ -382,6 +406,12 @@ function PathwaysPanel({ goal }: { goal: Goal }) {
                     <div>
                       <span className="text-muted-foreground">End equity</span>
                       <div className="font-medium">{formatCurrency(pw.summary.end_equity)}</div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Ending CF/mo</span>
+                      <div className={`font-medium ${(pw.summary.ending_monthly_cashflow ?? 0) >= 0 ? '' : 'text-red-400'}`}>
+                        {formatCurrency(pw.summary.ending_monthly_cashflow ?? 0)}
+                      </div>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Avg CF/mo</span>

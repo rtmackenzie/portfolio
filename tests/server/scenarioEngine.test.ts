@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildProjection, type PropertyState, type ScenarioEvent } from '../../server/services/scenarioEngine.ts'
-import { calcMonthlyPayment } from '../../server/services/calculations.ts'
+import { calcMonthlyPayment, calcTransactionCosts } from '../../server/services/calculations.ts'
 
 // Helpers
 function makeState(overrides: Partial<PropertyState> = {}): PropertyState {
@@ -31,11 +31,11 @@ function makeEvent(overrides: Partial<ScenarioEvent> & { event_type: string }): 
   }
 }
 
-// void=0 and inflation=0 so existing tests aren't affected by new defaults
+// void=0, inflation=0, rent growth=0 so existing tests aren't affected by growth defaults
 const BASE_CONFIG = {
   base_date: '2026-01-01',
   projection_years: 1,
-  assumptions_json: JSON.stringify({ void_months_per_year: 0, expense_inflation_pct: 0 }),
+  assumptions_json: JSON.stringify({ void_months_per_year: 0, expense_inflation_pct: 0, rent_growth_pct: 0 }),
 }
 
 // ─── Snapshot structure ───────────────────────────────────────────────────────
@@ -169,6 +169,45 @@ describe('buildProjection — amortisation', () => {
   })
 })
 
+// ─── True cash model — deposits & payoffs draw down the cash pot ────────────────
+
+describe('buildProjection — true cash model', () => {
+  it('buy_property deducts the deposit (not just costs) at the buy month', () => {
+    const price = 120000, depositPct = 25, rate = 5.5, term = 25
+    const debt = price * (1 - depositPct / 100)        // 90000
+    const deposit = price * (depositPct / 100)         // 30000
+    const { total: txCosts } = calcTransactionCosts(price, 2000, 0)
+    const monthlyMortgage = calcMonthlyPayment(debt, rate, term * 12)
+    const { months } = buildProjection(
+      new Map(),
+      [makeEvent({
+        event_type: 'buy_property',
+        date: '2026-01-01',
+        parameters_json: JSON.stringify({
+          purchase_price: price, monthly_rent: 0, deposit_percent: depositPct,
+          monthly_expenses: 0, mortgage_rate: rate, mortgage_term_years: term,
+          legal_fees: 2000, refurb_costs: 0,
+        }),
+      })],
+      BASE_CONFIG
+    )
+    // month 0: rent 0, first mortgage payment, minus capital outflow (deposit + txCosts)
+    expect(months[0].cumulative_cashflow).toBe(Math.round(-(deposit + txCosts) - monthlyMortgage))
+  })
+
+  it('payoff_mortgage deducts the cleared balance from cumulative cashflow', () => {
+    // interest-only so the balance stays £120k until cleared
+    const state = makeState({ id: 1, debt: 120000, is_interest_only: true, monthly_rent: 0, monthly_other_expenses: 0 })
+    const { months } = buildProjection(
+      makeMap(state),
+      [makeEvent({ event_type: 'payoff_mortgage', date: '2026-06-01', property_id: 1, parameters_json: '{}' })],
+      BASE_CONFIG
+    )
+    // The £120k capital outflow lands in the payoff month — a clean step down from the prior month
+    expect(months[5].cumulative_cashflow - months[4].cumulative_cashflow).toBe(-120000)
+  })
+})
+
 // ─── Cashflow ─────────────────────────────────────────────────────────────────
 
 describe('buildProjection — cashflow', () => {
@@ -195,6 +234,31 @@ describe('buildProjection — cashflow', () => {
     const { months, summary } = buildProjection(makeMap(state), [], BASE_CONFIG)
     const manualAvg = Math.round(months.reduce((s, m) => s + m.monthly_cashflow, 0) / months.length)
     expect(summary.avg_monthly_cashflow).toBe(manualAvg)
+  })
+
+  it('ending_monthly_cashflow equals the final month monthly cashflow', () => {
+    const state = makeState({ monthly_rent: 1000, monthly_mortgage: 500, monthly_other_expenses: 100 })
+    const { months, summary } = buildProjection(makeMap(state), [], BASE_CONFIG)
+    expect(summary.ending_monthly_cashflow).toBe(months[months.length - 1].monthly_cashflow)
+  })
+
+  it('rent grows over time when rent_growth_pct > 0 (later month rent > month 0)', () => {
+    // No mortgage / no expenses / no void → cashflow is pure rent, isolating rent growth
+    const state = makeState({ monthly_rent: 1000, monthly_mortgage: 0, monthly_other_expenses: 0 })
+    const { months } = buildProjection(makeMap(state), [], {
+      base_date: '2026-01-01',
+      projection_years: 2,
+      assumptions_json: JSON.stringify({ void_months_per_year: 0, expense_inflation_pct: 0, rent_growth_pct: 10 }),
+    })
+    expect(months[0].monthly_cashflow).toBe(1000)                       // base year, factor 1
+    expect(months[12].monthly_cashflow).toBeGreaterThan(months[0].monthly_cashflow)
+    expect(months[12].monthly_cashflow).toBe(Math.round(1000 * 1.10))   // +1 year at 10%
+  })
+
+  it('rent stays flat when rent_growth_pct = 0', () => {
+    const state = makeState({ monthly_rent: 1000, monthly_mortgage: 0, monthly_other_expenses: 0 })
+    const { months } = buildProjection(makeMap(state), [], BASE_CONFIG)
+    expect(months[11].monthly_cashflow).toBe(months[0].monthly_cashflow)
   })
 })
 
@@ -229,8 +293,8 @@ describe('buildProjection — buy_property event', () => {
   })
 
   it('deducts LBTT+ADS+fees from cumulative cashflow at buy month', () => {
-    // £66k cash buy: ADS=£5,280, LBTT=£0, legal=£2,000 → txCosts=£7,280
-    // monthly_expenses=0 so cashflow = £700 rent; cumulative = 700 − 7280 = −6580
+    // £66k cash buy (100% deposit): deposit=£66,000, ADS=£5,280, LBTT=£0, legal=£2,000 → txCosts=£7,280
+    // monthly_expenses=0 so cashflow = £700 rent; cumulative = 700 − 7280 − 66000 = −72,580
     const { months } = buildProjection(
       new Map(),
       [makeEvent({
@@ -243,7 +307,7 @@ describe('buildProjection — buy_property event', () => {
       })],
       BASE_CONFIG
     )
-    expect(months[0].cumulative_cashflow).toBe(700 - 7280)
+    expect(months[0].cumulative_cashflow).toBe(700 - 7280 - 66000)
   })
 })
 

@@ -1,4 +1,5 @@
 import { buildProjection, type PropertyState, type ScenarioEvent } from './scenarioEngine.ts'
+import { calcTransactionCosts } from './calculations.ts'
 
 type GoalType = 'income' | 'count' | 'net_worth' | 'mortgage_free' | 'retirement_date'
 
@@ -11,6 +12,8 @@ interface Goal {
   max_ltv_pct?: number | null
   min_dscr?: number | null
   min_annual_cashflow?: number | null
+  director_loan_annual?: number | null
+  director_loan_start_date?: string | null
 }
 
 export interface PropertyAssumptions {
@@ -33,9 +36,24 @@ type MonthSnapshot = {
   monthly_dscr: number
 }
 
+type PropMonth = {
+  date: string
+  value: number
+  debt: number
+  equity: number
+  monthly_cashflow: number
+  cumulative_cashflow: number
+}
+
+type PropSeries = {
+  property_id: number
+  label: string
+  months: PropMonth[]
+}
+
 type ProjectionResult = {
   months: MonthSnapshot[]
-  property_series: unknown[]
+  property_series: PropSeries[]
   summary: {
     start_equity: number
     end_equity: number
@@ -43,6 +61,7 @@ type ProjectionResult = {
     equity_growth_pct: number
     total_cashflow: number
     avg_monthly_cashflow: number
+    ending_monthly_cashflow: number
     min_dscr: number
     months_below_dscr: number
     min_cumulative_cashflow: number
@@ -100,58 +119,104 @@ function payoffEvent(date: string): ScenarioEvent {
   }
 }
 
-// ─── Template 1: Steady Growth ────────────────────────────────────────────────
-// Buy 1 property every 12 months, starting at +3 months
+// ─── Cash-gated event generation ──────────────────────────────────────────────
+// Decisions (buy / payoff) are driven by the accumulated cash pot — read straight
+// from the engine's true-cash `cumulative_cashflow` line — not by fixed timers.
+// Greedy forward insertion: re-project after every decision so each subsequent
+// choice sees the updated cash balance (deposits/payoffs drawn, loans added).
 
-function buildSteadyGrowthEvents(baseDate: string, projYears: number, a: PropertyAssumptions): ScenarioEvent[] {
-  const events: ScenarioEvent[] = []
-  const totalMonths = projYears * 12
-  for (let mo = 3; mo < totalMonths; mo += 12) {
-    events.push(buyEvent(addMonths(baseDate, mo), a))
-  }
-  return events
+type Strategy = 'steady' | 'accelerated' | 'recycler'
+
+function depositPlusCosts(a: PropertyAssumptions): number {
+  const price = a.purchase_price
+  const deposit = price * ((a.deposit_percent ?? 25) / 100)
+  const { total: txCosts } = calcTransactionCosts(price, 2000, 0)
+  return deposit + txCosts
 }
 
-// ─── Template 2: Accelerated Growth ──────────────────────────────────────────
-// Buy 1 property every 6 months, starting at +3 months
-
-function buildAcceleratedEvents(baseDate: string, projYears: number, a: PropertyAssumptions): ScenarioEvent[] {
-  const events: ScenarioEvent[] = []
-  const totalMonths = projYears * 12
-  for (let mo = 3; mo < totalMonths; mo += 6) {
-    events.push(buyEvent(addMonths(baseDate, mo), a))
-  }
-  return events
+function cloneState(initial: Map<number, PropertyState>): Map<number, PropertyState> {
+  return new Map(Array.from(initial.entries()).map(([k, v]) => [k, { ...v }]))
 }
 
-// ─── Template 3: Mortgage Recycler ───────────────────────────────────────────
-// Keep ≤2 active mortgages. When at 2, payoff the smallest after 18 months then buy.
-// Mirrors create-scenarios.ts lines 58–116.
+// Active mortgages / smallest balance at absolute month i, read from property_series
+function activeBalancesAt(proj: ProjectionResult, i: number): number[] {
+  const ym = proj.months[i].date
+  const out: number[] = []
+  for (const ps of proj.property_series) {
+    const pm = ps.months.find(m => m.date === ym)
+    if (pm && pm.debt > 0) out.push(pm.debt)
+  }
+  return out
+}
 
-function buildMortgageRecyclerEvents(
+function buildCashGatedEvents(
+  strategy: Strategy,
   baseDate: string,
   projYears: number,
   a: PropertyAssumptions,
-  initialMortgageCount: number
+  initialState: Map<number, PropertyState>,
+  loanEvents: ScenarioEvent[]
+): ScenarioEvent[] {
+  const totalMonths = projYears * 12
+  const config = { base_date: baseDate, projection_years: projYears }
+  const buyCost = depositPlusCosts(a)
+  const monthlyExp = a.monthly_expenses ?? 200
+  const buffer = strategy === 'steady' ? monthlyExp * 6 : 0  // steady keeps a reserve
+  const cap = projYears * 4                                   // hard ceiling on decisions
+
+  const decisions: ScenarioEvent[] = []
+  let lastMonth = 0
+
+  while (decisions.length < cap) {
+    const events = [...loanEvents, ...decisions].sort((x, y) => x.date.localeCompare(y.date))
+    const proj = buildProjection(cloneState(initialState), events, config) as ProjectionResult
+
+    let decided: ScenarioEvent | null = null
+    let decidedMonth = -1
+
+    for (let i = lastMonth; i < proj.months.length && i < totalMonths; i++) {
+      const cash = proj.months[i].cumulative_cashflow
+
+      if (strategy === 'recycler') {
+        const balances = activeBalancesAt(proj, i)
+        if (balances.length < 2) {
+          if (cash >= buyCost) { decided = buyEvent(proj.months[i].date, a); decidedMonth = i; break }
+        } else {
+          const smallest = Math.min(...balances)
+          if (cash >= smallest) { decided = payoffEvent(proj.months[i].date); decidedMonth = i; break }
+        }
+      } else {
+        if (cash >= buyCost + buffer) { decided = buyEvent(proj.months[i].date, a); decidedMonth = i; break }
+      }
+    }
+
+    if (!decided || decidedMonth < lastMonth) break
+    decisions.push(decided)
+    lastMonth = decidedMonth + 1   // guarantee forward progress
+  }
+
+  return decisions
+}
+
+// ─── Director loan events ─────────────────────────────────────────────────────
+
+function buildDirectorLoanEvents(
+  baseDate: string,
+  projYears: number,
+  annualAmount: number,
+  startDate?: string | null
 ): ScenarioEvent[] {
   const events: ScenarioEvent[] = []
   const totalMonths = projYears * 12
-  let activeMortgages = Math.min(initialMortgageCount, 2)
-  let cursor = 3 // months from base_date
-
-  while (cursor < totalMonths) {
-    if (activeMortgages < 2) {
-      events.push(buyEvent(addMonths(baseDate, cursor), a))
-      activeMortgages++
-      cursor += 3  // small gap before next decision
-    } else {
-      // Hold for 18 months then payoff the smallest (pid:null = auto-select)
-      cursor += 18
-      if (cursor >= totalMonths) break
-      events.push(payoffEvent(addMonths(baseDate, cursor)))
-      activeMortgages--
-      cursor += 1
-    }
+  let offsetMonths = startDate ? monthDiff(baseDate, startDate) : 0
+  if (offsetMonths < 0) offsetMonths = 0
+  for (let mo = offsetMonths; mo < totalMonths; mo += 12) {
+    events.push({
+      event_type: 'director_loan_in',
+      property_id: null,
+      date: addMonths(baseDate, mo),
+      parameters_json: JSON.stringify({ amount: annualAmount }),
+    })
   }
   return events
 }
@@ -211,7 +276,7 @@ export function generatePathways(
   initialState: Map<number, PropertyState>,
   assumptions: PropertyAssumptions,
   projectionYears: number,
-  activeMortgageCount: number
+  _activeMortgageCount: number   // retained for API stability; recycler now reads live debt
 ): GeneratedPathway[] {
   const baseDate = new Date().toISOString().slice(0, 10)
 
@@ -220,37 +285,29 @@ export function generatePathways(
     projection_years: projectionYears,
   }
 
-  const templates: Array<{ template_name: string; label: string; events: ScenarioEvent[] }> = [
-    {
-      template_name: 'steady_growth',
-      label: 'Steady Growth',
-      events: buildSteadyGrowthEvents(baseDate, projectionYears, assumptions),
-    },
-    {
-      template_name: 'accelerated_growth',
-      label: 'Accelerated Growth',
-      events: buildAcceleratedEvents(baseDate, projectionYears, assumptions),
-    },
-    {
-      template_name: 'mortgage_recycler',
-      label: 'Mortgage Recycler',
-      events: buildMortgageRecyclerEvents(baseDate, projectionYears, assumptions, activeMortgageCount),
-    },
+  const loanEvents = goal.director_loan_annual
+    ? buildDirectorLoanEvents(baseDate, projectionYears, goal.director_loan_annual, goal.director_loan_start_date)
+    : []
+
+  const templates: Array<{ template_name: string; label: string; strategy: Strategy }> = [
+    { template_name: 'steady_growth',      label: 'Steady Growth',      strategy: 'steady' },
+    { template_name: 'accelerated_growth', label: 'Accelerated Growth', strategy: 'accelerated' },
+    { template_name: 'mortgage_recycler',  label: 'Mortgage Recycler',  strategy: 'recycler' },
   ]
 
   return templates.map(t => {
-    // Deep-clone initialState for each run so templates don't share state
-    const stateCopy = new Map<number, PropertyState>(
-      Array.from(initialState.entries()).map(([k, v]) => [k, { ...v }])
-    )
-    const results = buildProjection(stateCopy, t.events, config) as ProjectionResult
-    const feasible = checkConstraints(results.months, goal)
+    // Cash-gated decisions (buys/payoffs), then merge loan events for the final run
+    const decisions = buildCashGatedEvents(t.strategy, baseDate, projectionYears, assumptions, initialState, loanEvents)
+    const allEvents = [...decisions, ...loanEvents].sort((a, b) => a.date.localeCompare(b.date))
+
+    const results = buildProjection(cloneState(initialState), allEvents, config) as ProjectionResult
+    const feasible = checkConstraints(results.months, goal) && results.summary.min_cumulative_cashflow >= 0
     const { reached, monthIndex } = checkGoalReached(results.months, goal)
 
     return {
       template_name: t.template_name,
       label: t.label,
-      events: t.events,
+      events: allEvents,
       results,
       feasible,
       reaches_goal: reached,

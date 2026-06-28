@@ -88,10 +88,11 @@ export function buildProjection(
   }
 
   const assumptions = JSON.parse(config.assumptions_json ?? '{}')
-  const growthRate    = assumptions.property_growth_pct   ?? 3.0
-  const inflationRate = assumptions.expense_inflation_pct ?? 2.5
-  const voidMonths    = assumptions.void_months_per_year  ?? 0.5
-  const voidFactor    = 1 - voidMonths / 12
+  const growthRate     = assumptions.property_growth_pct   ?? 3.0
+  const inflationRate  = assumptions.expense_inflation_pct ?? 2.5
+  const rentGrowthRate = assumptions.rent_growth_pct       ?? 2.5
+  const voidMonths     = assumptions.void_months_per_year  ?? 0.5
+  const voidFactor     = 1 - voidMonths / 12
 
   const snapshots: MonthSnapshot[] = []
   let cumulativeCashflow = 0
@@ -145,7 +146,10 @@ export function buildProjection(
             params.legal_fees ?? 2000,
             params.refurb_costs ?? 0
           )
-          cumulativeCashflow -= txCosts
+          // Deposit + transaction costs are a real capital outflow drawn from the
+          // accumulated cash pot (retained cashflow + director loans).
+          const deposit = price * (depositPct / 100)
+          cumulativeCashflow -= deposit + txCosts
           break
         }
         case 'sell_property': {
@@ -220,8 +224,10 @@ export function buildProjection(
           }
           const state = targetId !== null ? stateMap.get(targetId) : null
           if (state && targetId !== null) {
-            // Capital event — funded from savings/equity outside this cashflow model.
-            // buy_property follows the same convention (deposit not deducted).
+            // Capital event — the cleared balance is a real outflow drawn from the
+            // accumulated cash pot (retained cashflow + director loans).
+            const clearedBalance = debtMap.get(targetId) ?? 0
+            cumulativeCashflow -= clearedBalance
             state.monthly_mortgage = 0
             state.debt = 0
             debtMap.set(targetId, 0)
@@ -267,7 +273,8 @@ export function buildProjection(
       totalValue += currentValue
       totalDebt += currentDebt
 
-      const rent = state.is_vacant ? 0 : state.monthly_rent * voidFactor
+      const rentGrowthFactor = Math.pow(1 + rentGrowthRate / 100, i / 12)
+      const rent = state.is_vacant ? 0 : state.monthly_rent * voidFactor * rentGrowthFactor
       const inflationFactor = Math.pow(1 + inflationRate / 100, i / 12)
       const expenses = state.monthly_other_expenses * inflationFactor
       const propCashflow = rent - state.monthly_mortgage - expenses
@@ -328,6 +335,7 @@ export function buildProjection(
       avg_monthly_cashflow: snapshots.length > 0
         ? Math.round(snapshots.reduce((s, m) => s + m.monthly_cashflow, 0) / snapshots.length)
         : 0,
+      ending_monthly_cashflow: last?.monthly_cashflow ?? 0,
       min_dscr: nonZeroDscr.length > 0
         ? Math.round(Math.min(...nonZeroDscr.map(s => s.monthly_dscr)) * 100) / 100
         : 0,
