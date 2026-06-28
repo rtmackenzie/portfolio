@@ -12,6 +12,20 @@ router.get('/', (_req, res) => {
   }
 })
 
+router.get('/compare', (req, res) => {
+  try {
+    const ids = String(req.query.ids ?? '').split(',').map(Number).filter(Boolean)
+    const results = ids.map(id => {
+      const s = queryOne<{ id: number; name: string }>('SELECT id, name FROM scenarios WHERE id=?', [id])
+      const r = queryOne<{ results_json: string }>('SELECT results_json FROM scenario_results WHERE scenario_id=? ORDER BY calculated_at DESC LIMIT 1', [id])
+      return { scenario: s, results: r ? JSON.parse(r.results_json) : null }
+    })
+    res.json(results)
+  } catch (err) {
+    res.status(500).json({ message: String(err) })
+  }
+})
+
 router.get('/:id', (req, res) => {
   try {
     const id = Number(req.params.id)
@@ -147,20 +161,6 @@ router.post('/:id/calculate', async (req, res) => {
     const events = queryAll('SELECT * FROM scenario_events WHERE scenario_id=? ORDER BY date, sort_order', [id])
     const results = runScenario(scenario, events as any)
     execute('INSERT INTO scenario_results (scenario_id, results_json) VALUES (?, ?)', [id, JSON.stringify(results)])
-    res.json(results)
-  } catch (err) {
-    res.status(500).json({ message: String(err) })
-  }
-})
-
-router.get('/compare', (req, res) => {
-  try {
-    const ids = String(req.query.ids ?? '').split(',').map(Number).filter(Boolean)
-    const results = ids.map(id => {
-      const s = queryOne<{ id: number; name: string }>('SELECT id, name FROM scenarios WHERE id=?', [id])
-      const r = queryOne<{ results_json: string }>('SELECT results_json FROM scenario_results WHERE scenario_id=? ORDER BY calculated_at DESC LIMIT 1', [id])
-      return { scenario: s, results: r ? JSON.parse(r.results_json) : null }
-    })
     res.json(results)
   } catch (err) {
     res.status(500).json({ message: String(err) })

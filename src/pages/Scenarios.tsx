@@ -11,6 +11,7 @@ import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import type { Scenario, ScenarioResults } from '@/types'
+import { ScenarioCompareTable } from '@/components/shared/ScenarioCompareTable'
 
 const scenarioSchema = z.object({
   name: z.string().min(1),
@@ -49,6 +50,16 @@ export default function Scenarios() {
   const [showAddEvent, setShowAddEvent] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
   const [editingEvent, setEditingEvent] = useState<import('@/types').ScenarioEvent | null>(null)
+  const [compareIds, setCompareIds] = useState<Set<number>>(new Set())
+  const [compareMode, setCompareMode] = useState(false)
+
+  function toggleCompare(id: number) {
+    setCompareIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
 
   const { data: selected } = useQuery({
     queryKey: ['scenarios', selectedId],
@@ -77,6 +88,14 @@ export default function Scenarios() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['scenarios', selectedId] }),
   })
 
+  const compareQuery = useQuery({
+    queryKey: ['scenarios', 'compare', [...compareIds].sort().join(',')],
+    queryFn: () => api.get<{ scenario: { id: number; name: string }; results: ScenarioResults | null }[]>(
+      `/scenarios/compare?ids=${[...compareIds].join(',')}`
+    ),
+    enabled: compareMode && compareIds.size >= 2,
+  })
+
   if (isLoading) return <PageLoader />
 
   const results = selected?.results as ScenarioResults | null | undefined
@@ -100,22 +119,46 @@ export default function Scenarios() {
           {!scenarios || scenarios.length === 0 ? (
             <p className="text-sm text-muted-foreground">No scenarios yet</p>
           ) : (
-            scenarios.map(s => (
-              <button
-                key={s.id}
-                onClick={() => setSelectedId(s.id)}
-                className={`w-full text-left px-3 py-2.5 rounded-md text-sm transition-colors ${selectedId === s.id ? 'bg-primary/15 text-primary' : 'bg-card text-foreground hover:bg-accent'}`}
-              >
-                <div className="font-medium">{s.name}</div>
-                <div className="text-xs text-muted-foreground">{s.projection_years}yr projection</div>
-              </button>
-            ))
+            <>
+              {scenarios.map(s => (
+                <div key={s.id} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={compareIds.has(s.id)}
+                    onChange={() => toggleCompare(s.id)}
+                    onClick={e => e.stopPropagation()}
+                    className="rounded border-border accent-primary flex-none"
+                  />
+                  <button
+                    onClick={() => { setSelectedId(s.id); setCompareMode(false) }}
+                    className={`flex-1 text-left px-3 py-2.5 rounded-md text-sm transition-colors ${selectedId === s.id && !compareMode ? 'bg-primary/15 text-primary' : 'bg-card text-foreground hover:bg-accent'}`}
+                  >
+                    <div className="font-medium">{s.name}</div>
+                    <div className="text-xs text-muted-foreground">{s.projection_years}yr projection</div>
+                  </button>
+                </div>
+              ))}
+              {compareIds.size >= 2 && (
+                <button
+                  onClick={() => setCompareMode(true)}
+                  className="w-full mt-1 px-3 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium"
+                >
+                  Compare ({compareIds.size})
+                </button>
+              )}
+            </>
           )}
         </div>
 
-        {/* Detail panel */}
+        {/* Detail / Compare panel */}
         <div className="col-span-3 space-y-5">
-          {!selectedId ? (
+          {compareMode ? (
+            <ScenarioCompareTable
+              data={compareQuery.data ?? []}
+              isLoading={compareQuery.isLoading}
+              onExit={() => setCompareMode(false)}
+            />
+          ) : !selectedId ? (
             <div className="bg-card rounded-lg p-8 text-center text-muted-foreground">
               Select a scenario or create a new one
             </div>
