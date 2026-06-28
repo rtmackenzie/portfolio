@@ -615,7 +615,7 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
             <tr><td><strong>Property sale</strong></td><td>Sale price, costs, CGT base, ownership</td><td>Net proceeds = price − costs − CGT; releases equity to liquidity pool.</td><td>Sell just removes the asset; no proceeds or CGT.</td><td><span class="pill p1">P1</span></td></tr>
             <tr><td><strong>Capital injection</strong></td><td>Amount, date, source</td><td>Adds to liquidity pool to fund deposits/payoffs; enables goal pathways.</td><td>No concept of available cash.</td><td><span class="pill p1">P1</span></td></tr>
             <tr><td><strong>Tax engine</strong></td><td>Structure, income band, S24, CGT, corp tax</td><td>Post-tax cashflow layer (see below); personal vs. Ltd toggle.</td><td>Entirely absent.</td><td><span class="pill p1">P1</span></td></tr>
-            <tr><td><strong>Director's loan</strong></td><td>Balance, draw/repay schedule</td><td>Track DL account in Ltd structures; tax-efficient extraction modelling.</td><td>Absent.</td><td><span class="pill p2">P2</span></td></tr>
+            <tr><td><strong>Director's loan</strong></td><td>Balance, draw/repay schedule</td><td>Track DL account in Ltd structures; tax-efficient extraction modelling.</td><td><code>director_loan_in</code> / <code>director_loan_repay</code> events implemented — cashflow mechanics in place. Balance tracking &amp; tax extraction remain P2.</td><td><span class="pill p2">P2</span></td></tr>
             <tr><td><strong>Portfolio restructuring</strong></td><td>Incorporation, transfers, refinance bundle</td><td>Composite multi-event template with cost/tax consequences.</td><td>Absent.</td><td><span class="pill p2">P2</span></td></tr>
           </tbody>
         </table>

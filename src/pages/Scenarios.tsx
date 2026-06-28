@@ -34,6 +34,8 @@ const EVENT_TYPES = [
   { value: 'major_expense', label: 'Major Expense' },
   { value: 'interest_rate_change', label: 'Interest Rate Change' },
   { value: 'payoff_mortgage', label: 'Pay Off Mortgage' },
+  { value: 'director_loan_in', label: 'Director Loan In' },
+  { value: 'director_loan_repay', label: 'Director Loan Repay' },
 ]
 
 export default function Scenarios() {
@@ -488,6 +490,10 @@ function EventModal({ scenarioId, event, onClose }: { scenarioId: number; event?
         return numField('amount', 'Amount (£)', '5000')
       case 'interest_rate_change':
         return numField('change_basis_points', 'Basis Points (e.g. 25 = +0.25%)', '25')
+      case 'director_loan_in':
+        return numField('amount', 'Loan Amount (£)', '25000')
+      case 'director_loan_repay':
+        return numField('amount', 'Repayment Amount (£)', '5000')
       default:
         return null
     }

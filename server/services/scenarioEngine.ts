@@ -204,6 +204,14 @@ export function buildProjection(
           cumulativeCashflow -= params.amount ?? 0
           break
         }
+        case 'director_loan_in': {
+          cumulativeCashflow += params.amount ?? 0
+          break
+        }
+        case 'director_loan_repay': {
+          cumulativeCashflow -= params.amount ?? 0
+          break
+        }
       }
     }
 

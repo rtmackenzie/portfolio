@@ -424,6 +424,44 @@ describe('buildProjection — remortgage event', () => {
   })
 })
 
+// ─── Director loans ───────────────────────────────────────────────────────────
+
+describe('buildProjection — director_loan_in event', () => {
+  it('adds loan amount to cumulative cashflow in that month', () => {
+    const state = makeState({ monthly_rent: 1000, monthly_mortgage: 500, monthly_other_expenses: 100 })
+    const without = buildProjection(makeMap(state), [], BASE_CONFIG)
+    const withLoan = buildProjection(
+      makeMap(state),
+      [makeEvent({
+        event_type: 'director_loan_in',
+        date: '2026-06-01',
+        parameters_json: JSON.stringify({ amount: 25000 }),
+      })],
+      BASE_CONFIG
+    )
+    expect(withLoan.months[5].cumulative_cashflow)
+      .toBe(without.months[5].cumulative_cashflow + 25000)
+  })
+})
+
+describe('buildProjection — director_loan_repay event', () => {
+  it('deducts repayment amount from cumulative cashflow in that month', () => {
+    const state = makeState({ monthly_rent: 1000, monthly_mortgage: 500, monthly_other_expenses: 100 })
+    const without = buildProjection(makeMap(state), [], BASE_CONFIG)
+    const withRepay = buildProjection(
+      makeMap(state),
+      [makeEvent({
+        event_type: 'director_loan_repay',
+        date: '2026-06-01',
+        parameters_json: JSON.stringify({ amount: 10000 }),
+      })],
+      BASE_CONFIG
+    )
+    expect(withRepay.months[5].cumulative_cashflow)
+      .toBe(without.months[5].cumulative_cashflow - 10000)
+  })
+})
+
 // ─── Assumptions ─────────────────────────────────────────────────────────────
 
 describe('buildProjection — assumptions', () => {
