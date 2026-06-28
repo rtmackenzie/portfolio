@@ -9,6 +9,7 @@ import Acquisitions from './pages/Acquisitions'
 import Scenarios from './pages/Scenarios'
 import BusinessOverview from './pages/BusinessOverview'
 import Reports from './pages/Reports'
+import Goals from './pages/Goals'
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/calendar" element={<Calendar />} />
         <Route path="/acquisitions" element={<Acquisitions />} />
         <Route path="/scenarios" element={<Scenarios />} />
+        <Route path="/goals" element={<Goals />} />
         <Route path="/business" element={<BusinessOverview />} />
         <Route path="/reports" element={<Reports />} />
       </Route>

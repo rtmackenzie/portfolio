@@ -246,6 +246,26 @@ export interface AcquisitionOpportunity {
   }
 }
 
+export type GoalType = 'income' | 'count' | 'net_worth' | 'mortgage_free' | 'retirement_date'
+
+export interface Goal {
+  id: number
+  name: string
+  goal_type: GoalType
+  target_monthly_income?: number | null
+  target_property_count?: number | null
+  target_equity?: number | null
+  target_date?: string | null
+  max_ltv_pct?: number | null
+  min_dscr?: number | null
+  min_annual_cashflow?: number | null
+  scenario_id?: number | null
+  scenario_name?: string | null
+  notes?: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface Scenario {
   id: number
   name: string
