@@ -502,3 +502,113 @@ describe('buildProjection — assumptions', () => {
     expect(months[119].monthly_cashflow).toBeLessThan(months[0].monthly_cashflow)
   })
 })
+
+// ─── Stress tests: rate shock ────────────────────────────────────────────────
+
+describe('buildProjection — rate_shock_bps', () => {
+  it('raises monthly mortgage for an existing property (+200bps → ×1.02)', () => {
+    const state = makeState({ monthly_rent: 0, monthly_mortgage: 500, monthly_other_expenses: 0 })
+    const { months } = buildProjection(makeMap(state), [], { ...BASE_CONFIG, rate_shock_bps: 200 })
+    // 500 × (1 + 200/10000) = 510 → cashflow = −510
+    expect(months[0].monthly_cashflow).toBe(-510)
+  })
+
+  it('raises mortgage on a property acquired mid-projection (buy_property)', () => {
+    const buyEvent = makeEvent({
+      event_type: 'buy_property',
+      date: '2026-01-01',
+      parameters_json: JSON.stringify({ purchase_price: 150000, monthly_rent: 0, deposit_percent: 25, mortgage_rate: 5, mortgage_term_years: 25, monthly_expenses: 0 }),
+    })
+    const base    = buildProjection(new Map(), [buyEvent], BASE_CONFIG)
+    const shocked = buildProjection(new Map(), [buyEvent], { ...BASE_CONFIG, rate_shock_bps: 300 })
+    // Higher rate on the acquired mortgage → more negative operating cashflow
+    expect(shocked.months[0].monthly_cashflow).toBeLessThan(base.months[0].monthly_cashflow)
+  })
+
+  it('zero shock leaves mortgage unchanged', () => {
+    const state = makeState({ monthly_rent: 0, monthly_mortgage: 500, monthly_other_expenses: 0 })
+    const { months } = buildProjection(makeMap(state), [], { ...BASE_CONFIG, rate_shock_bps: 0 })
+    expect(months[0].monthly_cashflow).toBe(-500)
+  })
+})
+
+// ─── Stress tests: rent shock ────────────────────────────────────────────────
+
+describe('buildProjection — rent_shock_pct', () => {
+  it('reduces rent for an existing property (−10% → ×0.9)', () => {
+    const state = makeState({ monthly_rent: 1000, monthly_mortgage: 0, monthly_other_expenses: 0 })
+    const { months } = buildProjection(makeMap(state), [], { ...BASE_CONFIG, rent_shock_pct: -10 })
+    expect(months[0].monthly_cashflow).toBe(900)
+  })
+
+  it('reduces rent for a property acquired mid-projection (regression — buy_property)', () => {
+    // The bug: rent_shock_pct was applied only to the initial state, leaving acquired rents unshocked.
+    const buyEvent = makeEvent({
+      event_type: 'buy_property',
+      date: '2026-01-01',
+      parameters_json: JSON.stringify({ purchase_price: 80000, monthly_rent: 800, deposit_percent: 100, monthly_expenses: 0 }),
+    })
+    const { months } = buildProjection(new Map(), [buyEvent], { ...BASE_CONFIG, rent_shock_pct: -10 })
+    // deposit 100% → no debt/mortgage; rent 800 × 0.9 = 720
+    expect(months[0].monthly_cashflow).toBe(720)
+  })
+
+  it('rate and rent shocks combine independently', () => {
+    const state = makeState({ monthly_rent: 1000, monthly_mortgage: 500, monthly_other_expenses: 0 })
+    const { months } = buildProjection(makeMap(state), [], { ...BASE_CONFIG, rate_shock_bps: 200, rent_shock_pct: -10 })
+    // rent 1000 × 0.9 = 900; mortgage 500 × 1.02 = 510 → cashflow = 390
+    expect(months[0].monthly_cashflow).toBe(390)
+  })
+})
+
+// ─── DSCR & liquidity ────────────────────────────────────────────────────────
+
+describe('buildProjection — DSCR', () => {
+  it('flags every month below the 1.25× threshold', () => {
+    // rent 600 / mortgage 500 = 1.2 DSCR < 1.25 for all 12 months
+    const state = makeState({ monthly_rent: 600, monthly_mortgage: 500, monthly_other_expenses: 0 })
+    const { summary } = buildProjection(makeMap(state), [], BASE_CONFIG)
+    expect(summary.min_dscr).toBe(1.2)
+    expect(summary.months_below_dscr).toBe(12)
+  })
+
+  it('reports no breaches for a well-covered portfolio', () => {
+    // rent 1000 / mortgage 500 = 2.0 DSCR ≥ 1.25
+    const state = makeState({ monthly_rent: 1000, monthly_mortgage: 500, monthly_other_expenses: 0 })
+    const { summary } = buildProjection(makeMap(state), [], BASE_CONFIG)
+    expect(summary.min_dscr).toBe(2)
+    expect(summary.months_below_dscr).toBe(0)
+  })
+
+  it('rent shock can push a healthy portfolio into DSCR breach', () => {
+    // rent 650 / mortgage 500 = 1.3 (healthy); −20% rent → 520/500 = 1.04 (breach)
+    const state = makeState({ monthly_rent: 650, monthly_mortgage: 500, monthly_other_expenses: 0 })
+    const healthy = buildProjection(makeMap(state), [], BASE_CONFIG)
+    const shocked = buildProjection(makeMap(state), [], { ...BASE_CONFIG, rent_shock_pct: -20 })
+    expect(healthy.summary.months_below_dscr).toBe(0)
+    expect(shocked.summary.months_below_dscr).toBe(12)
+  })
+})
+
+describe('buildProjection — liquidity (min_cumulative_cashflow)', () => {
+  it('equals the trough of cumulative cashflow', () => {
+    const state = makeState({ monthly_rent: 1000, monthly_mortgage: 500, monthly_other_expenses: 100 })
+    const { months, summary } = buildProjection(makeMap(state), [], BASE_CONFIG)
+    const trough = Math.min(...months.map(m => m.cumulative_cashflow))
+    expect(summary.min_cumulative_cashflow).toBe(trough)
+  })
+
+  it('captures a negative cash dip from acquisition costs', () => {
+    // A 100% cash buy incurs LBTT/ADS/fees up front → cumulative goes negative before rent recovers
+    const { summary } = buildProjection(
+      new Map(),
+      [makeEvent({
+        event_type: 'buy_property',
+        date: '2026-01-01',
+        parameters_json: JSON.stringify({ purchase_price: 66000, monthly_rent: 700, deposit_percent: 100, monthly_expenses: 0, legal_fees: 2000, refurb_costs: 0 }),
+      })],
+      BASE_CONFIG
+    )
+    expect(summary.min_cumulative_cashflow).toBeLessThan(0)
+  })
+})

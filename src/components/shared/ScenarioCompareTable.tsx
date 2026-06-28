@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { ScenarioResults } from '@/types'
 import { formatCurrency, formatPercent, formatNumber } from '@/utils/currency'
 
@@ -12,24 +13,46 @@ interface Props {
   onExit: () => void
 }
 
-function deriveMetrics(results: ScenarioResults | null) {
+function deriveMetrics(results: ScenarioResults | null, targetEquity: number) {
   if (!results) return null
   const { summary, months } = results
   const peakLtv = months.reduce((max, m) => {
     const ltv = m.total_value > 0 ? (m.total_debt / m.total_value) * 100 : 0
     return Math.max(max, ltv)
   }, 0)
+  // Time-to-target: first month total_equity reaches the (shared) target.
+  // NaN = no target set; Infinity = target never reached within the projection.
+  let monthsToTarget: number
+  if (!targetEquity || targetEquity <= 0) {
+    monthsToTarget = NaN
+  } else {
+    const idx = months.findIndex(m => m.total_equity >= targetEquity)
+    monthsToTarget = idx === -1 ? Infinity : idx
+  }
   return {
     end_equity:        summary.end_equity,
     equity_growth_pct: summary.equity_growth_pct,
     total_cashflow:    summary.total_cashflow,
     avg_monthly_cf:    summary.avg_monthly_cashflow,
     peak_ltv:          Math.round(peakLtv * 10) / 10,
+    min_dscr:          summary.min_dscr ?? 0,
+    liquidity:         summary.min_cumulative_cashflow ?? 0,
+    months_to_target:  monthsToTarget,
     final_properties:  months[months.length - 1]?.property_count ?? 0,
   }
 }
 
 type Metrics = NonNullable<ReturnType<typeof deriveMetrics>>
+
+function formatMonths(v: number): string {
+  if (Number.isNaN(v)) return '—'
+  if (!Number.isFinite(v)) return 'Not reached'
+  const years = Math.floor(v / 12)
+  const months = v % 12
+  if (years === 0) return `${months}mo`
+  if (months === 0) return `${years}y`
+  return `${years}y ${months}mo`
+}
 
 const ROWS: {
   label: string
@@ -42,6 +65,9 @@ const ROWS: {
   { label: 'Total Cashflow',     key: 'total_cashflow',    format: v => formatCurrency(v),          bestHighest: true  },
   { label: 'Avg Monthly CF',     key: 'avg_monthly_cf',    format: v => formatCurrency(v),          bestHighest: true  },
   { label: 'Peak LTV',           key: 'peak_ltv',          format: v => `${v.toFixed(1)}%`,         bestHighest: false },
+  { label: 'Min DSCR (risk)',    key: 'min_dscr',          format: v => `${v.toFixed(2)}×`,         bestHighest: true  },
+  { label: 'Liquidity (min cash)', key: 'liquidity',       format: v => formatCurrency(v),          bestHighest: true  },
+  { label: 'Time to Target',     key: 'months_to_target',  format: formatMonths,                    bestHighest: false },
   { label: 'Final Properties',   key: 'final_properties',  format: v => formatNumber(v),            bestHighest: null  },
 ]
 
@@ -51,6 +77,7 @@ function winnerIndex(metrics: (Metrics | null)[], key: keyof Metrics, bestHighes
   metrics.forEach((m, i) => {
     if (!m) return
     const v = m[key] as number
+    if (!Number.isFinite(v)) return  // "Not reached" / unset never wins
     if (best === null || (bestHighest ? v > best : v < best)) {
       best = v
       idx = i
@@ -87,6 +114,20 @@ function buildDiff(a: Metrics, b: Metrics): string[] {
   if (Math.abs(ltv) > 0.5)
     parts.push(`${ltv >= 0 ? '+' : ''}${ltv.toFixed(1)}pp LTV`)
 
+  const dscr = b.min_dscr - a.min_dscr
+  if (Math.abs(dscr) >= 0.1)
+    parts.push(`${dscr >= 0 ? '+' : '−'}${Math.abs(dscr).toFixed(2)}× min DSCR`)
+
+  const liq = b.liquidity - a.liquidity
+  if (Math.abs(liq) > 1000)
+    parts.push(`${signedCurrency(liq)} liquidity`)
+
+  if (Number.isFinite(a.months_to_target) && Number.isFinite(b.months_to_target)) {
+    const tt = b.months_to_target - a.months_to_target
+    if (Math.abs(tt) >= 1)
+      parts.push(`${tt >= 0 ? '+' : '−'}${Math.abs(tt)} mo to target`)
+  }
+
   const props = b.final_properties - a.final_properties
   if (Math.abs(props) >= 1)
     parts.push(`${props >= 0 ? '+' : ''}${props} propert${Math.abs(props) === 1 ? 'y' : 'ies'}`)
@@ -95,7 +136,9 @@ function buildDiff(a: Metrics, b: Metrics): string[] {
 }
 
 export function ScenarioCompareTable({ data, isLoading, onExit }: Props) {
-  const allMetrics = data.map(d => deriveMetrics(d.results))
+  const [targetInput, setTargetInput] = useState('')
+  const targetEquity = Number(targetInput) || 0
+  const allMetrics = data.map(d => deriveMetrics(d.results, targetEquity))
 
   return (
     <div className="bg-card rounded-lg p-5 space-y-4">
@@ -107,6 +150,24 @@ export function ScenarioCompareTable({ data, isLoading, onExit }: Props) {
         >
           × Exit Compare
         </button>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <label htmlFor="target-equity" className="text-xs font-semibold text-muted-foreground">
+          Target equity (for time-to-target):
+        </label>
+        <div className="relative">
+          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">£</span>
+          <input
+            id="target-equity"
+            type="number"
+            inputMode="numeric"
+            placeholder="e.g. 500000"
+            value={targetInput}
+            onChange={e => setTargetInput(e.target.value)}
+            className="w-40 pl-5 pr-2 py-1 text-xs rounded-md border border-border bg-background text-foreground tabular-nums"
+          />
+        </div>
       </div>
 
       {isLoading ? (

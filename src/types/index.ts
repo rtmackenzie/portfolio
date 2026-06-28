@@ -295,6 +295,7 @@ export interface ScenarioResults {
     avg_monthly_cashflow: number
     min_dscr: number
     months_below_dscr: number
+    min_cumulative_cashflow: number
   }
 }
 

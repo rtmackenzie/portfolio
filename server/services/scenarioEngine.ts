@@ -128,7 +128,7 @@ export function buildProjection(
           stateMap.set(newId, {
             id: newId,
             value: price,
-            monthly_rent: params.monthly_rent ?? 0,
+            monthly_rent: (params.monthly_rent ?? 0) * (1 + (config.rent_shock_pct ?? 0) / 100),
             monthly_mortgage,
             monthly_other_expenses: params.monthly_expenses ?? 200,
             debt,
@@ -332,6 +332,9 @@ export function buildProjection(
         ? Math.round(Math.min(...nonZeroDscr.map(s => s.monthly_dscr)) * 100) / 100
         : 0,
       months_below_dscr: snapshots.filter(s => s.monthly_dscr > 0 && s.monthly_dscr < 1.25).length,
+      min_cumulative_cashflow: snapshots.length > 0
+        ? Math.min(...snapshots.map(s => s.cumulative_cashflow))
+        : 0,
     },
   }
 }
