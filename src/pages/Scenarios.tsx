@@ -80,10 +80,12 @@ export default function Scenarios() {
   const [stressResults, setStressResults]     = useState<ScenarioResults | null>(null)
   const [activeRateShock, setActiveRateShock] = useState<number | null>(null)
   const [activeRentShock, setActiveRentShock] = useState<number | null>(null)
+  const [viewMode, setViewMode]               = useState<'portfolio' | 'property'>('portfolio')
+  const [propMetric, setPropMetric]           = useState<'equity' | 'cashflow' | 'cumulative'>('equity')
 
   const calculate = useMutation({
     mutationFn: (id: number) => api.post<ScenarioResults>(`/scenarios/${id}/calculate`, {}),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['scenarios', selectedId] }); setStressResults(null); setActiveRateShock(null); setActiveRentShock(null) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['scenarios', selectedId] }); setStressResults(null); setActiveRateShock(null); setActiveRentShock(null); setViewMode('portfolio') },
   })
 
   const runStress = useMutation({
@@ -160,7 +162,7 @@ export default function Scenarios() {
                     className="rounded border-border accent-primary flex-none"
                   />
                   <button
-                    onClick={() => { setSelectedId(s.id); setCompareMode(false); setStressResults(null); setActiveRateShock(null); setActiveRentShock(null) }}
+                    onClick={() => { setSelectedId(s.id); setCompareMode(false); setStressResults(null); setActiveRateShock(null); setActiveRentShock(null); setViewMode('portfolio') }}
                     className={`flex-1 text-left px-3 py-2.5 rounded-md text-sm transition-colors ${selectedId === s.id && !compareMode ? 'bg-primary/15 text-primary' : 'bg-card text-foreground hover:bg-accent'}`}
                   >
                     <div className="font-medium">{s.name}</div>
@@ -274,21 +276,66 @@ export default function Scenarios() {
                   activeRentShock ? `${activeRentShock}% rent` : null,
                 ].filter(Boolean).join(', ')
 
-                const chartData = results.months.map((m, i) => ({
-                  ...m,
-                  ...(stressResults ? { stressed_cashflow: stressResults.months[i]?.cumulative_cashflow } : {}),
-                }))
-                const chartKeys: { key: string; name: string; color: string; dash?: boolean }[] = [
-                  { key: 'total_equity',        name: 'Equity',              color: CHART_COLORS.success },
-                  { key: 'total_debt',          name: 'Debt',                color: CHART_COLORS.danger  },
-                  { key: 'cumulative_cashflow', name: 'Cumulative Cashflow', color: CHART_COLORS.primary },
-                  ...(stressResults ? [{ key: 'stressed_cashflow', name: `Cashflow (${stressLabel})`, color: CHART_COLORS.warning, dash: true }] : []),
-                ]
+                const PROP_COLORS = Object.values(CHART_COLORS)
+                let chartData: Record<string, string | number>[]
+                let chartKeys: { key: string; name: string; color: string; dash?: boolean }[]
+
+                if (viewMode === 'property' && results.property_series?.length) {
+                  const mKey = propMetric === 'equity' ? 'equity' : propMetric === 'cumulative' ? 'cumulative_cashflow' : 'monthly_cashflow'
+                  const propByDate = new Map(
+                    results.property_series!.map(ps => [
+                      ps.property_id,
+                      new Map(ps.months.map(pm => [pm.date, pm]))
+                    ])
+                  )
+                  chartData = results.months.map(m => {
+                    const row: Record<string, string | number | undefined> = { date: m.date }
+                    for (const ps of results.property_series!) {
+                      const snap = propByDate.get(ps.property_id)?.get(m.date)
+                      row[`prop_${ps.property_id}`] = snap?.[mKey]
+                    }
+                    return row
+                  })
+                  chartKeys = results.property_series.map((ps, i) => ({
+                    key: `prop_${ps.property_id}`,
+                    name: ps.label,
+                    color: PROP_COLORS[i % PROP_COLORS.length],
+                  }))
+                } else {
+                  chartData = results.months.map((m, i) => ({
+                    ...m,
+                    ...(stressResults ? { stressed_cashflow: stressResults.months[i]?.cumulative_cashflow } : {}),
+                  }))
+                  chartKeys = [
+                    { key: 'total_equity',        name: 'Equity',              color: CHART_COLORS.success },
+                    { key: 'total_debt',          name: 'Debt',                color: CHART_COLORS.danger  },
+                    { key: 'cumulative_cashflow', name: 'Cumulative Cashflow', color: CHART_COLORS.primary },
+                    ...(stressResults ? [{ key: 'stressed_cashflow', name: `Cashflow (${stressLabel})`, color: CHART_COLORS.warning, dash: true }] : []),
+                  ]
+                }
+
+                const btnCls = (active: boolean) =>
+                  `px-2.5 py-1 text-xs rounded-md border transition-colors ${active ? 'bg-primary/15 border-primary/60 text-primary' : 'border-border text-muted-foreground hover:bg-accent'}`
 
                 return (
                   <>
-                    {/* Stress test buttons */}
+                    {/* View + stress controls */}
                     <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-semibold text-muted-foreground">View:</span>
+                      <button onClick={() => setViewMode('portfolio')} className={btnCls(viewMode === 'portfolio')}>Portfolio</button>
+                      <button onClick={() => setViewMode('property')}  className={btnCls(viewMode === 'property')}>Per Property</button>
+                      {viewMode === 'property' && results.property_series && (
+                        <>
+                          <span className="text-xs text-muted-foreground ml-2">Show:</span>
+                          <button onClick={() => setPropMetric('equity')}     className={btnCls(propMetric === 'equity')}>Equity</button>
+                          <button onClick={() => setPropMetric('cashflow')}   className={btnCls(propMetric === 'cashflow')}>Monthly CF</button>
+                          <button onClick={() => setPropMetric('cumulative')} className={btnCls(propMetric === 'cumulative')}>Cumulative CF</button>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Stress test buttons (portfolio view only) */}
+                    {viewMode === 'portfolio' && <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-semibold text-muted-foreground">Rates:</span>
                       {[100, 200, 300].map(bps => (
                         <button
@@ -321,10 +368,10 @@ export default function Scenarios() {
                           className="px-2.5 py-1 text-xs rounded-md border border-border text-muted-foreground hover:bg-accent ml-1"
                         >Clear</button>
                       )}
-                    </div>
+                    </div>}
 
-                    {/* DSCR breach warning */}
-                    {stressResults && (stressResults.summary.months_below_dscr ?? 0) > 0 && (
+                    {/* DSCR breach warning (portfolio view only) */}
+                    {viewMode === 'portfolio' && stressResults && (stressResults.summary.months_below_dscr ?? 0) > 0 && (
                       <div className="flex items-center gap-2 px-4 py-2.5 rounded-md bg-warning/10 border border-warning/30 text-sm text-warning">
                         ⚠ {stressResults.summary.months_below_dscr} month{stressResults.summary.months_below_dscr !== 1 ? 's' : ''} breach DSCR 1.25× under {stressLabel}. Min DSCR: {(stressResults.summary.min_dscr ?? 0).toFixed(2)}.
                       </div>
@@ -347,9 +394,31 @@ export default function Scenarios() {
                       ))}
                     </div>
 
+                    {/* Per-property: no data guard */}
+                    {viewMode === 'property' && !results.property_series && (
+                      <p className="text-sm text-muted-foreground py-4 text-center">Re-run the projection to enable per-property view.</p>
+                    )}
+
                     <div className="bg-card rounded-lg p-5">
                       <h3 className="text-sm font-semibold mb-4">Projection Chart</h3>
                       <ScenarioAreaChart data={chartData} keys={chartKeys} />
+                      {/* Best / Worst banner */}
+                      {viewMode === 'property' && results.property_series && results.property_series.length >= 2 && (() => {
+                        const mKey = propMetric === 'equity' ? 'equity' : propMetric === 'cumulative' ? 'cumulative_cashflow' : 'monthly_cashflow'
+                        const ranked = [...results.property_series]
+                          .filter(ps => ps.months.length > 0)
+                          .sort((a, b) => (b.months.at(-1)?.[mKey] ?? 0) - (a.months.at(-1)?.[mKey] ?? 0))
+                        const best  = ranked[0]
+                        const worst = ranked.at(-1)
+                        if (!best || !worst || best === worst) return null
+                        return (
+                          <p className="text-xs text-muted-foreground mt-3">
+                            Best: <span className="text-foreground font-medium">{best.label}</span>
+                            {' · '}
+                            Worst: <span className="text-foreground font-medium">{worst.label}</span>
+                          </p>
+                        )
+                      })()}
                     </div>
                   </>
                 )

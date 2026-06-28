@@ -98,12 +98,12 @@ export function ScenarioAreaChart({ data, keys }: { data: ChartData[]; keys: { k
   const allValues = data.flatMap(d => keys.map(k => Number(d[k.key] ?? 0)))
   const rawMax = allValues.length > 0 ? Math.max(...allValues) : 100000
   const rawMin = allValues.length > 0 ? Math.min(...allValues) : 0
-  // Upper: 5% headroom, rounded to nearest £50k
-  const yMax = Math.ceil(rawMax * 1.05 / 50000) * 50000
-  // Lower: cap negative space at 10% of the positive max so a small cashflow dip
-  // doesn't compress the whole chart. Large genuine negatives are clipped at the cap.
-  const negCap = rawMax > 0 ? -(rawMax * 0.1) : -10000
-  const yMin = rawMin < 0 ? Math.floor(Math.max(rawMin, negCap) / 10000) * 10000 : 0
+  // Adaptive tick rounding based on data magnitude
+  const upperStep = rawMax >= 100000 ? 50000 : rawMax >= 10000 ? 5000 : rawMax >= 1000 ? 500 : 100
+  const lowerStep = rawMax >= 100000 ? 10000 : rawMax >= 10000 ? 1000 : rawMax >= 1000 ? 500 : 100
+  const yMax = Math.ceil(rawMax * 1.05 / upperStep) * upperStep
+  const negCap = rawMax > 0 ? -(rawMax * 0.1) : -lowerStep
+  const yMin = rawMin < 0 ? Math.floor(Math.max(rawMin, negCap) / lowerStep) * lowerStep : 0
 
   return (
     <ResponsiveContainer width="100%" height={300}>

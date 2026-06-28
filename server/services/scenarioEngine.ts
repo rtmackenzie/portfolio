@@ -7,6 +7,7 @@ interface ScenarioConfig {
   assumptions_json?: string | null
   rate_shock_bps?: number
   rent_shock_pct?: number
+  propertyLabels?: Record<number, string>
 }
 
 export interface ScenarioEvent {
@@ -50,6 +51,15 @@ export function buildProjection(
   const stateMap = new Map<number, PropertyState>(
     Array.from(initialState.entries()).map(([k, v]) => [k, { ...v }])
   )
+
+  const propLabels = new Map<number, string>()
+  for (const [id] of stateMap) {
+    propLabels.set(id, config.propertyLabels?.[id] ?? `Property ${id}`)
+  }
+  type PropMonthEntry = { date: string; value: number; debt: number; equity: number; monthly_cashflow: number; cumulative_cashflow: number }
+  const propMonths = new Map<number, PropMonthEntry[]>()
+  const propCumCashflow = new Map<number, number>()
+  for (const [id] of stateMap) { propMonths.set(id, []); propCumCashflow.set(id, 0) }
 
   const eventsByDate = new Map<string, ScenarioEvent[]>()
   for (const ev of events) {
@@ -127,6 +137,9 @@ export function buildProjection(
             is_interest_only: isIO,
           })
           debtMap.set(newId, debt)
+          propLabels.set(newId, params.address ?? `New Property ${newId}`)
+          propMonths.set(newId, [])
+          propCumCashflow.set(newId, 0)
           const { total: txCosts } = calcTransactionCosts(
             price,
             params.legal_fees ?? 2000,
@@ -257,9 +270,22 @@ export function buildProjection(
       const rent = state.is_vacant ? 0 : state.monthly_rent * voidFactor
       const inflationFactor = Math.pow(1 + inflationRate / 100, i / 12)
       const expenses = state.monthly_other_expenses * inflationFactor
-      monthlyCashflow += rent - state.monthly_mortgage - expenses
+      const propCashflow = rent - state.monthly_mortgage - expenses
+      monthlyCashflow += propCashflow
       totalRent     += rent
       totalMortgage += state.monthly_mortgage
+
+      const prevCum = propCumCashflow.get(propId) ?? 0
+      const newCum = prevCum + propCashflow
+      propCumCashflow.set(propId, newCum)
+      propMonths.get(propId)?.push({
+        date: yearMonth,
+        value: Math.round(currentValue),
+        debt: Math.round(currentDebt),
+        equity: Math.round(currentValue - currentDebt),
+        monthly_cashflow: Math.round(propCashflow),
+        cumulative_cashflow: Math.round(newCum),
+      })
     }
 
     cumulativeCashflow += monthlyCashflow
@@ -278,12 +304,19 @@ export function buildProjection(
     })
   }
 
+  const property_series = Array.from(propMonths.entries()).map(([id, months]) => ({
+    property_id: id,
+    label: propLabels.get(id) ?? `Property ${id}`,
+    months,
+  }))
+
   const first = snapshots[0]
   const last = snapshots[snapshots.length - 1]
   const nonZeroDscr = snapshots.filter(s => s.monthly_dscr > 0)
 
   return {
     months: snapshots,
+    property_series,
     summary: {
       start_equity: first?.total_equity ?? 0,
       end_equity: last?.total_equity ?? 0,
@@ -305,8 +338,8 @@ export function buildProjection(
 
 export function runScenario(scenario: ScenarioConfig, events: ScenarioEvent[]) {
   const dbProperties = queryAll<{
-    id: number; current_value: number | null; purchase_price: number | null;
-  }>('SELECT id, current_value, purchase_price FROM properties')
+    id: number; current_value: number | null; purchase_price: number | null; address_line1: string; town: string;
+  }>('SELECT id, current_value, purchase_price, address_line1, town FROM properties')
 
   const dbTenants = queryAll<{ property_id: number; rent_amount: number; status: string }>(
     "SELECT property_id, rent_amount, status FROM tenants WHERE status='active'"
@@ -366,5 +399,8 @@ export function runScenario(scenario: ScenarioConfig, events: ScenarioEvent[]) {
     })
   }
 
-  return buildProjection(initialState, events, scenario)
+  const propertyLabels: Record<number, string> = {}
+  for (const p of dbProperties) propertyLabels[p.id] = `${p.address_line1}, ${p.town}`
+
+  return buildProjection(initialState, events, { ...scenario, propertyLabels })
 }

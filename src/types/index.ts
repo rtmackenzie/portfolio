@@ -268,8 +268,24 @@ export interface ScenarioEvent {
   sort_order: number
 }
 
+export interface PropertyMonthSnapshot {
+  date: string
+  value: number
+  debt: number
+  equity: number
+  monthly_cashflow: number
+  cumulative_cashflow: number
+}
+
+export interface PropertySeries {
+  property_id: number
+  label: string
+  months: PropertyMonthSnapshot[]
+}
+
 export interface ScenarioResults {
   months: MonthSnapshot[]
+  property_series?: PropertySeries[]
   summary: {
     start_equity: number
     end_equity: number
