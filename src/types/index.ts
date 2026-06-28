@@ -359,6 +359,21 @@ export interface ScenarioResults {
   summary: ScenarioSummary
 }
 
+export type ScoreRating = 'strong' | 'fair' | 'weak'
+
+export interface ScoreItem {
+  key: string
+  label: string
+  value: number
+  rating: ScoreRating
+  detail: string
+}
+
+export interface Scorecard {
+  overall: ScoreItem
+  scores: ScoreItem[]
+}
+
 export interface TaxSettings {
   ownership: 'personal' | 'ltd'
   personal_marginal_rate_pct: number

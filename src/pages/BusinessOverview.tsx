@@ -2,10 +2,71 @@ import { useState, useEffect } from 'react'
 import { useDashboard } from '@/hooks/useDashboard'
 import { useFinancialSummary } from '@/hooks/useFinancials'
 import { useSettings, useUpdateSettings } from '@/hooks/useSettings'
+import { useScorecard } from '@/hooks/useScorecard'
 import { KPICard } from '@/components/shared/KPICard'
 import { PageLoader } from '@/components/shared/LoadingSpinner'
+import { ScorecardRadar } from '@/components/charts'
 import { formatCurrency, formatPercent } from '@/utils/currency'
-import type { TaxSettings } from '@/types'
+import type { TaxSettings, ScoreItem, ScoreRating } from '@/types'
+
+const RATING_CLS: Record<ScoreRating, string> = {
+  strong: 'bg-emerald-500/15 text-emerald-400',
+  fair:   'bg-amber-500/15 text-amber-400',
+  weak:   'bg-red-500/15 text-red-400',
+}
+const RATING_BAR: Record<ScoreRating, string> = {
+  strong: 'bg-emerald-500',
+  fair:   'bg-amber-500',
+  weak:   'bg-red-500',
+}
+
+function ScoreCard({ s }: { s: ScoreItem }) {
+  const [show, setShow] = useState(false)
+  return (
+    <div className="bg-card rounded-lg p-4 relative"
+      onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-muted-foreground underline decoration-dotted decoration-muted-foreground/40 cursor-default">{s.label}</span>
+        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${RATING_CLS[s.rating]}`}>{s.rating}</span>
+      </div>
+      <div className="text-2xl font-bold text-foreground mt-1">{s.value}<span className="text-sm text-muted-foreground font-normal">/100</span></div>
+      <div className="h-1.5 rounded-full bg-muted mt-2 overflow-hidden">
+        <div className={`h-full rounded-full ${RATING_BAR[s.rating]}`} style={{ width: `${s.value}%` }} />
+      </div>
+      {show && (
+        <div className="absolute top-full left-0 mt-1 w-64 rounded-md bg-popover border border-border text-xs text-popover-foreground p-2 shadow-lg z-50 whitespace-normal leading-relaxed">
+          {s.detail}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ScorecardSection() {
+  const { data: sc, isLoading } = useScorecard()
+  if (isLoading || !sc) return null
+  const radarData = sc.scores.map(s => ({ label: s.label, value: s.value }))
+  return (
+    <div className="bg-card rounded-lg p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-base font-semibold">Portfolio scorecard</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Six transparent 0–100 scores. Hover a card for the formula. Recomputes when your data changes.</p>
+        </div>
+        <div className="text-right">
+          <div className="text-3xl font-bold text-foreground">{sc.overall.value}<span className="text-base text-muted-foreground font-normal">/100</span></div>
+          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded ${RATING_CLS[sc.overall.rating]}`}>{sc.overall.rating}</span>
+        </div>
+      </div>
+      <div className="grid grid-cols-12 gap-4 items-center">
+        <div className="col-span-12 lg:col-span-5"><ScorecardRadar data={radarData} /></div>
+        <div className="col-span-12 lg:col-span-7 grid grid-cols-3 gap-3">
+          {sc.scores.map(s => <ScoreCard key={s.key} s={s} />)}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const taxInputCls = 'w-full px-3 py-2 rounded-md bg-input border border-border text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary'
 const taxLabelCls = 'block text-xs font-medium text-muted-foreground mb-1'
@@ -85,6 +146,8 @@ export default function BusinessOverview() {
         <h1 className="text-2xl font-bold">Business Overview</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Company-wide statistics and performance</p>
       </div>
+
+      <ScorecardSection />
 
       <div className="grid grid-cols-4 gap-4">
         <KPICard label="Total Assets" value={formatCurrency(kpis?.total_portfolio_value ?? 0, true)} subtext="Property portfolio value" variant="success" />

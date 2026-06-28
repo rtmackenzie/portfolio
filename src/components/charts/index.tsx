@@ -1,7 +1,8 @@
 import {
   AreaChart as ReAreaChart, Area, BarChart as ReBarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend
+  PieChart, Pie, Cell, Legend,
+  RadarChart as ReRadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar
 } from 'recharts'
 import { formatCurrency, formatPercent } from '@/utils/currency'
 import { formatMonthYear } from '@/utils/dates'
@@ -59,6 +60,20 @@ export function IncomeAreaChart({ data }: { data: { month: string; gross_income:
         <Tooltip contentStyle={tooltipStyle} formatter={currencyFormatter} labelFormatter={monthLabelFormatter} />
         <Area type="monotone" dataKey="gross_income" stroke={CHART_COLORS.primary} fill="url(#incomeGrad)" strokeWidth={2} name="Income" />
       </ReAreaChart>
+    </ResponsiveContainer>
+  )
+}
+
+export function ScorecardRadar({ data }: { data: { label: string; value: number }[] }) {
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <ReRadarChart data={data} margin={{ top: 10, right: 30, bottom: 10, left: 30 }}>
+        <PolarGrid stroke="var(--color-border)" />
+        <PolarAngleAxis dataKey="label" tick={{ fill: 'var(--color-muted-foreground)', fontSize: 11 }} />
+        <PolarRadiusAxis domain={[0, 100]} tick={{ fill: 'var(--color-muted-foreground)', fontSize: 9 }} tickCount={5} />
+        <Radar dataKey="value" stroke={CHART_COLORS.primary} fill={CHART_COLORS.primary} fillOpacity={0.35} name="Score" />
+        <Tooltip contentStyle={tooltipStyle} />
+      </ReRadarChart>
     </ResponsiveContainer>
   )
 }

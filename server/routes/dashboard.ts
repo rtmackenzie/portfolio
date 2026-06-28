@@ -1,8 +1,47 @@
 import { Router } from 'express'
 import { queryAll, queryOne } from '../db/database.ts'
 import { calculatePortfolioKPIs } from '../services/calculations.ts'
+import { computeScorecard, type ScorecardInputs } from '../services/scorecard.ts'
 
 const router = Router()
+
+// Portfolio scorecard (D1). Keyed under /dashboard so the client query
+// ['dashboard','scorecard'] is invalidated by every mutation that invalidates
+// ['dashboard'] — i.e. it recomputes on change for free.
+router.get('/scorecard', (_req, res) => {
+  try {
+    const inputs: ScorecardInputs = {
+      properties: queryAll(
+        'SELECT current_value, purchase_price, property_type, town FROM properties'
+      ),
+      mortgages: queryAll(
+        'SELECT current_balance, monthly_payment, interest_rate, type, fixed_period_end, is_active FROM mortgages'
+      ),
+      tenants: queryAll(
+        'SELECT status, rent_amount, tenancy_end FROM tenants'
+      ),
+      expenses: queryAll(
+        'SELECT amount, frequency, active FROM expenses'
+      ),
+      certificates: queryAll(
+        'SELECT expiry_date FROM certificates'
+      ),
+      openMaintenance: queryOne<{ count: number }>(
+        `SELECT COUNT(*) as count FROM maintenance_records WHERE status IN ('pending','in_progress')`
+      )?.count ?? 0,
+      rentPayments: queryAll(
+        `SELECT status FROM rent_payments WHERE due_date >= date('now', '-12 months')`
+      ),
+      opportunities: queryAll(
+        'SELECT stage, asking_price, estimated_value, expected_rent, repair_costs, deposit_percent, mortgage_rate FROM acquisition_opportunities'
+      ),
+    }
+    res.json(computeScorecard(inputs))
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ message: String(err) })
+  }
+})
 
 router.get('/kpis', (_req, res) => {
   try {
