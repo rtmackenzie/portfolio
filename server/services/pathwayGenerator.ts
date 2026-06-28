@@ -76,6 +76,9 @@ export interface GeneratedPathway {
   feasible: boolean
   reaches_goal: boolean
   months_to_goal: number | null
+  risk_score: number
+  binding_constraint: string
+  binding_detail: string
 }
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
@@ -269,6 +272,101 @@ function checkGoalReached(months: MonthSnapshot[], goal: Goal): { reached: boole
   return { reached: false, monthIndex: null }
 }
 
+// ─── Ranking: risk score + binding constraint (C3) ────────────────────────────
+
+type Summary = ProjectionResult['summary']
+
+// Lower = safer. Transparent, documented in the plan.
+export function computeRiskScore(summary: Summary): number {
+  return summary.months_below_dscr * 2
+    + (summary.min_cumulative_cashflow < 0 ? 100 : 0)
+    + (summary.min_dscr > 0 ? Math.max(0, 1.5 - summary.min_dscr) * 20 : 0)
+}
+
+type Binding = { key: string; detail: string }
+
+// Identify the limiting factor: the tightest (or violated) constraint, else
+// deposit capital / horizon for a cash-gated pathway with constraint slack.
+export function analyzeBinding(
+  goal: Goal,
+  months: MonthSnapshot[],
+  summary: Summary,
+  reachesGoal: boolean,
+  buyCost: number
+): Binding {
+  let maxLtv = 0
+  let minAnnualCF = Infinity
+  for (const m of months) {
+    if (m.total_value > 0) maxLtv = Math.max(maxLtv, (m.total_debt / m.total_value) * 100)
+    minAnnualCF = Math.min(minAnnualCF, m.monthly_cashflow * 12)
+  }
+  if (!isFinite(minAnnualCF)) minAnnualCF = 0
+
+  type C = { key: string; headroom: number; label: string }
+  const cons: C[] = []
+  if (goal.max_ltv_pct != null) {
+    cons.push({ key: 'ltv', headroom: (goal.max_ltv_pct - maxLtv) / goal.max_ltv_pct,
+      label: `LTV peaked at ${maxLtv.toFixed(0)}% vs ${goal.max_ltv_pct}% ceiling` })
+  }
+  if (goal.min_dscr != null && summary.min_dscr > 0) {
+    cons.push({ key: 'dscr', headroom: (summary.min_dscr - goal.min_dscr) / goal.min_dscr,
+      label: `DSCR fell to ${summary.min_dscr.toFixed(2)}× vs ${goal.min_dscr.toFixed(2)}× floor` })
+  }
+  if (goal.min_annual_cashflow != null) {
+    cons.push({ key: 'cashflow', headroom: (minAnnualCF - goal.min_annual_cashflow) / Math.max(Math.abs(goal.min_annual_cashflow), 1),
+      label: `annual cashflow dipped to £${Math.round(minAnnualCF).toLocaleString()} vs £${goal.min_annual_cashflow.toLocaleString()} floor` })
+  }
+  // Liquidity is always meaningful under the true-cash model
+  cons.push({ key: 'liquidity', headroom: summary.min_cumulative_cashflow / Math.max(buyCost, 1),
+    label: `cash dipped to £${Math.round(summary.min_cumulative_cashflow).toLocaleString()}` })
+
+  const violated = cons.filter(c => c.headroom < 0).sort((a, b) => a.headroom - b.headroom)
+  if (violated.length > 0) {
+    const v = violated[0]
+    return { key: v.key, detail: `Infeasible — ${v.label}.` }
+  }
+
+  const tightest = cons.slice().sort((a, b) => a.headroom - b.headroom)[0]
+  const SLACK = 0.25 // >25% headroom ⇒ not really binding
+
+  if (reachesGoal) {
+    if (tightest && tightest.headroom <= SLACK) {
+      return { key: tightest.key, detail: `Reaches goal; tightest constraint is ${tightest.label}.` }
+    }
+    return { key: 'capital', detail: 'Reaches goal; pace set by available deposit capital.' }
+  }
+
+  // Feasible but goal not reached within the horizon
+  if (tightest && tightest.headroom <= SLACK) {
+    return { key: tightest.key, detail: `Limited by ${tightest.label} — relax it to progress.` }
+  }
+  return { key: 'capital', detail: 'Limited by deposit capital / time — add director loans or extend the horizon.' }
+}
+
+// Rank a set by time-to-goal + risk; flag the top feasible as recommended (C3).
+export interface RankablePathway {
+  id: number
+  feasible: number            // SQLite 0/1
+  reaches_goal: number        // SQLite 0/1
+  months_to_goal?: number | null
+  risk_score?: number | null
+  summary?: { end_equity?: number } | null
+}
+
+export function rankPathways<T extends RankablePathway>(rows: T[]): (T & { rank: number; recommended: boolean })[] {
+  const sorted = [...rows].sort((a, b) => {
+    const ar = a.reaches_goal ? 0 : 1, br = b.reaches_goal ? 0 : 1
+    if (ar !== br) return ar - br
+    const am = a.months_to_goal ?? Infinity, bm = b.months_to_goal ?? Infinity
+    if (am !== bm) return am - bm
+    const arisk = a.risk_score ?? Infinity, brisk = b.risk_score ?? Infinity
+    if (arisk !== brisk) return arisk - brisk
+    return (b.summary?.end_equity ?? 0) - (a.summary?.end_equity ?? 0)
+  })
+  const recId = sorted.find(p => p.feasible === 1)?.id ?? null
+  return sorted.map((p, i) => ({ ...p, rank: i + 1, recommended: p.id === recId }))
+}
+
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export function generatePathways(
@@ -304,6 +402,10 @@ export function generatePathways(
     const feasible = checkConstraints(results.months, goal) && results.summary.min_cumulative_cashflow >= 0
     const { reached, monthIndex } = checkGoalReached(results.months, goal)
 
+    const risk_score = computeRiskScore(results.summary)
+    const { key: binding_constraint, detail: binding_detail } =
+      analyzeBinding(goal, results.months, results.summary, reached, depositPlusCosts(assumptions))
+
     return {
       template_name: t.template_name,
       label: t.label,
@@ -312,6 +414,9 @@ export function generatePathways(
       feasible,
       reaches_goal: reached,
       months_to_goal: monthIndex,
+      risk_score,
+      binding_constraint,
+      binding_detail,
     }
   })
 }

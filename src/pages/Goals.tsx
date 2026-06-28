@@ -319,12 +319,8 @@ function PathwaysPanel({ goal }: { goal: Goal }) {
     generate.mutate(d as PropertyAssumptions)
   }
 
-  // Group pathways by generated date (YYYY-MM-DD)
-  const groups = pathways.reduce<Record<string, GoalPathway[]>>((acc, pw) => {
-    const day = pw.created_at.slice(0, 10)
-    ;(acc[day] = acc[day] ?? []).push(pw)
-    return acc
-  }, {})
+  // Pathways arrive pre-ranked from the API (rank + recommended already attached)
+  const noneFeasible = pathways.length > 0 && !pathways.some(p => p.feasible)
 
   return (
     <div className="mt-6 border-t border-border pt-6 space-y-5">
@@ -383,66 +379,84 @@ function PathwaysPanel({ goal }: { goal: Goal }) {
         <p className="text-xs text-muted-foreground">No pathways generated yet. Fill in the assumptions above and click Generate.</p>
       )}
 
-      {Object.entries(groups).map(([day, pws]) => (
-        <div key={day} className="space-y-2">
-          <p className="text-[11px] text-muted-foreground">Generated {day}</p>
-          <div className="grid grid-cols-3 gap-3">
-            {pws.map(pw => (
-              <div key={pw.id} className="bg-background border border-border rounded-lg p-3 space-y-2">
-                <div className="flex items-start justify-between gap-2">
+      {noneFeasible && (
+        <div className="text-xs px-3 py-2 rounded-md bg-red-500/10 border border-red-500/30 text-red-400">
+          No feasible pathway — relax a constraint (max LTV, min DSCR, min cash/yr) or add director-loan capital, then regenerate.
+        </div>
+      )}
+
+      {pathways.length > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          {pathways.map(pw => (
+            <div
+              key={pw.id}
+              className={`bg-background border rounded-lg p-3 space-y-2 ${pw.recommended ? 'border-primary ring-1 ring-primary/40' : 'border-border'}`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-semibold text-muted-foreground">#{pw.rank}</span>
                   <span className="text-sm font-medium">{pw.label}</span>
-                  <div className="flex gap-1 flex-wrap justify-end">
-                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${pw.feasible ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
-                      {pw.feasible ? 'feasible' : 'infeasible'}
-                    </span>
-                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${pw.reaches_goal ? 'bg-blue-500/15 text-blue-400' : 'bg-muted text-muted-foreground'}`}>
-                      {pw.reaches_goal ? 'reaches goal' : 'goal not reached'}
-                    </span>
+                </div>
+                <div className="flex gap-1 flex-wrap justify-end">
+                  {pw.recommended && (
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/15 text-primary">★ Recommended</span>
+                  )}
+                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${pw.feasible ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
+                    {pw.feasible ? 'feasible' : 'infeasible'}
+                  </span>
+                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${pw.reaches_goal ? 'bg-blue-500/15 text-blue-400' : 'bg-muted text-muted-foreground'}`}>
+                    {pw.reaches_goal ? 'reaches goal' : 'goal not reached'}
+                  </span>
+                </div>
+              </div>
+
+              {pw.summary && (
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+                  <div>
+                    <span className="text-muted-foreground">End equity</span>
+                    <div className="font-medium">{formatCurrency(pw.summary.end_equity)}</div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Ending CF/mo</span>
+                    <div className={`font-medium ${(pw.summary.ending_monthly_cashflow ?? 0) >= 0 ? '' : 'text-red-400'}`}>
+                      {formatCurrency(pw.summary.ending_monthly_cashflow ?? 0)}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Avg CF/mo</span>
+                    <div className={`font-medium ${pw.summary.avg_monthly_cashflow >= 0 ? '' : 'text-red-400'}`}>
+                      {formatCurrency(pw.summary.avg_monthly_cashflow)}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Min DSCR</span>
+                    <div className="font-medium">{pw.summary.min_dscr > 0 ? `${pw.summary.min_dscr.toFixed(2)}×` : '—'}</div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Time to goal</span>
+                    <div className="font-medium">{formatMonthsToGoal(pw.months_to_goal)}</div>
                   </div>
                 </div>
+              )}
 
-                {pw.summary && (
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
-                    <div>
-                      <span className="text-muted-foreground">End equity</span>
-                      <div className="font-medium">{formatCurrency(pw.summary.end_equity)}</div>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Ending CF/mo</span>
-                      <div className={`font-medium ${(pw.summary.ending_monthly_cashflow ?? 0) >= 0 ? '' : 'text-red-400'}`}>
-                        {formatCurrency(pw.summary.ending_monthly_cashflow ?? 0)}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Avg CF/mo</span>
-                      <div className={`font-medium ${pw.summary.avg_monthly_cashflow >= 0 ? '' : 'text-red-400'}`}>
-                        {formatCurrency(pw.summary.avg_monthly_cashflow)}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Min DSCR</span>
-                      <div className="font-medium">{pw.summary.min_dscr > 0 ? `${pw.summary.min_dscr.toFixed(2)}×` : '—'}</div>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Time to goal</span>
-                      <div className="font-medium">{formatMonthsToGoal(pw.months_to_goal)}</div>
-                    </div>
-                  </div>
-                )}
+              {pw.binding_detail && (
+                <div className="text-[11px] text-muted-foreground border-t border-border pt-1.5">
+                  <span className="font-medium text-foreground">Limited by:</span> {pw.binding_detail}
+                </div>
+              )}
 
-                {pw.scenario_id && (
-                  <a
-                    href="/scenarios"
-                    className="block text-[11px] text-primary hover:underline mt-1"
-                  >
-                    View in What-If →
-                  </a>
-                )}
-              </div>
-            ))}
-          </div>
+              {pw.scenario_id && (
+                <a
+                  href="/scenarios"
+                  className="block text-[11px] text-primary hover:underline mt-1"
+                >
+                  View in What-If →
+                </a>
+              )}
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   )
 }

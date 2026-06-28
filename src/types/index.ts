@@ -293,6 +293,11 @@ export interface GoalPathway {
   months_to_goal?: number | null
   summary?: ScenarioSummary | null
   assumptions?: PropertyAssumptions | null
+  risk_score?: number | null
+  binding_constraint?: string | null
+  binding_detail?: string | null
+  rank?: number
+  recommended?: boolean
   created_at: string
 }
 

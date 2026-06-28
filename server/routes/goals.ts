@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { queryAll, queryOne, execute, transaction } from '../db/database.ts'
 import { logActivity } from '../services/activityLogger.ts'
 import { loadPortfolioState } from '../services/scenarioEngine.ts'
-import { generatePathways, type PropertyAssumptions } from '../services/pathwayGenerator.ts'
+import { generatePathways, rankPathways, type PropertyAssumptions, type RankablePathway } from '../services/pathwayGenerator.ts'
 
 const router = Router()
 
@@ -106,13 +106,16 @@ router.get('/:id/pathways', (req, res) => {
        ORDER BY gp.created_at DESC, gp.template_name`,
       [id]
     )
-    res.json(rows.map(r => ({
+    const parsed = rows.map(r => ({
       ...r,
       summary: r.summary_json ? JSON.parse(r.summary_json as string) : null,
       assumptions: r.assumptions_json ? JSON.parse(r.assumptions_json as string) : null,
       summary_json: undefined,
       assumptions_json: undefined,
-    })))
+    }))
+
+    // Rank by time-to-goal + risk; flag the recommended (top feasible) pathway (C3)
+    res.json(rankPathways(parsed as unknown as RankablePathway[]))
   } catch (err) {
     res.status(500).json({ message: String(err) })
   }
@@ -195,13 +198,14 @@ router.post('/:id/pathways/generate', (req, res) => {
 
         // Create pathway record
         const pathwayResult = execute(
-          `INSERT INTO goal_pathways (goal_id, scenario_id, template_name, label, feasible, reaches_goal, months_to_goal, summary_json, assumptions_json)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO goal_pathways (goal_id, scenario_id, template_name, label, feasible, reaches_goal, months_to_goal, summary_json, assumptions_json, risk_score, binding_constraint, binding_detail)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id, scenarioId, pw.template_name, pw.label,
             pw.feasible ? 1 : 0, pw.reaches_goal ? 1 : 0,
             pw.months_to_goal, JSON.stringify(pw.results.summary),
             JSON.stringify({ ...assumptions, projection_years: projectionYears }),
+            pw.risk_score, pw.binding_constraint, pw.binding_detail,
           ]
         )
 
@@ -217,6 +221,9 @@ router.post('/:id/pathways/generate', (req, res) => {
           months_to_goal: pw.months_to_goal,
           summary: pw.results.summary,
           assumptions: { ...assumptions, projection_years: projectionYears },
+          risk_score: pw.risk_score,
+          binding_constraint: pw.binding_constraint,
+          binding_detail: pw.binding_detail,
           created_at: new Date().toISOString(),
         })
       }

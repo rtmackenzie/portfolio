@@ -1,6 +1,38 @@
 import { describe, it, expect } from 'vitest'
-import { generatePathways } from '../../server/services/pathwayGenerator.ts'
+import {
+  generatePathways,
+  computeRiskScore,
+  analyzeBinding,
+  rankPathways,
+  type RankablePathway,
+} from '../../server/services/pathwayGenerator.ts'
 import type { PropertyState } from '../../server/services/scenarioEngine.ts'
+
+// ─── C3 test helpers ────────────────────────────────────────────────────────────
+
+function makeSummary(over: Partial<{
+  start_equity: number; end_equity: number; equity_growth: number; equity_growth_pct: number
+  total_cashflow: number; avg_monthly_cashflow: number; ending_monthly_cashflow: number
+  min_dscr: number; months_below_dscr: number; min_cumulative_cashflow: number
+}> = {}) {
+  return {
+    start_equity: 100000, end_equity: 500000, equity_growth: 400000, equity_growth_pct: 400,
+    total_cashflow: 50000, avg_monthly_cashflow: 1000, ending_monthly_cashflow: 2000,
+    min_dscr: 2.0, months_below_dscr: 0, min_cumulative_cashflow: 10000,
+    ...over,
+  }
+}
+
+function makeMonth(over: Partial<{
+  date: string; total_value: number; total_debt: number; total_equity: number
+  monthly_cashflow: number; cumulative_cashflow: number; property_count: number; monthly_dscr: number
+}> = {}) {
+  return {
+    date: '2030-01', total_value: 400000, total_debt: 200000, total_equity: 200000,
+    monthly_cashflow: 1500, cumulative_cashflow: 20000, property_count: 4, monthly_dscr: 1.8,
+    ...over,
+  }
+}
 
 // One cashflow-positive property so the cash pot grows slowly without loans
 function startingPortfolio(): Map<number, PropertyState> {
@@ -84,5 +116,87 @@ describe('generatePathways — director loans drive the schedule', () => {
     if (first) {
       expect(first > '2026-06').toBe(true)
     }
+  })
+})
+
+// ─── C3: ranking + binding constraint ────────────────────────────────────────────
+
+describe('computeRiskScore', () => {
+  it('a liquidity breach scores far riskier than a clean run', () => {
+    const clean = computeRiskScore(makeSummary())
+    const breach = computeRiskScore(makeSummary({ min_cumulative_cashflow: -1 }))
+    expect(breach).toBeGreaterThan(clean + 50)
+  })
+
+  it('more months below the DSCR floor increases risk', () => {
+    const few = computeRiskScore(makeSummary({ months_below_dscr: 1 }))
+    const many = computeRiskScore(makeSummary({ months_below_dscr: 10 }))
+    expect(many).toBeGreaterThan(few)
+  })
+
+  it('a thin DSCR cushion adds risk; a comfortable one does not', () => {
+    const thin = computeRiskScore(makeSummary({ min_dscr: 1.1 }))   // below 1.5 ⇒ penalty
+    const comfy = computeRiskScore(makeSummary({ min_dscr: 2.0 }))  // above 1.5 ⇒ none
+    expect(thin).toBeGreaterThan(comfy)
+    expect(comfy).toBe(0)
+  })
+})
+
+describe('analyzeBinding', () => {
+  it('flags a DSCR breach as the binding constraint (infeasible)', () => {
+    const goal = { goal_type: 'count' as const, min_dscr: 1.25 }
+    const months = [makeMonth({ monthly_dscr: 1.08 })]
+    const summary = makeSummary({ min_dscr: 1.08 })
+    const b = analyzeBinding(goal, months, summary, false, 30000)
+    expect(b.key).toBe('dscr')
+    expect(b.detail).toMatch(/Infeasible/i)
+  })
+
+  it('reports deposit capital as the limiter when constraints have ample slack', () => {
+    // Generous constraints, healthy LTV/DSCR/liquidity, but goal not reached → capital-limited
+    const goal = { goal_type: 'count' as const, max_ltv_pct: 95, min_dscr: 1.0 }
+    const months = [makeMonth({ total_value: 500000, total_debt: 200000, monthly_dscr: 2.5 })]
+    const summary = makeSummary({ min_dscr: 2.5, min_cumulative_cashflow: 80000 })
+    const b = analyzeBinding(goal, months, summary, false, 30000)
+    expect(b.key).toBe('capital')
+  })
+
+  it('a goal reached with ample slack is not marked infeasible', () => {
+    const goal = { goal_type: 'count' as const, max_ltv_pct: 95 }
+    const months = [makeMonth({ total_value: 500000, total_debt: 150000 })]
+    const summary = makeSummary({ min_cumulative_cashflow: 50000 })
+    const b = analyzeBinding(goal, months, summary, true, 30000)
+    expect(b.detail).not.toMatch(/Infeasible/i)
+  })
+})
+
+describe('rankPathways', () => {
+  const base = (over: Partial<RankablePathway> & { id: number }): RankablePathway => ({
+    feasible: 1, reaches_goal: 1, months_to_goal: 60, risk_score: 0,
+    summary: { end_equity: 100000 }, ...over,
+  })
+
+  it('ranks a sooner, lower-risk goal-reaching pathway #1 and recommends it', () => {
+    const rows = [
+      base({ id: 1, reaches_goal: 0, months_to_goal: null, risk_score: 5 }),
+      base({ id: 2, months_to_goal: 48, risk_score: 2 }),   // sooner + low risk → best
+      base({ id: 3, months_to_goal: 90, risk_score: 1 }),
+    ]
+    const ranked = rankPathways(rows)
+    expect(ranked[0].id).toBe(2)
+    expect(ranked[0].rank).toBe(1)
+    expect(ranked.find(r => r.id === 2)!.recommended).toBe(true)
+    expect(ranked.find(r => r.id === 1)!.rank).toBe(3) // goal-not-reached sinks to the bottom
+  })
+
+  it('never recommends an infeasible pathway, even if it reaches the goal soonest', () => {
+    const rows = [
+      base({ id: 1, feasible: 0, months_to_goal: 24 }),   // fastest but infeasible
+      base({ id: 2, feasible: 1, months_to_goal: 60 }),
+    ]
+    const ranked = rankPathways(rows)
+    expect(ranked[0].id).toBe(1)            // still ranked first by time-to-goal
+    expect(ranked[0].recommended).toBe(false)
+    expect(ranked.find(r => r.id === 2)!.recommended).toBe(true)
   })
 })
