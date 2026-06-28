@@ -95,6 +95,16 @@ export function ExpenseDonutChart({ data }: { data: { category: string; total: n
 }
 
 export function ScenarioAreaChart({ data, keys }: { data: ChartData[]; keys: { key: string; name: string; color: string }[] }) {
+  const allValues = data.flatMap(d => keys.map(k => Number(d[k.key] ?? 0)))
+  const rawMax = allValues.length > 0 ? Math.max(...allValues) : 100000
+  const rawMin = allValues.length > 0 ? Math.min(...allValues) : 0
+  // Upper: 5% headroom, rounded to nearest £50k
+  const yMax = Math.ceil(rawMax * 1.05 / 50000) * 50000
+  // Lower: cap negative space at 10% of the positive max so a small cashflow dip
+  // doesn't compress the whole chart. Large genuine negatives are clipped at the cap.
+  const negCap = rawMax > 0 ? -(rawMax * 0.1) : -10000
+  const yMin = rawMin < 0 ? Math.floor(Math.max(rawMin, negCap) / 10000) * 10000 : 0
+
   return (
     <ResponsiveContainer width="100%" height={300}>
       <ReAreaChart data={data} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
@@ -108,11 +118,17 @@ export function ScenarioAreaChart({ data, keys }: { data: ChartData[]; keys: { k
         </defs>
         <CartesianGrid {...gridStyle} />
         <XAxis dataKey="date" tick={axisStyle} interval="preserveStartEnd" tickFormatter={formatMonthYear} />
-        <YAxis tick={axisStyle} tickFormatter={yAxisFormatter} width={55} />
+        <YAxis
+          tick={axisStyle}
+          tickFormatter={yAxisFormatter}
+          width={55}
+          domain={[yMin, yMax]}
+          allowDataOverflow
+        />
         <Tooltip contentStyle={tooltipStyle} formatter={currencyFormatter} labelFormatter={monthLabelFormatter} />
         <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: 'var(--color-muted-foreground)' }} />
         {keys.map(k => (
-          <Area key={k.key} type="monotone" dataKey={k.key} name={k.name} stroke={k.color} fill={`url(#grad-${k.key})`} strokeWidth={2} />
+          <Area key={k.key} type="monotone" dataKey={k.key} name={k.name} stroke={k.color} fill={`url(#grad-${k.key})`} strokeWidth={2} allowDataOverflow />
         ))}
       </ReAreaChart>
     </ResponsiveContainer>
