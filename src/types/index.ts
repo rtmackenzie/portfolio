@@ -266,6 +266,43 @@ export interface Goal {
   updated_at: string
 }
 
+export interface ScenarioSummary {
+  start_equity: number
+  end_equity: number
+  equity_growth: number
+  equity_growth_pct: number
+  total_cashflow: number
+  avg_monthly_cashflow: number
+  min_dscr: number
+  months_below_dscr: number
+  min_cumulative_cashflow: number
+}
+
+export interface GoalPathway {
+  id: number
+  goal_id: number
+  scenario_id?: number | null
+  scenario_name?: string | null
+  template_name: string
+  label: string
+  feasible: number        // SQLite 0/1
+  reaches_goal: number    // SQLite 0/1
+  months_to_goal?: number | null
+  summary?: ScenarioSummary | null
+  assumptions?: PropertyAssumptions | null
+  created_at: string
+}
+
+export interface PropertyAssumptions {
+  purchase_price: number
+  monthly_rent: number
+  monthly_expenses?: number
+  deposit_percent?: number
+  mortgage_rate?: number
+  mortgage_term_years?: number
+  projection_years?: number
+}
+
 export interface Scenario {
   id: number
   name: string

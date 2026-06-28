@@ -339,7 +339,11 @@ export function buildProjection(
   }
 }
 
-export function runScenario(scenario: ScenarioConfig, events: ScenarioEvent[]) {
+export function loadPortfolioState(): {
+  initialState: Map<number, PropertyState>
+  propertyLabels: Record<number, string>
+  activeMortgageCount: number
+} {
   const dbProperties = queryAll<{
     id: number; current_value: number | null; purchase_price: number | null; address_line1: string; town: string;
   }>('SELECT id, current_value, purchase_price, address_line1, town FROM properties')
@@ -405,5 +409,12 @@ export function runScenario(scenario: ScenarioConfig, events: ScenarioEvent[]) {
   const propertyLabels: Record<number, string> = {}
   for (const p of dbProperties) propertyLabels[p.id] = `${p.address_line1}, ${p.town}`
 
+  const activeMortgageCount = new Set(dbMortgages.map(m => m.property_id)).size
+
+  return { initialState, propertyLabels, activeMortgageCount }
+}
+
+export function runScenario(scenario: ScenarioConfig, events: ScenarioEvent[]) {
+  const { initialState, propertyLabels } = loadPortfolioState()
   return buildProjection(initialState, events, { ...scenario, propertyLabels })
 }

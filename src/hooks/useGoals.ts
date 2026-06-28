@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import type { Goal } from '@/types'
+import type { Goal, GoalPathway, PropertyAssumptions } from '@/types'
 
 export const goalKeys = {
   all: ['goals'] as const,
@@ -47,5 +47,25 @@ export function useDeleteGoal() {
   return useMutation({
     mutationFn: (id: number) => api.delete(`/goals/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: goalKeys.lists() }),
+  })
+}
+
+export function useGoalPathways(goalId: number) {
+  return useQuery({
+    queryKey: ['goals', goalId, 'pathways'],
+    queryFn: () => api.get<GoalPathway[]>(`/goals/${goalId}/pathways`),
+    enabled: !!goalId,
+  })
+}
+
+export function useGeneratePathways(goalId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (assumptions: PropertyAssumptions) =>
+      api.post<GoalPathway[]>(`/goals/${goalId}/pathways/generate`, assumptions),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['goals', goalId, 'pathways'] })
+      qc.invalidateQueries({ queryKey: ['scenarios'] })
+    },
   })
 }

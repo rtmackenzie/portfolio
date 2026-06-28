@@ -4,8 +4,9 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import type { Goal, GoalType, Scenario } from '@/types'
+import type { Goal, GoalType, GoalPathway, PropertyAssumptions, Scenario } from '@/types'
 import { formatCurrency } from '@/utils/currency'
+import { useGoalPathways, useGeneratePathways } from '@/hooks/useGoals'
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
@@ -238,6 +239,184 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
   )
 }
 
+// ─── Assumptions schema ───────────────────────────────────────────────────────
+
+const assumptionsSchema = z.object({
+  purchase_price:      z.coerce.number().min(1),
+  monthly_rent:        z.coerce.number().min(1),
+  monthly_expenses:    z.coerce.number().min(0),
+  deposit_percent:     z.coerce.number().min(1).max(100),
+  mortgage_rate:       z.coerce.number().min(0),
+  mortgage_term_years: z.coerce.number().int().min(1),
+  projection_years:    z.coerce.number().int().min(1).max(30),
+})
+
+type AssumptionsFormValues = z.infer<typeof assumptionsSchema>
+
+function formatMonthsToGoal(m: number | null | undefined): string {
+  if (m == null) return 'Not reached'
+  const yr = Math.floor(m / 12)
+  const mo = m % 12
+  if (yr === 0) return `${mo}mo`
+  if (mo === 0) return `${yr}yr`
+  return `${yr}yr ${mo}mo`
+}
+
+// ─── Pathways panel ───────────────────────────────────────────────────────────
+
+const ASSUMPTION_DEFAULTS: AssumptionsFormValues = {
+  purchase_price: 180000,
+  monthly_rent: 950,
+  monthly_expenses: 200,
+  deposit_percent: 25,
+  mortgage_rate: 5.5,
+  mortgage_term_years: 25,
+  projection_years: 15,
+}
+
+function PathwaysPanel({ goal }: { goal: Goal }) {
+  const { data: pathways = [], isLoading } = useGoalPathways(goal.id)
+  const generate = useGeneratePathways(goal.id)
+
+  const { register, handleSubmit, reset } = useForm<AssumptionsFormValues>({
+    resolver: zodResolver(assumptionsSchema) as any,
+    defaultValues: ASSUMPTION_DEFAULTS,
+  })
+
+  // Pre-populate form from the most recent generation's assumptions once loaded
+  const latestAssumptions = pathways[0]?.assumptions
+  useEffect(() => {
+    if (latestAssumptions) {
+      reset({ ...ASSUMPTION_DEFAULTS, ...latestAssumptions })
+    }
+  }, [latestAssumptions?.purchase_price, latestAssumptions?.monthly_rent]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function onGenerate(d: AssumptionsFormValues) {
+    generate.mutate(d as PropertyAssumptions)
+  }
+
+  // Group pathways by generated date (YYYY-MM-DD)
+  const groups = pathways.reduce<Record<string, GoalPathway[]>>((acc, pw) => {
+    const day = pw.created_at.slice(0, 10)
+    ;(acc[day] = acc[day] ?? []).push(pw)
+    return acc
+  }, {})
+
+  return (
+    <div className="mt-6 border-t border-border pt-6 space-y-5">
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Generate pathways</p>
+
+      {/* Assumptions form */}
+      <form onSubmit={handleSubmit(onGenerate)} className="space-y-3">
+        <div className="grid grid-cols-4 gap-3">
+          <div>
+            <label className={labelCls}>Purchase price (£)</label>
+            <input type="number" {...register('purchase_price')} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Monthly rent (£)</label>
+            <input type="number" {...register('monthly_rent')} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Monthly expenses (£)</label>
+            <input type="number" {...register('monthly_expenses')} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Deposit (%)</label>
+            <input type="number" {...register('deposit_percent')} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Mortgage rate (%)</label>
+            <input type="number" step="0.1" {...register('mortgage_rate')} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Term (years)</label>
+            <input type="number" {...register('mortgage_term_years')} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Projection (years)</label>
+            <input type="number" {...register('projection_years')} className={inputCls} />
+          </div>
+          <div className="flex items-end">
+            <button
+              type="submit"
+              disabled={generate.isPending}
+              className="w-full px-3 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium disabled:opacity-50"
+            >
+              {generate.isPending ? 'Generating…' : 'Generate'}
+            </button>
+          </div>
+        </div>
+        {generate.isError && (
+          <p className="text-xs text-red-400">{String((generate.error as Error)?.message ?? 'Generation failed')}</p>
+        )}
+      </form>
+
+      {/* Pathway list */}
+      {isLoading && <p className="text-xs text-muted-foreground">Loading pathways…</p>}
+
+      {!isLoading && pathways.length === 0 && (
+        <p className="text-xs text-muted-foreground">No pathways generated yet. Fill in the assumptions above and click Generate.</p>
+      )}
+
+      {Object.entries(groups).map(([day, pws]) => (
+        <div key={day} className="space-y-2">
+          <p className="text-[11px] text-muted-foreground">Generated {day}</p>
+          <div className="grid grid-cols-3 gap-3">
+            {pws.map(pw => (
+              <div key={pw.id} className="bg-background border border-border rounded-lg p-3 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-sm font-medium">{pw.label}</span>
+                  <div className="flex gap-1 flex-wrap justify-end">
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${pw.feasible ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
+                      {pw.feasible ? 'feasible' : 'infeasible'}
+                    </span>
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${pw.reaches_goal ? 'bg-blue-500/15 text-blue-400' : 'bg-muted text-muted-foreground'}`}>
+                      {pw.reaches_goal ? 'reaches goal' : 'goal not reached'}
+                    </span>
+                  </div>
+                </div>
+
+                {pw.summary && (
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+                    <div>
+                      <span className="text-muted-foreground">End equity</span>
+                      <div className="font-medium">{formatCurrency(pw.summary.end_equity)}</div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Avg CF/mo</span>
+                      <div className={`font-medium ${pw.summary.avg_monthly_cashflow >= 0 ? '' : 'text-red-400'}`}>
+                        {formatCurrency(pw.summary.avg_monthly_cashflow)}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Min DSCR</span>
+                      <div className="font-medium">{pw.summary.min_dscr > 0 ? `${pw.summary.min_dscr.toFixed(2)}×` : '—'}</div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Time to goal</span>
+                      <div className="font-medium">{formatMonthsToGoal(pw.months_to_goal)}</div>
+                    </div>
+                  </div>
+                )}
+
+                {pw.scenario_id && (
+                  <a
+                    href="/scenarios"
+                    className="block text-[11px] text-primary hover:underline mt-1"
+                  >
+                    View in What-If →
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function Goals() {
@@ -320,6 +499,7 @@ export default function Goals() {
                 onSaved={(g) => setSelectedId(g.id)}
                 onDeleted={() => setSelectedId(null)}
               />
+              {selected && <PathwaysPanel goal={selected} />}
             </div>
           )}
         </div>

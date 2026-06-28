@@ -381,18 +381,15 @@ export default function Scenarios() {
 
                     <div className="grid grid-cols-3 gap-3">
                       {[
-                        { label: 'Starting Equity', value: formatCurrency(results.summary.start_equity, true) },
-                        { label: 'Ending Equity', value: formatCurrency(results.summary.end_equity, true) },
-                        { label: 'Equity Growth', value: `+${formatCurrency(results.summary.equity_growth, true)} (${formatPercent(results.summary.equity_growth_pct)})` },
-                        { label: 'Total Cashflow', value: formatCurrency(results.summary.total_cashflow, true) },
-                        { label: 'Avg Monthly CF', value: formatCurrency(results.summary.avg_monthly_cashflow) },
-                        { label: 'Min DSCR', value: (results.summary.min_dscr ?? 0).toFixed(2) },
-                        { label: 'DSCR Breaches', value: `${results.summary.months_below_dscr ?? '—'} mo` },
+                        { label: 'Starting Equity',  value: formatCurrency(results.summary.start_equity, true), tooltip: 'Total equity across all properties at the start of the projection — current market value minus outstanding mortgage debt.' },
+                        { label: 'Ending Equity',    value: formatCurrency(results.summary.end_equity, true),   tooltip: 'Projected total equity at the end of the projection period, after property value growth and mortgage amortisation.' },
+                        { label: 'Equity Growth',    value: `+${formatCurrency(results.summary.equity_growth, true)} (${formatPercent(results.summary.equity_growth_pct)})`, tooltip: 'Net increase in equity over the projection: property appreciation plus principal repaid, minus any new debt taken on.' },
+                        { label: 'Total Cashflow',   value: formatCurrency(results.summary.total_cashflow, true), tooltip: 'Cumulative net cashflow over the full projection period — rent received minus mortgage payments, expenses, and one-off acquisition costs.' },
+                        { label: 'Avg Monthly CF',   value: formatCurrency(results.summary.avg_monthly_cashflow), tooltip: 'Average monthly net cashflow across all properties and all months in the projection. Negative values indicate the portfolio is loss-making on average.' },
+                        { label: 'Min DSCR',         value: (results.summary.min_dscr ?? 0).toFixed(2), tooltip: 'Lowest Debt Service Coverage Ratio recorded in any month (total rent ÷ total mortgage payments). Below 1.25× indicates cashflow stress relative to the standard lender threshold.' },
+                        { label: 'DSCR Breaches',    value: `${results.summary.months_below_dscr ?? '—'} mo`, tooltip: 'Number of months where the portfolio DSCR fell below 1.25×. A high breach count under stress scenarios suggests vulnerability to rate rises or void periods.' },
                       ].map(k => (
-                        <div key={k.label} className="bg-card rounded-lg p-4">
-                          <div className="text-xs text-muted-foreground">{k.label}</div>
-                          <div className="text-sm font-bold text-foreground mt-1">{k.value}</div>
-                        </div>
+                        <KpiCard key={k.label} label={k.label} value={k.value} tooltip={k.tooltip} />
                       ))}
                     </div>
 
@@ -439,6 +436,29 @@ export default function Scenarios() {
           onClose={() => { setShowAddEvent(false); setEditingEvent(null) }}
         />
       )}
+    </div>
+  )
+}
+
+function KpiCard({ label, value, tooltip }: { label: string; value: string; tooltip: string }) {
+  const [show, setShow] = useState(false)
+  return (
+    <div className="bg-card rounded-lg p-4">
+      <div className="relative">
+        <span
+          className="text-xs text-muted-foreground underline decoration-dotted decoration-muted-foreground/50 cursor-default"
+          onMouseEnter={() => setShow(true)}
+          onMouseLeave={() => setShow(false)}
+        >
+          {label}
+        </span>
+        {show && (
+          <div className="absolute bottom-full left-0 mb-2 w-56 rounded-md bg-popover border border-border text-xs text-popover-foreground p-2 shadow-lg z-50 whitespace-normal leading-relaxed">
+            {tooltip}
+          </div>
+        )}
+      </div>
+      <div className="text-sm font-bold text-foreground mt-1">{value}</div>
     </div>
   )
 }
