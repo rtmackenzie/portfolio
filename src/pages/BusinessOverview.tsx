@@ -3,8 +3,10 @@ import { useDashboard } from '@/hooks/useDashboard'
 import { useFinancialSummary } from '@/hooks/useFinancials'
 import { useSettings, useUpdateSettings } from '@/hooks/useSettings'
 import { useScorecard } from '@/hooks/useScorecard'
+import { useRiskHeatmap } from '@/hooks/useRiskHeatmap'
 import { KPICard } from '@/components/shared/KPICard'
 import { PageLoader } from '@/components/shared/LoadingSpinner'
+import { RiskHeatmap } from '@/components/shared/RiskHeatmap'
 import { ScorecardRadar } from '@/components/charts'
 import { formatCurrency, formatPercent } from '@/utils/currency'
 import type { TaxSettings, ScoreItem, ScoreRating } from '@/types'
@@ -64,6 +66,20 @@ function ScorecardSection() {
           {sc.scores.map(s => <ScoreCard key={s.key} s={s} />)}
         </div>
       </div>
+    </div>
+  )
+}
+
+function RiskSection() {
+  const { data: risk, isLoading } = useRiskHeatmap()
+  if (isLoading || !risk) return null
+  return (
+    <div className="bg-card rounded-lg p-6 space-y-4">
+      <div>
+        <h3 className="text-base font-semibold">Risk heatmap</h3>
+        <p className="text-xs text-muted-foreground mt-0.5">Likelihood × impact per risk factor, scored from your portfolio facts. Hover a marker; recomputes when data changes.</p>
+      </div>
+      <RiskHeatmap factors={risk.factors} />
     </div>
   )
 }
@@ -148,6 +164,8 @@ export default function BusinessOverview() {
       </div>
 
       <ScorecardSection />
+
+      <RiskSection />
 
       <div className="grid grid-cols-4 gap-4">
         <KPICard label="Total Assets" value={formatCurrency(kpis?.total_portfolio_value ?? 0, true)} subtext="Property portfolio value" variant="success" />

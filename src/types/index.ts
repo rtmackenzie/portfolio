@@ -374,6 +374,23 @@ export interface Scorecard {
   scores: ScoreItem[]
 }
 
+export type RiskBand = 'low' | 'medium' | 'high' | 'critical'
+
+export interface RiskFactor {
+  key: string
+  label: string
+  likelihood: number   // 1–5
+  impact: number       // 1–5
+  severity: number     // likelihood × impact
+  band: RiskBand
+  rationale: string
+  mitigation: string
+}
+
+export interface RiskHeatmap {
+  factors: RiskFactor[]
+}
+
 export interface TaxSettings {
   ownership: 'personal' | 'ltd'
   personal_marginal_rate_pct: number
