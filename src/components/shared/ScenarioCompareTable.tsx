@@ -59,6 +59,41 @@ function winnerIndex(metrics: (Metrics | null)[], key: keyof Metrics, bestHighes
   return idx
 }
 
+function signedCurrency(delta: number): string {
+  const sign = delta >= 0 ? '+' : '−'
+  return `${sign}${formatCurrency(Math.abs(delta), true)}`
+}
+
+function buildDiff(a: Metrics, b: Metrics): string[] {
+  const parts: string[] = []
+
+  const eq = b.end_equity - a.end_equity
+  if (Math.abs(eq) > 1000)
+    parts.push(`${signedCurrency(eq)} equity`)
+
+  const cf = b.avg_monthly_cf - a.avg_monthly_cf
+  if (Math.abs(cf) > 50)
+    parts.push(`${signedCurrency(cf)}/mo cashflow`)
+
+  const tc = b.total_cashflow - a.total_cashflow
+  if (Math.abs(tc) > 1000)
+    parts.push(`${signedCurrency(tc)} total cashflow`)
+
+  const eg = b.equity_growth_pct - a.equity_growth_pct
+  if (Math.abs(eg) > 0.5)
+    parts.push(`${eg >= 0 ? '+' : ''}${eg.toFixed(1)}% equity growth`)
+
+  const ltv = b.peak_ltv - a.peak_ltv
+  if (Math.abs(ltv) > 0.5)
+    parts.push(`${ltv >= 0 ? '+' : ''}${ltv.toFixed(1)}pp LTV`)
+
+  const props = b.final_properties - a.final_properties
+  if (Math.abs(props) >= 1)
+    parts.push(`${props >= 0 ? '+' : ''}${props} propert${Math.abs(props) === 1 ? 'y' : 'ies'}`)
+
+  return parts
+}
+
 export function ScenarioCompareTable({ data, isLoading, onExit }: Props) {
   const allMetrics = data.map(d => deriveMetrics(d.results))
 
@@ -128,6 +163,24 @@ export function ScenarioCompareTable({ data, isLoading, onExit }: Props) {
           </table>
         </div>
       )}
+
+      {data.length === 2 && allMetrics[0] && allMetrics[1] && (() => {
+        const parts = buildDiff(allMetrics[0]!, allMetrics[1]!)
+        const baseline = data[0].scenario.name
+        const variant  = data[1].scenario.name
+        return (
+          <div className="border border-border rounded-md p-4 space-y-1.5">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              {variant} vs {baseline}
+            </p>
+            <p className="text-sm text-foreground leading-relaxed">
+              {parts.length > 0
+                ? `${variant} delivers ${parts.join(', ')} vs ${baseline}.`
+                : 'No material differences between these two scenarios.'}
+            </p>
+          </div>
+        )
+      })()}
 
       <p className="text-xs text-muted-foreground">
         ★ Best in column &nbsp;·&nbsp; Run a projection on each scenario to populate results
