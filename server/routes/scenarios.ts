@@ -33,8 +33,8 @@ router.post('/', (req, res) => {
   try {
     const d = req.body
     const result = execute(
-      'INSERT INTO scenarios (name, description, base_date, projection_years) VALUES (?, ?, ?, ?)',
-      [d.name, d.description ?? null, d.base_date, d.projection_years ?? 10]
+      'INSERT INTO scenarios (name, description, base_date, projection_years, assumptions_json) VALUES (?, ?, ?, ?, ?)',
+      [d.name, d.description ?? null, d.base_date, d.projection_years ?? 10, d.assumptions_json ?? null]
     )
     res.status(201).json(queryOne('SELECT * FROM scenarios WHERE id=?', [result.lastInsertRowid]))
   } catch (err) {
@@ -47,8 +47,8 @@ router.put('/:id', (req, res) => {
     const id = Number(req.params.id)
     const d = req.body
     execute(
-      "UPDATE scenarios SET name=?, description=?, base_date=?, projection_years=?, updated_at=datetime('now') WHERE id=?",
-      [d.name, d.description ?? null, d.base_date, d.projection_years ?? 10, id]
+      "UPDATE scenarios SET name=?, description=?, base_date=?, projection_years=?, assumptions_json=?, updated_at=datetime('now') WHERE id=?",
+      [d.name, d.description ?? null, d.base_date, d.projection_years ?? 10, d.assumptions_json ?? null, id]
     )
     res.json(queryOne('SELECT * FROM scenarios WHERE id=?', [id]))
   } catch (err) {

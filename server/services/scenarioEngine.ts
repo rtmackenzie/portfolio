@@ -4,6 +4,7 @@ import { calcMonthlyPayment, calcTransactionCosts } from './calculations.ts'
 interface ScenarioConfig {
   base_date: string
   projection_years: number
+  assumptions_json?: string | null
 }
 
 export interface ScenarioEvent {
@@ -60,6 +61,12 @@ export function buildProjection(
   for (const [id, state] of stateMap) {
     debtMap.set(id, state.debt)
   }
+
+  const assumptions = JSON.parse(config.assumptions_json ?? '{}')
+  const growthRate    = assumptions.property_growth_pct   ?? 3.0
+  const inflationRate = assumptions.expense_inflation_pct ?? 2.5
+  const voidMonths    = assumptions.void_months_per_year  ?? 0.5
+  const voidFactor    = 1 - voidMonths / 12
 
   const snapshots: MonthSnapshot[] = []
   let cumulativeCashflow = 0
@@ -191,8 +198,7 @@ export function buildProjection(
     let monthlyCashflow = 0
 
     for (const [propId, state] of stateMap) {
-      // Approximate 3% annual property growth
-      const growthFactor = Math.pow(1.03, i / 12)
+      const growthFactor = Math.pow(1 + growthRate / 100, i / 12)
       const currentValue = state.value * growthFactor
 
       // Iterative amortisation: subtract principal portion of payment from running balance.
@@ -209,8 +215,10 @@ export function buildProjection(
       totalValue += currentValue
       totalDebt += currentDebt
 
-      const rent = state.is_vacant ? 0 : state.monthly_rent
-      monthlyCashflow += rent - state.monthly_mortgage - state.monthly_other_expenses
+      const rent = state.is_vacant ? 0 : state.monthly_rent * voidFactor
+      const inflationFactor = Math.pow(1 + inflationRate / 100, i / 12)
+      const expenses = state.monthly_other_expenses * inflationFactor
+      monthlyCashflow += rent - state.monthly_mortgage - expenses
     }
 
     cumulativeCashflow += monthlyCashflow

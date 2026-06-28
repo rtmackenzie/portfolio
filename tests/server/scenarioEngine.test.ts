@@ -31,7 +31,12 @@ function makeEvent(overrides: Partial<ScenarioEvent> & { event_type: string }): 
   }
 }
 
-const BASE_CONFIG = { base_date: '2026-01-01', projection_years: 1 }
+// void=0 and inflation=0 so existing tests aren't affected by new defaults
+const BASE_CONFIG = {
+  base_date: '2026-01-01',
+  projection_years: 1,
+  assumptions_json: JSON.stringify({ void_months_per_year: 0, expense_inflation_pct: 0 }),
+}
 
 // ─── Snapshot structure ───────────────────────────────────────────────────────
 
@@ -362,5 +367,46 @@ describe('buildProjection — remortgage event', () => {
     )
     expect(months[4].monthly_cashflow).toBe(-600)
     expect(months[5].monthly_cashflow).toBe(-450)
+  })
+})
+
+// ─── Assumptions ─────────────────────────────────────────────────────────────
+
+describe('buildProjection — assumptions', () => {
+  it('uses custom growth rate (5%) — value grows faster than 3%', () => {
+    const config = { ...BASE_CONFIG, assumptions_json: JSON.stringify({ property_growth_pct: 5 }) }
+    const { months } = buildProjection(makeMap(makeState({ value: 100000 })), [], config)
+    // 5% p.a. at month 11: 100000 × 1.05^(11/12) ≈ 104,600 — must exceed 3% result
+    expect(months[11].total_value).toBeGreaterThan(104000)
+  })
+
+  it('default growth (3%) reproduces prior hardcoded behaviour', () => {
+    const { months } = buildProjection(makeMap(makeState({ value: 100000 })), [], BASE_CONFIG)
+    // 3% p.a. at month 11: 100000 × 1.03^(11/12) ≈ 102,750
+    expect(months[11].total_value).toBeGreaterThan(102000)
+    expect(months[11].total_value).toBeLessThan(103500)
+  })
+
+  it('void_months_per_year reduces monthly cashflow vs zero void', () => {
+    const state = makeState({ monthly_rent: 1000, monthly_mortgage: 0, monthly_other_expenses: 0 })
+    const noVoid = buildProjection(
+      makeMap(state), [],
+      { ...BASE_CONFIG, assumptions_json: JSON.stringify({ void_months_per_year: 0 }) }
+    )
+    const withVoid = buildProjection(
+      makeMap(state), [],
+      { ...BASE_CONFIG, assumptions_json: JSON.stringify({ void_months_per_year: 2 }) }
+    )
+    expect(withVoid.months[0].monthly_cashflow).toBeLessThan(noVoid.months[0].monthly_cashflow)
+  })
+
+  it('expense_inflation_pct causes expenses to rise over time', () => {
+    const state = makeState({ monthly_rent: 0, monthly_mortgage: 0, monthly_other_expenses: 1000 })
+    const { months } = buildProjection(
+      makeMap(state), [],
+      { ...BASE_CONFIG, projection_years: 10, assumptions_json: JSON.stringify({ expense_inflation_pct: 5, void_months_per_year: 0 }) }
+    )
+    // Month 0: expenses ≈ £1000; month 119 (year 10): ≈ £1000 × 1.05^(119/12) ≈ £1,620
+    expect(months[119].monthly_cashflow).toBeLessThan(months[0].monthly_cashflow)
   })
 })

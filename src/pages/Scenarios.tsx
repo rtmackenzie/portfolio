@@ -17,6 +17,9 @@ const scenarioSchema = z.object({
   description: z.string().optional(),
   base_date: z.string().min(1),
   projection_years: z.coerce.number().min(1).max(30),
+  property_growth_pct: z.coerce.number().min(0).max(20),
+  expense_inflation_pct: z.coerce.number().min(0).max(20),
+  void_months_per_year: z.coerce.number().min(0).max(12),
 })
 
 const inputCls = 'w-full px-3 py-2 rounded-md bg-input border border-border text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary'
@@ -230,24 +233,67 @@ export default function Scenarios() {
   )
 }
 
+function AssumptionsFields({ register }: { register: ReturnType<typeof useForm>['register'] }) {
+  return (
+    <div className="border-t border-border pt-3 mt-1 space-y-3">
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Growth & Assumptions</p>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={labelCls}>Property Growth (% p.a.)</label>
+          <input type="number" step="0.1" {...register('property_growth_pct')} className={inputCls} />
+        </div>
+        <div>
+          <label className={labelCls}>Expense Inflation (% p.a.)</label>
+          <input type="number" step="0.1" {...register('expense_inflation_pct')} className={inputCls} />
+        </div>
+        <div>
+          <label className={labelCls}>Avg Void (months/year)</label>
+          <input type="number" step="0.1" {...register('void_months_per_year')} className={inputCls} />
+        </div>
+        <div className="flex items-end pb-2">
+          <p className="text-xs text-muted-foreground">Void reduces effective rent. Rent growth uses rent_change events.</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function serializeScenarioPayload(d: z.infer<typeof scenarioSchema>) {
+  const { property_growth_pct, expense_inflation_pct, void_months_per_year, ...rest } = d
+  return { ...rest, assumptions_json: JSON.stringify({ property_growth_pct, expense_inflation_pct, void_months_per_year }) }
+}
+
+function parseAssumptions(json?: string | null) {
+  const a = JSON.parse(json ?? '{}')
+  return {
+    property_growth_pct:   a.property_growth_pct   ?? 3.0,
+    expense_inflation_pct: a.expense_inflation_pct ?? 2.5,
+    void_months_per_year:  a.void_months_per_year  ?? 0.5,
+  }
+}
+
 function CreateScenarioModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: number) => void }) {
   const qc = useQueryClient()
   const create = useMutation({
     mutationFn: (data: any) => api.post<Scenario>('/scenarios', data),
     onSuccess: (s) => { qc.invalidateQueries({ queryKey: ['scenarios'] }); onCreated(s.id) },
   })
-  const { register, handleSubmit } = useForm({ resolver: zodResolver(scenarioSchema), defaultValues: { projection_years: 10, base_date: new Date().toISOString().slice(0, 10) } })
+  const { register, handleSubmit } = useForm({
+    resolver: zodResolver(scenarioSchema) as any,
+    defaultValues: { projection_years: 10, base_date: new Date().toISOString().slice(0, 10), ...parseAssumptions(null) },
+  })
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-card rounded-xl shadow-2xl w-full max-w-md p-6">
         <h2 className="text-base font-semibold mb-4">New Scenario</h2>
-        <form onSubmit={handleSubmit(d => create.mutateAsync(d))} className="space-y-4">
+        <form onSubmit={handleSubmit(d => create.mutateAsync(serializeScenarioPayload(d as any)))} className="space-y-4">
           <div><label className={labelCls}>Name *</label><input {...register('name')} className={inputCls} placeholder="Base Case" /></div>
           <div><label className={labelCls}>Description</label><textarea {...register('description')} className={inputCls} rows={2} /></div>
           <div className="grid grid-cols-2 gap-4">
             <div><label className={labelCls}>Base Date</label><input type="date" {...register('base_date')} className={inputCls} /></div>
             <div><label className={labelCls}>Projection Years</label><input type="number" {...register('projection_years')} className={inputCls} /></div>
           </div>
+          <AssumptionsFields register={register} />
           <div className="flex gap-3"><button type="button" onClick={onClose} className="flex-1 px-4 py-2 border border-border rounded-md text-sm text-muted-foreground">Cancel</button><button type="submit" className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium">Create</button></div>
         </form>
       </div>
@@ -258,24 +304,31 @@ function CreateScenarioModal({ onClose, onCreated }: { onClose: () => void; onCr
 function EditScenarioModal({ scenario, onClose }: { scenario: Scenario; onClose: () => void }) {
   const qc = useQueryClient()
   const update = useMutation({
-    mutationFn: (data: z.infer<typeof scenarioSchema>) => api.put(`/scenarios/${scenario.id}`, data),
+    mutationFn: (data: any) => api.put(`/scenarios/${scenario.id}`, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['scenarios'] }); qc.invalidateQueries({ queryKey: ['scenarios', scenario.id] }); onClose() },
   })
   const { register, handleSubmit } = useForm({
     resolver: zodResolver(scenarioSchema) as any,
-    defaultValues: { name: scenario.name, description: scenario.description ?? '', base_date: scenario.base_date, projection_years: scenario.projection_years },
+    defaultValues: {
+      name: scenario.name,
+      description: scenario.description ?? '',
+      base_date: scenario.base_date,
+      projection_years: scenario.projection_years,
+      ...parseAssumptions((scenario as any).assumptions_json),
+    },
   })
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-card rounded-xl shadow-2xl w-full max-w-md p-6">
         <h2 className="text-base font-semibold mb-4">Edit Scenario</h2>
-        <form onSubmit={handleSubmit(d => update.mutateAsync(d))} className="space-y-4">
+        <form onSubmit={handleSubmit(d => update.mutateAsync(serializeScenarioPayload(d as any)))} className="space-y-4">
           <div><label className={labelCls}>Name *</label><input {...register('name')} className={inputCls} /></div>
           <div><label className={labelCls}>Description</label><textarea {...register('description')} className={inputCls} rows={2} /></div>
           <div className="grid grid-cols-2 gap-4">
             <div><label className={labelCls}>Base Date</label><input type="date" {...register('base_date')} className={inputCls} /></div>
             <div><label className={labelCls}>Projection Years</label><input type="number" {...register('projection_years')} className={inputCls} /></div>
           </div>
+          <AssumptionsFields register={register} />
           <div className="flex gap-3">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2 border border-border rounded-md text-sm text-muted-foreground">Cancel</button>
             <button type="submit" disabled={update.isPending} className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium disabled:opacity-50">Save</button>
