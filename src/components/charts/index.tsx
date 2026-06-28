@@ -94,7 +94,7 @@ export function ExpenseDonutChart({ data }: { data: { category: string; total: n
   )
 }
 
-export function ScenarioAreaChart({ data, keys }: { data: ChartData[]; keys: { key: string; name: string; color: string }[] }) {
+export function ScenarioAreaChart({ data, keys }: { data: ChartData[]; keys: { key: string; name: string; color: string; dash?: boolean }[] }) {
   const allValues = data.flatMap(d => keys.map(k => Number(d[k.key] ?? 0)))
   const rawMax = allValues.length > 0 ? Math.max(...allValues) : 100000
   const rawMin = allValues.length > 0 ? Math.min(...allValues) : 0
@@ -128,7 +128,7 @@ export function ScenarioAreaChart({ data, keys }: { data: ChartData[]; keys: { k
         <Tooltip contentStyle={tooltipStyle} formatter={currencyFormatter} labelFormatter={monthLabelFormatter} />
         <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: 'var(--color-muted-foreground)' }} />
         {keys.map(k => (
-          <Area key={k.key} type="monotone" dataKey={k.key} name={k.name} stroke={k.color} fill={`url(#grad-${k.key})`} strokeWidth={2} allowDataOverflow />
+          <Area key={k.key} type="monotone" dataKey={k.key} name={k.name} stroke={k.color} fill={k.dash ? 'none' : `url(#grad-${k.key})`} strokeWidth={2} strokeDasharray={k.dash ? '5 5' : undefined} allowDataOverflow />
         ))}
       </ReAreaChart>
     </ResponsiveContainer>

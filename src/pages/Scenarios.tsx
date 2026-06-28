@@ -77,10 +77,40 @@ export default function Scenarios() {
     onSuccess: (s) => { qc.invalidateQueries({ queryKey: ['scenarios'] }); setSelectedId(s.id) },
   })
 
+  const [stressResults, setStressResults]     = useState<ScenarioResults | null>(null)
+  const [activeRateShock, setActiveRateShock] = useState<number | null>(null)
+  const [activeRentShock, setActiveRentShock] = useState<number | null>(null)
+
   const calculate = useMutation({
     mutationFn: (id: number) => api.post<ScenarioResults>(`/scenarios/${id}/calculate`, {}),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['scenarios', selectedId] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['scenarios', selectedId] }); setStressResults(null); setActiveRateShock(null); setActiveRentShock(null) },
   })
+
+  const runStress = useMutation({
+    mutationFn: ({ id, rateShock, rentShock }: { id: number; rateShock?: number; rentShock?: number }) =>
+      api.post<ScenarioResults>(`/scenarios/${id}/stress`, { rateShock, rentShock }),
+    onSuccess: (data) => setStressResults(data),
+  })
+
+  function handleRateButton(bps: number) {
+    const newRate = activeRateShock === bps ? null : bps
+    setActiveRateShock(newRate)
+    if (newRate !== null || activeRentShock !== null) {
+      runStress.mutate({ id: selected!.id, rateShock: newRate ?? undefined, rentShock: activeRentShock ?? undefined })
+    } else {
+      setStressResults(null)
+    }
+  }
+
+  function handleRentButton(pct: number) {
+    const newRent = activeRentShock === pct ? null : pct
+    setActiveRentShock(newRent)
+    if (activeRateShock !== null || newRent !== null) {
+      runStress.mutate({ id: selected!.id, rateShock: activeRateShock ?? undefined, rentShock: newRent ?? undefined })
+    } else {
+      setStressResults(null)
+    }
+  }
 
   const deleteEvent = useMutation({
     mutationFn: ({ scenarioId, eventId }: { scenarioId: number; eventId: number }) =>
@@ -130,7 +160,7 @@ export default function Scenarios() {
                     className="rounded border-border accent-primary flex-none"
                   />
                   <button
-                    onClick={() => { setSelectedId(s.id); setCompareMode(false) }}
+                    onClick={() => { setSelectedId(s.id); setCompareMode(false); setStressResults(null); setActiveRateShock(null); setActiveRentShock(null) }}
                     className={`flex-1 text-left px-3 py-2.5 rounded-md text-sm transition-colors ${selectedId === s.id && !compareMode ? 'bg-primary/15 text-primary' : 'bg-card text-foreground hover:bg-accent'}`}
                   >
                     <div className="font-medium">{s.name}</div>
@@ -238,36 +268,92 @@ export default function Scenarios() {
               </div>
 
               {/* Results */}
-              {results && (
-                <>
-                  <div className="grid grid-cols-3 gap-3">
-                    {[
-                      { label: 'Starting Equity', value: formatCurrency(results.summary.start_equity, true) },
-                      { label: 'Ending Equity', value: formatCurrency(results.summary.end_equity, true) },
-                      { label: 'Equity Growth', value: `+${formatCurrency(results.summary.equity_growth, true)} (${formatPercent(results.summary.equity_growth_pct)})` },
-                      { label: 'Total Cashflow', value: formatCurrency(results.summary.total_cashflow, true) },
-                      { label: 'Avg Monthly CF', value: formatCurrency(results.summary.avg_monthly_cashflow) },
-                    ].map(k => (
-                      <div key={k.label} className="bg-card rounded-lg p-4">
-                        <div className="text-xs text-muted-foreground">{k.label}</div>
-                        <div className="text-sm font-bold text-foreground mt-1">{k.value}</div>
-                      </div>
-                    ))}
-                  </div>
+              {results && (() => {
+                const stressLabel = [
+                  activeRateShock ? `+${activeRateShock / 100}% rates` : null,
+                  activeRentShock ? `${activeRentShock}% rent` : null,
+                ].filter(Boolean).join(', ')
 
-                  <div className="bg-card rounded-lg p-5">
-                    <h3 className="text-sm font-semibold mb-4">Projection Chart</h3>
-                    <ScenarioAreaChart
-                      data={results.months}
-                      keys={[
-                        { key: 'total_equity', name: 'Equity', color: CHART_COLORS.success },
-                        { key: 'total_debt', name: 'Debt', color: CHART_COLORS.danger },
-                        { key: 'cumulative_cashflow', name: 'Cumulative Cashflow', color: CHART_COLORS.primary },
-                      ]}
-                    />
-                  </div>
-                </>
-              )}
+                const chartData = results.months.map((m, i) => ({
+                  ...m,
+                  ...(stressResults ? { stressed_cashflow: stressResults.months[i]?.cumulative_cashflow } : {}),
+                }))
+                const chartKeys: { key: string; name: string; color: string; dash?: boolean }[] = [
+                  { key: 'total_equity',        name: 'Equity',              color: CHART_COLORS.success },
+                  { key: 'total_debt',          name: 'Debt',                color: CHART_COLORS.danger  },
+                  { key: 'cumulative_cashflow', name: 'Cumulative Cashflow', color: CHART_COLORS.primary },
+                  ...(stressResults ? [{ key: 'stressed_cashflow', name: `Cashflow (${stressLabel})`, color: CHART_COLORS.warning, dash: true }] : []),
+                ]
+
+                return (
+                  <>
+                    {/* Stress test buttons */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-semibold text-muted-foreground">Rates:</span>
+                      {[100, 200, 300].map(bps => (
+                        <button
+                          key={bps}
+                          onClick={() => handleRateButton(bps)}
+                          disabled={runStress.isPending}
+                          className={`px-2.5 py-1 text-xs rounded-md border transition-colors disabled:opacity-50 ${
+                            activeRateShock === bps
+                              ? 'bg-warning/20 border-warning/60 text-warning'
+                              : 'border-border text-muted-foreground hover:bg-accent'
+                          }`}
+                        >+{bps / 100}%</button>
+                      ))}
+                      <span className="text-xs font-semibold text-muted-foreground ml-2">Rent:</span>
+                      {[-10, -20].map(pct => (
+                        <button
+                          key={pct}
+                          onClick={() => handleRentButton(pct)}
+                          disabled={runStress.isPending}
+                          className={`px-2.5 py-1 text-xs rounded-md border transition-colors disabled:opacity-50 ${
+                            activeRentShock === pct
+                              ? 'bg-warning/20 border-warning/60 text-warning'
+                              : 'border-border text-muted-foreground hover:bg-accent'
+                          }`}
+                        >{pct}%</button>
+                      ))}
+                      {(activeRateShock !== null || activeRentShock !== null) && (
+                        <button
+                          onClick={() => { setActiveRateShock(null); setActiveRentShock(null); setStressResults(null) }}
+                          className="px-2.5 py-1 text-xs rounded-md border border-border text-muted-foreground hover:bg-accent ml-1"
+                        >Clear</button>
+                      )}
+                    </div>
+
+                    {/* DSCR breach warning */}
+                    {stressResults && (stressResults.summary.months_below_dscr ?? 0) > 0 && (
+                      <div className="flex items-center gap-2 px-4 py-2.5 rounded-md bg-warning/10 border border-warning/30 text-sm text-warning">
+                        ⚠ {stressResults.summary.months_below_dscr} month{stressResults.summary.months_below_dscr !== 1 ? 's' : ''} breach DSCR 1.25× under {stressLabel}. Min DSCR: {(stressResults.summary.min_dscr ?? 0).toFixed(2)}.
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { label: 'Starting Equity', value: formatCurrency(results.summary.start_equity, true) },
+                        { label: 'Ending Equity', value: formatCurrency(results.summary.end_equity, true) },
+                        { label: 'Equity Growth', value: `+${formatCurrency(results.summary.equity_growth, true)} (${formatPercent(results.summary.equity_growth_pct)})` },
+                        { label: 'Total Cashflow', value: formatCurrency(results.summary.total_cashflow, true) },
+                        { label: 'Avg Monthly CF', value: formatCurrency(results.summary.avg_monthly_cashflow) },
+                        { label: 'Min DSCR', value: (results.summary.min_dscr ?? 0).toFixed(2) },
+                        { label: 'DSCR Breaches', value: `${results.summary.months_below_dscr ?? '—'} mo` },
+                      ].map(k => (
+                        <div key={k.label} className="bg-card rounded-lg p-4">
+                          <div className="text-xs text-muted-foreground">{k.label}</div>
+                          <div className="text-sm font-bold text-foreground mt-1">{k.value}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="bg-card rounded-lg p-5">
+                      <h3 className="text-sm font-semibold mb-4">Projection Chart</h3>
+                      <ScenarioAreaChart data={chartData} keys={chartKeys} />
+                    </div>
+                  </>
+                )
+              })()}
             </>
           ) : null}
         </div>

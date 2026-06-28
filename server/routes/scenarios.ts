@@ -152,6 +152,24 @@ router.delete('/:id/events/:eid', (req, res) => {
   }
 })
 
+// Stress test — runs projection with rate/rent shock but does NOT persist results
+router.post('/:id/stress', (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    const scenario = queryOne('SELECT * FROM scenarios WHERE id=?', [id])
+    if (!scenario) return res.status(404).json({ message: 'Not found' })
+    const events = queryAll('SELECT * FROM scenario_events WHERE scenario_id=? ORDER BY date, sort_order', [id])
+    const { rateShock, rentShock } = req.body as { rateShock?: number; rentShock?: number }
+    const results = runScenario(
+      { ...(scenario as any), rate_shock_bps: rateShock, rent_shock_pct: rentShock },
+      events as any
+    )
+    res.json(results)
+  } catch (err) {
+    res.status(500).json({ message: String(err) })
+  }
+})
+
 // Calculate
 router.post('/:id/calculate', async (req, res) => {
   try {

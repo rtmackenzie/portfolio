@@ -5,6 +5,8 @@ interface ScenarioConfig {
   base_date: string
   projection_years: number
   assumptions_json?: string | null
+  rate_shock_bps?: number
+  rent_shock_pct?: number
 }
 
 export interface ScenarioEvent {
@@ -34,6 +36,7 @@ interface MonthSnapshot {
   monthly_cashflow: number
   cumulative_cashflow: number
   property_count: number
+  monthly_dscr: number
 }
 
 // Pure projection engine — accepts initial state directly, no DB access.
@@ -60,6 +63,18 @@ export function buildProjection(
   const debtMap = new Map<number, number>()
   for (const [id, state] of stateMap) {
     debtMap.set(id, state.debt)
+  }
+
+  if (config.rate_shock_bps) {
+    for (const state of stateMap.values()) {
+      state.monthly_mortgage *= (1 + config.rate_shock_bps / 10000)
+      state.mortgage_rate    += config.rate_shock_bps / 100
+    }
+  }
+  if (config.rent_shock_pct) {
+    for (const state of stateMap.values()) {
+      state.monthly_rent *= (1 + config.rent_shock_pct / 100)
+    }
   }
 
   const assumptions = JSON.parse(config.assumptions_json ?? '{}')
@@ -92,7 +107,7 @@ export function buildProjection(
         case 'buy_property': {
           const depositPct = params.deposit_percent ?? 25
           const price = params.purchase_price ?? 0
-          const rate = params.mortgage_rate ?? 5.5
+          const rate = (params.mortgage_rate ?? 5.5) + (config.rate_shock_bps ?? 0) / 100
           const termYears = params.mortgage_term_years ?? 25
           const debt = price * (1 - depositPct / 100)
           const isIO = params.interest_only ?? false
@@ -132,7 +147,7 @@ export function buildProjection(
           const state = propId ? stateMap.get(propId) : null
           if (state && propId != null) {
             const currentDebt = debtMap.get(propId) ?? 0
-            const newRate    = params.new_rate ?? state.mortgage_rate
+            const newRate    = (params.new_rate ?? state.mortgage_rate) + (config.rate_shock_bps ?? 0) / 100
             const newTermYrs = params.new_term_years ?? 25
             const isIO       = !!(params.interest_only)
             const newDebt    = params.new_balance != null ? params.new_balance : currentDebt
@@ -218,6 +233,8 @@ export function buildProjection(
     let totalValue = 0
     let totalDebt = 0
     let monthlyCashflow = 0
+    let totalRent = 0
+    let totalMortgage = 0
 
     for (const [propId, state] of stateMap) {
       const growthFactor = Math.pow(1 + growthRate / 100, i / 12)
@@ -241,10 +258,13 @@ export function buildProjection(
       const inflationFactor = Math.pow(1 + inflationRate / 100, i / 12)
       const expenses = state.monthly_other_expenses * inflationFactor
       monthlyCashflow += rent - state.monthly_mortgage - expenses
+      totalRent     += rent
+      totalMortgage += state.monthly_mortgage
     }
 
     cumulativeCashflow += monthlyCashflow
     const equity = totalValue - totalDebt
+    const dscr = totalMortgage > 0 ? Math.round((totalRent / totalMortgage) * 100) / 100 : 0
 
     snapshots.push({
       date: yearMonth,
@@ -254,11 +274,13 @@ export function buildProjection(
       monthly_cashflow: Math.round(monthlyCashflow),
       cumulative_cashflow: Math.round(cumulativeCashflow),
       property_count: stateMap.size,
+      monthly_dscr: dscr,
     })
   }
 
   const first = snapshots[0]
   const last = snapshots[snapshots.length - 1]
+  const nonZeroDscr = snapshots.filter(s => s.monthly_dscr > 0)
 
   return {
     months: snapshots,
@@ -273,6 +295,10 @@ export function buildProjection(
       avg_monthly_cashflow: snapshots.length > 0
         ? Math.round(snapshots.reduce((s, m) => s + m.monthly_cashflow, 0) / snapshots.length)
         : 0,
+      min_dscr: nonZeroDscr.length > 0
+        ? Math.round(Math.min(...nonZeroDscr.map(s => s.monthly_dscr)) * 100) / 100
+        : 0,
+      months_below_dscr: snapshots.filter(s => s.monthly_dscr > 0 && s.monthly_dscr < 1.25).length,
     },
   }
 }

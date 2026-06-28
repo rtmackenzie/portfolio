@@ -277,6 +277,8 @@ export interface ScenarioResults {
     equity_growth_pct: number
     total_cashflow: number
     avg_monthly_cashflow: number
+    min_dscr: number
+    months_below_dscr: number
   }
 }
 
@@ -289,6 +291,7 @@ export interface MonthSnapshot {
   monthly_cashflow: number
   cumulative_cashflow: number
   property_count: number
+  monthly_dscr: number
 }
 
 export interface DashboardKPIs {
