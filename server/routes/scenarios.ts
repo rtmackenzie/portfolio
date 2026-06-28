@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { queryAll, queryOne, execute } from '../db/database.ts'
+import { queryAll, queryOne, execute, transaction } from '../db/database.ts'
 import { runScenario } from '../services/scenarioEngine.ts'
 
 const router = Router()
@@ -60,6 +60,38 @@ router.delete('/:id', (req, res) => {
   try {
     execute('DELETE FROM scenarios WHERE id=?', [Number(req.params.id)])
     res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ message: String(err) })
+  }
+})
+
+router.post('/:id/duplicate', (req, res) => {
+  try {
+    const srcId = Number(req.params.id)
+    const src = queryOne<{ name: string; description: string | null; base_date: string; projection_years: number; assumptions_json: string | null }>(
+      'SELECT name, description, base_date, projection_years, assumptions_json FROM scenarios WHERE id=?', [srcId]
+    )
+    if (!src) return res.status(404).json({ message: 'Not found' })
+
+    const srcEvents = queryAll<{ event_type: string; property_id: number | null; date: string; parameters_json: string; sort_order: number }>(
+      'SELECT event_type, property_id, date, parameters_json, sort_order FROM scenario_events WHERE scenario_id=? ORDER BY sort_order', [srcId]
+    )
+
+    let newId = 0
+    transaction(() => {
+      const result = execute(
+        'INSERT INTO scenarios (name, description, base_date, projection_years, assumptions_json) VALUES (?, ?, ?, ?, ?)',
+        [`${src.name} (copy)`, src.description, src.base_date, src.projection_years, src.assumptions_json]
+      )
+      newId = Number(result.lastInsertRowid)
+      for (const ev of srcEvents) {
+        execute(
+          'INSERT INTO scenario_events (scenario_id, event_type, property_id, date, parameters_json, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
+          [newId, ev.event_type, ev.property_id, ev.date, ev.parameters_json, ev.sort_order]
+        )
+      }
+    })
+    res.status(201).json(queryOne('SELECT * FROM scenarios WHERE id=?', [newId]))
   } catch (err) {
     res.status(500).json({ message: String(err) })
   }

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Play, X, Trash2, Pencil } from 'lucide-react'
+import { Plus, Play, X, Trash2, Pencil, Copy } from 'lucide-react'
 import { api } from '@/services/api'
 import { PageLoader } from '@/components/shared/LoadingSpinner'
 import { ScenarioAreaChart, CHART_COLORS } from '@/components/charts'
@@ -59,6 +59,11 @@ export default function Scenarios() {
   const deleteScenario = useMutation({
     mutationFn: (id: number) => api.delete(`/scenarios/${id}`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['scenarios'] }); setSelectedId(null) },
+  })
+
+  const duplicateScenario = useMutation({
+    mutationFn: (id: number) => api.post<Scenario>(`/scenarios/${id}/duplicate`, {}),
+    onSuccess: (s) => { qc.invalidateQueries({ queryKey: ['scenarios'] }); setSelectedId(s.id) },
   })
 
   const calculate = useMutation({
@@ -132,6 +137,9 @@ export default function Scenarios() {
                     </button>
                     <button onClick={() => setShowEdit(true)} title="Edit scenario" className="px-3 py-1.5 border border-border rounded-md text-xs text-muted-foreground hover:bg-accent">
                       <Pencil size={12} />
+                    </button>
+                    <button onClick={() => duplicateScenario.mutate(selected.id)} disabled={duplicateScenario.isPending} title="Duplicate scenario" className="px-3 py-1.5 border border-border rounded-md text-xs text-muted-foreground hover:bg-accent disabled:opacity-50">
+                      <Copy size={12} />
                     </button>
                     <button onClick={() => deleteScenario.mutate(selected.id)} className="px-3 py-1.5 border border-red-500/40 text-red-400 rounded-md text-xs hover:bg-red-500/10">
                       <Trash2 size={12} />
