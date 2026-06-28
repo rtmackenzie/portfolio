@@ -128,10 +128,24 @@ export function buildProjection(
           break
         }
         case 'remortgage': {
-          const state = ev.property_id ? stateMap.get(ev.property_id) : null
-          if (state) {
-            // TODO: Phase 2 — extend to accept new_rate / new_balance for equity-release refi
-            state.monthly_mortgage = params.new_monthly_payment ?? state.monthly_mortgage
+          const propId = ev.property_id
+          const state = propId ? stateMap.get(propId) : null
+          if (state && propId != null) {
+            const currentDebt = debtMap.get(propId) ?? 0
+            const newRate    = params.new_rate ?? state.mortgage_rate
+            const newTermYrs = params.new_term_years ?? 25
+            const isIO       = !!(params.interest_only)
+            const newDebt    = params.new_balance != null ? params.new_balance : currentDebt
+
+            if (newDebt > currentDebt) {
+              cumulativeCashflow += newDebt - currentDebt
+            }
+            cumulativeCashflow -= params.arrangement_fee ?? 0
+
+            state.monthly_mortgage = calcMonthlyPayment(newDebt, newRate, isIO ? 0 : newTermYrs * 12)
+            state.mortgage_rate    = newRate
+            state.is_interest_only = isIO
+            debtMap.set(propId, newDebt)
           }
           break
         }

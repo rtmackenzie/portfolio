@@ -6,7 +6,7 @@ import { PageLoader } from '@/components/shared/LoadingSpinner'
 import { ScenarioAreaChart, CHART_COLORS } from '@/components/charts'
 import { formatCurrency, formatPercent } from '@/utils/currency'
 import { formatDate } from '@/utils/dates'
-import { calcTransactionCosts } from '@/utils/calculations'
+import { calcTransactionCosts, calcMonthlyMortgage } from '@/utils/calculations'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -444,8 +444,39 @@ function EventModal({ scenarioId, event, onClose }: { scenarioId: number; event?
           </div>
         )
       }
-      case 'remortgage':
-        return numField('new_monthly_payment', 'New Monthly Payment (£)', '600')
+      case 'remortgage': {
+        const isIO = params.interest_only
+        const previewRate = Number(params.new_rate) || 0
+        const previewDebt = Number(params.new_balance) || 0
+        const previewTerm = Number(params.new_term_years) || 25
+        const previewPayment = previewRate && previewDebt
+          ? calcMonthlyMortgage(previewDebt, previewRate, isIO ? 0 : previewTerm * 12)
+          : null
+        return (
+          <div className="grid grid-cols-2 gap-3">
+            {numField('new_rate', 'New Interest Rate (%)', '4.5')}
+            {numField('new_term_years', 'New Term (years)', '25')}
+            {numField('new_balance', 'New Loan Amount (£)')}
+            {numField('arrangement_fee', 'Arrangement Fee (£)', '0')}
+            <div className="col-span-2">
+              <label className={labelCls}>Mortgage Type</label>
+              <select
+                value={String(params.interest_only ?? 0)}
+                onChange={e => setParam('interest_only', e.target.value)}
+                className={inputCls}
+              >
+                <option value="0">Repayment</option>
+                <option value="1">Interest Only</option>
+              </select>
+            </div>
+            {previewPayment != null && (
+              <div className="col-span-2 rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                Estimated new payment: <strong className="text-foreground">{formatCurrency(previewPayment)}/mo</strong>
+              </div>
+            )}
+          </div>
+        )
+      }
       case 'rent_change':
         return (
           <div className="grid grid-cols-2 gap-3">

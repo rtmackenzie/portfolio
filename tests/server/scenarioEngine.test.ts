@@ -353,20 +353,74 @@ describe('buildProjection — interest_rate_change event', () => {
 })
 
 describe('buildProjection — remortgage event', () => {
-  it('replaces monthly_mortgage with new payment', () => {
-    const state = makeState({ id: 1, monthly_rent: 0, monthly_mortgage: 600, monthly_other_expenses: 0 })
+  it('resets monthly payment from new rate and term', () => {
+    // £120k at 5% over 25y → calcMonthlyPayment(120000, 5, 300) ≈ £701/mo
+    const state = makeState({ id: 1, monthly_rent: 0, monthly_mortgage: 500, monthly_other_expenses: 0 })
     const { months } = buildProjection(
       makeMap(state),
       [makeEvent({
         event_type: 'remortgage',
         date: '2026-06-01',
         property_id: 1,
-        parameters_json: JSON.stringify({ new_monthly_payment: 450 }),
+        parameters_json: JSON.stringify({ new_rate: 5, new_term_years: 25, new_balance: 120000 }),
       })],
       BASE_CONFIG
     )
-    expect(months[4].monthly_cashflow).toBe(-600)
-    expect(months[5].monthly_cashflow).toBe(-450)
+    expect(months[4].monthly_cashflow).toBe(-500)
+    expect(months[5].monthly_cashflow).toBeLessThan(-690)
+    expect(months[5].monthly_cashflow).toBeGreaterThan(-720)
+  })
+
+  it('equity release adds cash-out to cumulative cashflow', () => {
+    // Debt £100k (via state.debt), refinance to £130k → £30k equity released in month 0
+    const state = makeState({ id: 1, debt: 100000, monthly_rent: 0, monthly_mortgage: 500, monthly_other_expenses: 0 })
+    const { months } = buildProjection(
+      makeMap(state),
+      [makeEvent({
+        event_type: 'remortgage',
+        date: '2026-01-01',
+        property_id: 1,
+        parameters_json: JSON.stringify({ new_rate: 5, new_term_years: 25, new_balance: 130000 }),
+      })],
+      BASE_CONFIG
+    )
+    expect(months[0].cumulative_cashflow).toBeGreaterThan(20000)
+  })
+
+  it('arrangement_fee is deducted from cumulative cashflow', () => {
+    const state = makeState({ id: 1, monthly_rent: 0, monthly_mortgage: 500, monthly_other_expenses: 0 })
+    const noFee = buildProjection(
+      makeMap(state),
+      [makeEvent({
+        event_type: 'remortgage', date: '2026-06-01', property_id: 1,
+        parameters_json: JSON.stringify({ new_rate: 5, new_term_years: 25, new_balance: 120000 }),
+      })],
+      BASE_CONFIG
+    )
+    const withFee = buildProjection(
+      makeMap(state),
+      [makeEvent({
+        event_type: 'remortgage', date: '2026-06-01', property_id: 1,
+        parameters_json: JSON.stringify({ new_rate: 5, new_term_years: 25, new_balance: 120000, arrangement_fee: 1500 }),
+      })],
+      BASE_CONFIG
+    )
+    expect(withFee.months[5].cumulative_cashflow).toBe(noFee.months[5].cumulative_cashflow - 1500)
+  })
+
+  it('interest-only refinance does not reduce debt', () => {
+    const state = makeState({ id: 1, debt: 120000 })
+    const { months } = buildProjection(
+      makeMap(state),
+      [makeEvent({
+        event_type: 'remortgage',
+        date: '2026-01-01',
+        property_id: 1,
+        parameters_json: JSON.stringify({ new_rate: 5, new_term_years: 25, new_balance: 120000, interest_only: 1 }),
+      })],
+      BASE_CONFIG
+    )
+    expect(months[11].total_debt).toBe(months[0].total_debt)
   })
 })
 
