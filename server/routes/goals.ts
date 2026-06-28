@@ -3,6 +3,7 @@ import { queryAll, queryOne, execute, transaction } from '../db/database.ts'
 import { logActivity } from '../services/activityLogger.ts'
 import { loadPortfolioState } from '../services/scenarioEngine.ts'
 import { generatePathways, rankPathways, type PropertyAssumptions, type RankablePathway } from '../services/pathwayGenerator.ts'
+import { loadTaxSettings } from '../services/settings.ts'
 
 const router = Router()
 
@@ -151,7 +152,8 @@ router.post('/:id/pathways/generate', (req, res) => {
       initialState,
       assumptions,
       projectionYears,
-      activeMortgageCount
+      activeMortgageCount,
+      loadTaxSettings()
     )
 
     const created = transaction(() => {

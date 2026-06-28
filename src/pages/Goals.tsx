@@ -440,9 +440,9 @@ function PathwaysPanel({ goal }: { goal: Goal }) {
                     <div className="font-medium">{formatCurrency(pw.summary.end_equity)}</div>
                   </div>
                   <div>
-                    <Tip className="text-muted-foreground" text="Net monthly cashflow in the final month — the steady-state income once the portfolio is fully built.">Ending CF/mo</Tip>
-                    <div className={`font-medium ${(pw.summary.ending_monthly_cashflow ?? 0) >= 0 ? '' : 'text-red-400'}`}>
-                      {formatCurrency(pw.summary.ending_monthly_cashflow ?? 0)}
+                    <Tip className="text-muted-foreground" text="Post-tax net monthly cashflow in the final month — the steady-state spendable income the goal solver judges income goals against. Uses your global Tax settings.">Ending CF/mo (post-tax)</Tip>
+                    <div className={`font-medium ${(pw.summary.ending_monthly_cashflow_posttax ?? pw.summary.ending_monthly_cashflow ?? 0) >= 0 ? '' : 'text-red-400'}`}>
+                      {formatCurrency(pw.summary.ending_monthly_cashflow_posttax ?? pw.summary.ending_monthly_cashflow ?? 0)}
                     </div>
                   </div>
                   <div>

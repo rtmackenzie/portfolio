@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { buildProjection, type PropertyState, type ScenarioEvent } from '../../server/services/scenarioEngine.ts'
 import { calcMonthlyPayment, calcTransactionCosts } from '../../server/services/calculations.ts'
+import { DEFAULT_TAX_SETTINGS } from '../../server/services/tax.ts'
+
+const TAX_PERSONAL = { ...DEFAULT_TAX_SETTINGS, ownership: 'personal' as const, personal_marginal_rate_pct: 40, s24_credit_rate_pct: 20 }
 
 // Helpers
 function makeState(overrides: Partial<PropertyState> = {}): PropertyState {
@@ -14,6 +17,7 @@ function makeState(overrides: Partial<PropertyState> = {}): PropertyState {
     is_vacant: false,
     mortgage_rate: 5.5,
     is_interest_only: false,
+    purchase_price: 180000,
     ...overrides,
   }
 }
@@ -205,6 +209,49 @@ describe('buildProjection — true cash model', () => {
     )
     // The £120k capital outflow lands in the payoff month — a clean step down from the prior month
     expect(months[5].cumulative_cashflow - months[4].cumulative_cashflow).toBe(-120000)
+  })
+})
+
+// ─── Post-tax cashflow (C4) ───────────────────────────────────────────────────
+
+describe('buildProjection — post-tax cashflow', () => {
+  it('post-tax equals pre-tax when no tax settings are supplied', () => {
+    const state = makeState({ monthly_rent: 1000, monthly_mortgage: 500, monthly_other_expenses: 100 })
+    const { months } = buildProjection(makeMap(state), [], BASE_CONFIG)
+    expect(months[0].monthly_cashflow_posttax).toBe(months[0].monthly_cashflow)
+    expect(months[0].cumulative_cashflow_posttax).toBe(months[0].cumulative_cashflow)
+    expect(months[0].monthly_tax).toBe(0)
+  })
+
+  it('applies S24 income tax: profit×40% − interest×20%', () => {
+    // debt 120k @5.5% → interest = 120000*0.055/12 = 550
+    // profit (excl interest) = rent 1000 − expenses 100 = 900
+    // tax = 900*0.4 − min(550,900)*0.2 = 360 − 110 = 250
+    const state = makeState({ monthly_rent: 1000, monthly_mortgage: 500, monthly_other_expenses: 100, debt: 120000, mortgage_rate: 5.5, is_interest_only: true })
+    const { months } = buildProjection(makeMap(state), [], { ...BASE_CONFIG, tax: TAX_PERSONAL })
+    expect(months[0].monthly_tax).toBe(250)
+    expect(months[0].monthly_cashflow_posttax).toBe(months[0].monthly_cashflow - 250)
+    expect(months[0].monthly_cashflow_posttax).toBeLessThan(months[0].monthly_cashflow)
+  })
+
+  it('sell_property realises net proceeds to cash; CGT reduces the post-tax line', () => {
+    // value 200k, basis 150k, no growth, sell at base month
+    const state = makeState({ value: 200000, purchase_price: 150000, debt: 120000, monthly_rent: 0, monthly_mortgage: 0, monthly_other_expenses: 0 })
+    const cfg = {
+      base_date: '2026-01-01', projection_years: 1,
+      assumptions_json: JSON.stringify({ void_months_per_year: 0, expense_inflation_pct: 0, rent_growth_pct: 0, property_growth_pct: 0 }),
+      tax: TAX_PERSONAL,
+    }
+    const { months } = buildProjection(
+      makeMap(state),
+      [makeEvent({ event_type: 'sell_property', date: '2026-01-01', property_id: 1, parameters_json: '{}' })],
+      cfg
+    )
+    // proceeds: 200k − 2% costs (4k) − 120k debt = 76k realised into cash
+    expect(months[0].cumulative_cashflow).toBe(76000)
+    expect(months[0].property_count).toBe(0)
+    // CGT: (gain 46k − 3k exempt) * 24% = 10,320 → post-tax lower
+    expect(months[0].cumulative_cashflow - months[0].cumulative_cashflow_posttax).toBe(10320)
   })
 })
 

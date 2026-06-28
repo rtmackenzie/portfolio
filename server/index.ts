@@ -14,6 +14,7 @@ import acquisitionsRouter from './routes/acquisitions.ts'
 import scenariosRouter from './routes/scenarios.ts'
 import reportsRouter from './routes/reports.ts'
 import goalsRouter from './routes/goals.ts'
+import settingsRouter from './routes/settings.ts'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -36,6 +37,7 @@ app.use('/api/acquisitions', acquisitionsRouter)
 app.use('/api/scenarios', scenariosRouter)
 app.use('/api/reports', reportsRouter)
 app.use('/api/goals', goalsRouter)
+app.use('/api/settings', settingsRouter)
 
 if (!isDev) {
   const distPath = join(__dirname, '..', 'dist')

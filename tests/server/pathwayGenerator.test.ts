@@ -7,6 +7,9 @@ import {
   type RankablePathway,
 } from '../../server/services/pathwayGenerator.ts'
 import type { PropertyState } from '../../server/services/scenarioEngine.ts'
+import { DEFAULT_TAX_SETTINGS } from '../../server/services/tax.ts'
+
+const TAX_PERSONAL = { ...DEFAULT_TAX_SETTINGS, ownership: 'personal' as const, personal_marginal_rate_pct: 40 }
 
 // ─── C3 test helpers ────────────────────────────────────────────────────────────
 
@@ -46,6 +49,7 @@ function startingPortfolio(): Map<number, PropertyState> {
     is_vacant: false,
     mortgage_rate: 5.5,
     is_interest_only: false,
+    purchase_price: 150000,
   }]])
 }
 
@@ -67,6 +71,33 @@ function buyCount(events: { event_type: string }[]): number {
 function firstBuyDate(events: { event_type: string; date: string }[]): string | undefined {
   return events.filter(e => e.event_type === 'buy_property').map(e => e.date).sort()[0]
 }
+
+describe('generatePathways — goal solver uses post-tax cashflow', () => {
+  const incomeGoal = {
+    goal_type: 'income' as const,
+    target_monthly_income: 1500,
+    director_loan_annual: 60000,
+  }
+
+  it('an income goal is reached no sooner once tax is applied', () => {
+    const untaxed = generatePathways(incomeGoal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const taxed = generatePathways(incomeGoal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1, TAX_PERSONAL)
+
+    const pick = (ps: ReturnType<typeof generatePathways>) =>
+      ps.find(p => p.template_name === 'accelerated_growth')!
+    const u = pick(untaxed).months_to_goal ?? Infinity
+    const t = pick(taxed).months_to_goal ?? Infinity
+    expect(t).toBeGreaterThanOrEqual(u)
+  })
+
+  it('post-tax ending cashflow is below pre-tax under personal tax', () => {
+    const taxed = generatePathways(incomeGoal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1, TAX_PERSONAL)
+    const p = taxed.find(x => x.template_name === 'steady_growth')!
+    expect(p.results.summary.ending_monthly_cashflow_posttax)
+      .toBeLessThan(p.results.summary.ending_monthly_cashflow)
+    expect(p.results.summary.total_tax_paid).toBeGreaterThan(0)
+  })
+})
 
 describe('generatePathways — director loans drive the schedule', () => {
   const baseGoal = {

@@ -1,5 +1,7 @@
 import { queryAll } from '../db/database.ts'
 import { calcMonthlyPayment, calcTransactionCosts } from './calculations.ts'
+import { incomeTaxForMonth, disposalTax, type TaxSettings } from './tax.ts'
+import { loadTaxSettings } from './settings.ts'
 
 interface ScenarioConfig {
   base_date: string
@@ -8,6 +10,7 @@ interface ScenarioConfig {
   rate_shock_bps?: number
   rent_shock_pct?: number
   propertyLabels?: Record<number, string>
+  tax?: TaxSettings   // global tax settings; when absent, post-tax == pre-tax
 }
 
 export interface ScenarioEvent {
@@ -27,6 +30,7 @@ export interface PropertyState {
   is_vacant: boolean
   mortgage_rate: number      // annual %, 0 = no mortgage
   is_interest_only: boolean  // if true, principal is never reduced
+  purchase_price: number     // cost basis for CGT on disposal
 }
 
 interface MonthSnapshot {
@@ -36,6 +40,9 @@ interface MonthSnapshot {
   total_equity: number
   monthly_cashflow: number
   cumulative_cashflow: number
+  monthly_cashflow_posttax: number
+  cumulative_cashflow_posttax: number
+  monthly_tax: number
   property_count: number
   monthly_dscr: number
 }
@@ -96,7 +103,9 @@ export function buildProjection(
 
   const snapshots: MonthSnapshot[] = []
   let cumulativeCashflow = 0
+  let taxCumulative = 0   // running income tax + CGT (post-tax = pre-tax − this)
   let nextId = Math.max(...Array.from(stateMap.keys()), 0) + 1
+  const tax = config.tax
 
   // Use UTC-safe arithmetic to avoid DST/timezone shifts corrupting month keys
   const baseDate = new Date(config.base_date)
@@ -136,6 +145,7 @@ export function buildProjection(
             is_vacant: false,
             mortgage_rate: rate,
             is_interest_only: isIO,
+            purchase_price: price,
           })
           debtMap.set(newId, debt)
           propLabels.set(newId, params.address ?? `New Property ${newId}`)
@@ -153,9 +163,23 @@ export function buildProjection(
           break
         }
         case 'sell_property': {
-          if (ev.property_id) {
-            stateMap.delete(ev.property_id)
-            debtMap.delete(ev.property_id)
+          const sellId = ev.property_id
+          const state = sellId ? stateMap.get(sellId) : null
+          if (state && sellId != null) {
+            const growthFactor = Math.pow(1 + growthRate / 100, i / 12)
+            const saleValue = params.sale_price ?? state.value * growthFactor
+            const currentDebt = debtMap.get(sellId) ?? 0
+            const t = tax ?? { ownership: 'personal' as const, personal_marginal_rate_pct: 0, s24_credit_rate_pct: 0, corp_tax_rate_pct: 0, cgt_rate_pct: 0, cgt_annual_exempt: 0, selling_costs_pct: 0 }
+            const { cgt, netProceedsPreTax } = disposalTax(t, {
+              saleValue,
+              costBasis: state.purchase_price,
+              sellingCosts: params.selling_costs,
+            })
+            // Sale realises equity: net of selling costs and debt repayment into cash.
+            cumulativeCashflow += netProceedsPreTax - currentDebt
+            taxCumulative += cgt
+            stateMap.delete(sellId)
+            debtMap.delete(sellId)
           }
           break
         }
@@ -254,6 +278,8 @@ export function buildProjection(
     let monthlyCashflow = 0
     let totalRent = 0
     let totalMortgage = 0
+    let totalExpenses = 0
+    let totalInterest = 0
 
     for (const [propId, state] of stateMap) {
       const growthFactor = Math.pow(1 + growthRate / 100, i / 12)
@@ -262,10 +288,12 @@ export function buildProjection(
       // Iterative amortisation: subtract principal portion of payment from running balance.
       // Interest-only and no-mortgage properties keep their balance constant.
       let currentDebt = debtMap.get(propId) ?? 0
+      // Interest portion of this month's payment (for tax — principal is not deductible).
+      const monthlyInterest = (currentDebt > 0 && state.mortgage_rate > 0)
+        ? currentDebt * (state.mortgage_rate / 100 / 12)
+        : 0
       if (currentDebt > 0 && !state.is_interest_only && state.mortgage_rate > 0) {
-        const monthlyRate = state.mortgage_rate / 100 / 12
-        const interest = currentDebt * monthlyRate
-        const principal = Math.max(0, state.monthly_mortgage - interest)
+        const principal = Math.max(0, state.monthly_mortgage - monthlyInterest)
         currentDebt = Math.max(0, currentDebt - principal)
         debtMap.set(propId, currentDebt)
       }
@@ -281,6 +309,8 @@ export function buildProjection(
       monthlyCashflow += propCashflow
       totalRent     += rent
       totalMortgage += state.monthly_mortgage
+      totalExpenses += expenses
+      totalInterest += monthlyInterest
 
       const prevCum = propCumCashflow.get(propId) ?? 0
       const newCum = prevCum + propCashflow
@@ -296,6 +326,9 @@ export function buildProjection(
     }
 
     cumulativeCashflow += monthlyCashflow
+    // Income tax on this month's portfolio profit (0 when no tax settings supplied).
+    const monthlyTax = tax ? incomeTaxForMonth(tax, { rent: totalRent, expenses: totalExpenses, interest: totalInterest }) : 0
+    taxCumulative += monthlyTax
     const equity = totalValue - totalDebt
     const dscr = totalMortgage > 0 ? Math.round((totalRent / totalMortgage) * 100) / 100 : 0
 
@@ -306,6 +339,9 @@ export function buildProjection(
       total_equity: Math.round(equity),
       monthly_cashflow: Math.round(monthlyCashflow),
       cumulative_cashflow: Math.round(cumulativeCashflow),
+      monthly_cashflow_posttax: Math.round(monthlyCashflow - monthlyTax),
+      cumulative_cashflow_posttax: Math.round(cumulativeCashflow - taxCumulative),
+      monthly_tax: Math.round(monthlyTax),
       property_count: stateMap.size,
       monthly_dscr: dscr,
     })
@@ -336,12 +372,21 @@ export function buildProjection(
         ? Math.round(snapshots.reduce((s, m) => s + m.monthly_cashflow, 0) / snapshots.length)
         : 0,
       ending_monthly_cashflow: last?.monthly_cashflow ?? 0,
+      total_cashflow_posttax: last?.cumulative_cashflow_posttax ?? 0,
+      avg_monthly_cashflow_posttax: snapshots.length > 0
+        ? Math.round(snapshots.reduce((s, m) => s + m.monthly_cashflow_posttax, 0) / snapshots.length)
+        : 0,
+      ending_monthly_cashflow_posttax: last?.monthly_cashflow_posttax ?? 0,
+      total_tax_paid: Math.round(taxCumulative),
       min_dscr: nonZeroDscr.length > 0
         ? Math.round(Math.min(...nonZeroDscr.map(s => s.monthly_dscr)) * 100) / 100
         : 0,
       months_below_dscr: snapshots.filter(s => s.monthly_dscr > 0 && s.monthly_dscr < 1.25).length,
       min_cumulative_cashflow: snapshots.length > 0
         ? Math.min(...snapshots.map(s => s.cumulative_cashflow))
+        : 0,
+      min_cumulative_cashflow_posttax: snapshots.length > 0
+        ? Math.min(...snapshots.map(s => s.cumulative_cashflow_posttax))
         : 0,
     },
   }
@@ -411,6 +456,7 @@ export function loadPortfolioState(): {
       is_vacant: !tenant,
       mortgage_rate: primaryMortgage?.interest_rate ?? 0,
       is_interest_only: primaryMortgage?.type === 'interest_only',
+      purchase_price: p.purchase_price ?? p.current_value ?? 0,
     })
   }
 
@@ -424,5 +470,6 @@ export function loadPortfolioState(): {
 
 export function runScenario(scenario: ScenarioConfig, events: ScenarioEvent[]) {
   const { initialState, propertyLabels } = loadPortfolioState()
-  return buildProjection(initialState, events, { ...scenario, propertyLabels })
+  const tax = scenario.tax ?? loadTaxSettings()
+  return buildProjection(initialState, events, { ...scenario, propertyLabels, tax })
 }

@@ -1,5 +1,6 @@
 import { buildProjection, type PropertyState, type ScenarioEvent } from './scenarioEngine.ts'
 import { calcTransactionCosts } from './calculations.ts'
+import { type TaxSettings } from './tax.ts'
 
 type GoalType = 'income' | 'count' | 'net_worth' | 'mortgage_free' | 'retirement_date'
 
@@ -32,6 +33,9 @@ type MonthSnapshot = {
   total_equity: number
   monthly_cashflow: number
   cumulative_cashflow: number
+  monthly_cashflow_posttax: number
+  cumulative_cashflow_posttax: number
+  monthly_tax: number
   property_count: number
   monthly_dscr: number
 }
@@ -62,9 +66,14 @@ type ProjectionResult = {
     total_cashflow: number
     avg_monthly_cashflow: number
     ending_monthly_cashflow: number
+    total_cashflow_posttax: number
+    avg_monthly_cashflow_posttax: number
+    ending_monthly_cashflow_posttax: number
+    total_tax_paid: number
     min_dscr: number
     months_below_dscr: number
     min_cumulative_cashflow: number
+    min_cumulative_cashflow_posttax: number
   }
 }
 
@@ -158,10 +167,11 @@ function buildCashGatedEvents(
   projYears: number,
   a: PropertyAssumptions,
   initialState: Map<number, PropertyState>,
-  loanEvents: ScenarioEvent[]
+  loanEvents: ScenarioEvent[],
+  tax?: TaxSettings
 ): ScenarioEvent[] {
   const totalMonths = projYears * 12
-  const config = { base_date: baseDate, projection_years: projYears }
+  const config = { base_date: baseDate, projection_years: projYears, tax }
   const buyCost = depositPlusCosts(a)
   const monthlyExp = a.monthly_expenses ?? 200
   const buffer = strategy === 'steady' ? monthlyExp * 6 : 0  // steady keeps a reserve
@@ -178,7 +188,8 @@ function buildCashGatedEvents(
     let decidedMonth = -1
 
     for (let i = lastMonth; i < proj.months.length && i < totalMonths; i++) {
-      const cash = proj.months[i].cumulative_cashflow
+      // Gate on post-tax cash — taxes genuinely reduce deposit capital.
+      const cash = proj.months[i].cumulative_cashflow_posttax ?? proj.months[i].cumulative_cashflow
 
       if (strategy === 'recycler') {
         const balances = activeBalancesAt(proj, i)
@@ -236,7 +247,9 @@ function checkConstraints(months: MonthSnapshot[], goal: Goal): boolean {
       if (m.monthly_dscr < goal.min_dscr) return false
     }
     if (goal.min_annual_cashflow != null) {
-      if (m.monthly_cashflow * 12 < goal.min_annual_cashflow) return false
+      // Post-tax: the cash actually available to the investor.
+      const postTaxMonthly = m.monthly_cashflow_posttax ?? m.monthly_cashflow
+      if (postTaxMonthly * 12 < goal.min_annual_cashflow) return false
     }
   }
   return true
@@ -247,10 +260,12 @@ function checkConstraints(months: MonthSnapshot[], goal: Goal): boolean {
 function checkGoalReached(months: MonthSnapshot[], goal: Goal): { reached: boolean; monthIndex: number | null } {
   for (let i = 0; i < months.length; i++) {
     const m = months[i]
+    // Income/retirement goals judged on post-tax cash — the real FI number.
+    const postTaxMonthly = m.monthly_cashflow_posttax ?? m.monthly_cashflow
     let hit = false
     switch (goal.goal_type) {
       case 'income':
-        hit = goal.target_monthly_income != null && m.monthly_cashflow >= goal.target_monthly_income
+        hit = goal.target_monthly_income != null && postTaxMonthly >= goal.target_monthly_income
         break
       case 'count':
         hit = goal.target_property_count != null && m.property_count >= goal.target_property_count
@@ -263,7 +278,7 @@ function checkGoalReached(months: MonthSnapshot[], goal: Goal): { reached: boole
           (goal.target_date == null || m.date.slice(0, 7) <= goal.target_date.slice(0, 7))
         break
       case 'retirement_date':
-        hit = m.monthly_cashflow >= 0 &&
+        hit = postTaxMonthly >= 0 &&
           (goal.target_date == null || m.date.slice(0, 7) <= goal.target_date.slice(0, 7))
         break
     }
@@ -374,13 +389,15 @@ export function generatePathways(
   initialState: Map<number, PropertyState>,
   assumptions: PropertyAssumptions,
   projectionYears: number,
-  _activeMortgageCount: number   // retained for API stability; recycler now reads live debt
+  _activeMortgageCount: number,  // retained for API stability; recycler now reads live debt
+  tax?: TaxSettings              // global tax settings → post-tax goal solving
 ): GeneratedPathway[] {
   const baseDate = new Date().toISOString().slice(0, 10)
 
   const config = {
     base_date: baseDate,
     projection_years: projectionYears,
+    tax,
   }
 
   const loanEvents = goal.director_loan_annual
@@ -395,7 +412,7 @@ export function generatePathways(
 
   return templates.map(t => {
     // Cash-gated decisions (buys/payoffs), then merge loan events for the final run
-    const decisions = buildCashGatedEvents(t.strategy, baseDate, projectionYears, assumptions, initialState, loanEvents)
+    const decisions = buildCashGatedEvents(t.strategy, baseDate, projectionYears, assumptions, initialState, loanEvents, tax)
     const allEvents = [...decisions, ...loanEvents].sort((a, b) => a.date.localeCompare(b.date))
 
     const results = buildProjection(cloneState(initialState), allEvents, config) as ProjectionResult

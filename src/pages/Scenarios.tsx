@@ -85,6 +85,7 @@ export default function Scenarios() {
   const [activeRentShock, setActiveRentShock] = useState<number | null>(null)
   const [viewMode, setViewMode]               = useState<'portfolio' | 'property'>('portfolio')
   const [propMetric, setPropMetric]           = useState<'equity' | 'cashflow' | 'cumulative'>('equity')
+  const [taxView, setTaxView]                 = useState<'pretax' | 'posttax' | 'both'>('pretax')
 
   const calculate = useMutation({
     mutationFn: (id: number) => api.post<ScenarioResults>(`/scenarios/${id}/calculate`, {}),
@@ -332,10 +333,13 @@ export default function Scenarios() {
                     ...m,
                     ...(stressResults ? { stressed_cashflow: stressResults.months[i]?.cumulative_cashflow } : {}),
                   }))
+                  const showPre = taxView === 'pretax' || taxView === 'both'
+                  const showPost = taxView === 'posttax' || taxView === 'both'
                   chartKeys = [
                     { key: 'total_equity',        name: 'Equity',              color: CHART_COLORS.success },
                     { key: 'total_debt',          name: 'Debt',                color: CHART_COLORS.danger  },
-                    { key: 'cumulative_cashflow', name: 'Cumulative Cashflow', color: CHART_COLORS.primary },
+                    ...(showPre  ? [{ key: 'cumulative_cashflow',         name: taxView === 'both' ? 'Cumulative CF (pre-tax)' : 'Cumulative Cashflow', color: CHART_COLORS.primary }] : []),
+                    ...(showPost ? [{ key: 'cumulative_cashflow_posttax', name: 'Cumulative CF (post-tax)', color: CHART_COLORS.warning, dash: taxView === 'both' }] : []),
                     ...(stressResults ? [{ key: 'stressed_cashflow', name: `Cashflow (${stressLabel})`, color: CHART_COLORS.warning, dash: true }] : []),
                   ]
                 }
@@ -356,6 +360,14 @@ export default function Scenarios() {
                           <button onClick={() => setPropMetric('equity')}     className={btnCls(propMetric === 'equity')}>Equity</button>
                           <button onClick={() => setPropMetric('cashflow')}   className={btnCls(propMetric === 'cashflow')}>Monthly CF</button>
                           <button onClick={() => setPropMetric('cumulative')} className={btnCls(propMetric === 'cumulative')}>Cumulative CF</button>
+                        </>
+                      )}
+                      {viewMode === 'portfolio' && (
+                        <>
+                          <span className="text-xs text-muted-foreground ml-2">Tax:</span>
+                          <button onClick={() => setTaxView('pretax')}  className={btnCls(taxView === 'pretax')}>Pre-tax</button>
+                          <button onClick={() => setTaxView('posttax')} className={btnCls(taxView === 'posttax')}>Post-tax</button>
+                          <button onClick={() => setTaxView('both')}    className={btnCls(taxView === 'both')}>Both</button>
                         </>
                       )}
                     </div>
@@ -411,6 +423,8 @@ export default function Scenarios() {
                         { label: 'Total Cashflow',   value: formatCurrency(results.summary.total_cashflow, true), tooltip: 'Cumulative net cashflow over the full projection period — rent received minus mortgage payments, expenses, and one-off acquisition costs.' },
                         { label: 'Avg Monthly CF',   value: formatCurrency(results.summary.avg_monthly_cashflow), tooltip: 'Average monthly net cashflow across all properties and all months in the projection. Lower than the ending figure because the early years hold fewer properties.' },
                         { label: 'Ending Monthly CF', value: formatCurrency(results.summary.ending_monthly_cashflow ?? 0), tooltip: 'Net monthly cashflow in the final month of the projection — the steady-state income once the full portfolio is built and mortgages have amortised. This is the figure to compare against an income goal. Re-run the projection if this reads £0 on an older scenario.' },
+                        { label: 'Ending CF (post-tax)', value: formatCurrency(results.summary.ending_monthly_cashflow_posttax ?? 0), tooltip: 'Final-month net monthly cashflow after income tax (S24 personal or corporation tax for Ltd), using the global Tax settings. The real spendable FI figure. Set your structure in Business Overview → Tax settings.' },
+                        { label: 'Tax paid (total)', value: formatCurrency(results.summary.total_tax_paid ?? 0, true), tooltip: 'Total income tax plus CGT paid across the whole projection. £0 means no tax settings were applied (re-run the projection after setting your tax structure).' },
                         { label: 'Min DSCR',         value: (results.summary.min_dscr ?? 0).toFixed(2), tooltip: 'Lowest Debt Service Coverage Ratio recorded in any month (total rent ÷ total mortgage payments). Below 1.25× indicates cashflow stress relative to the standard lender threshold.' },
                         { label: 'DSCR Breaches',    value: `${results.summary.months_below_dscr ?? '—'} mo`, tooltip: 'Number of months where the portfolio DSCR fell below 1.25×. A high breach count under stress scenarios suggests vulnerability to rate rises or void periods.' },
                       ].map(k => (

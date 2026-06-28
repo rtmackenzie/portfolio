@@ -276,9 +276,14 @@ export interface ScenarioSummary {
   total_cashflow: number
   avg_monthly_cashflow: number
   ending_monthly_cashflow: number
+  total_cashflow_posttax?: number
+  avg_monthly_cashflow_posttax?: number
+  ending_monthly_cashflow_posttax?: number
+  total_tax_paid?: number
   min_dscr: number
   months_below_dscr: number
   min_cumulative_cashflow: number
+  min_cumulative_cashflow_posttax?: number
 }
 
 export interface GoalPathway {
@@ -351,18 +356,17 @@ export interface PropertySeries {
 export interface ScenarioResults {
   months: MonthSnapshot[]
   property_series?: PropertySeries[]
-  summary: {
-    start_equity: number
-    end_equity: number
-    equity_growth: number
-    equity_growth_pct: number
-    total_cashflow: number
-    avg_monthly_cashflow: number
-    ending_monthly_cashflow: number
-    min_dscr: number
-    months_below_dscr: number
-    min_cumulative_cashflow: number
-  }
+  summary: ScenarioSummary
+}
+
+export interface TaxSettings {
+  ownership: 'personal' | 'ltd'
+  personal_marginal_rate_pct: number
+  s24_credit_rate_pct: number
+  corp_tax_rate_pct: number
+  cgt_rate_pct: number
+  cgt_annual_exempt: number
+  selling_costs_pct: number
 }
 
 export interface MonthSnapshot {
@@ -373,6 +377,9 @@ export interface MonthSnapshot {
   total_equity: number
   monthly_cashflow: number
   cumulative_cashflow: number
+  monthly_cashflow_posttax: number
+  cumulative_cashflow_posttax: number
+  monthly_tax: number
   property_count: number
   monthly_dscr: number
 }
