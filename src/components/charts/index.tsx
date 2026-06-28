@@ -27,7 +27,7 @@ const axisStyle = { fill: 'var(--color-muted-foreground)', fontSize: 11 }
 const gridStyle = { stroke: 'var(--color-border)', strokeDasharray: '3 3' }
 
 interface ChartData {
-  [key: string]: string | number
+  [key: string]: string | number | undefined
 }
 
 // Recharts formatter types are overly broad — cast to any avoids false TS errors
@@ -128,7 +128,7 @@ export function ScenarioAreaChart({ data, keys }: { data: ChartData[]; keys: { k
         <Tooltip contentStyle={tooltipStyle} formatter={currencyFormatter} labelFormatter={monthLabelFormatter} />
         <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: 'var(--color-muted-foreground)' }} />
         {keys.map(k => (
-          <Area key={k.key} type="monotone" dataKey={k.key} name={k.name} stroke={k.color} fill={k.dash ? 'none' : `url(#grad-${k.key})`} strokeWidth={2} strokeDasharray={k.dash ? '5 5' : undefined} allowDataOverflow />
+          <Area key={k.key} type="monotone" dataKey={k.key} name={k.name} stroke={k.color} fill={k.dash ? 'none' : `url(#grad-${k.key})`} strokeWidth={2} strokeDasharray={k.dash ? '5 5' : undefined} />
         ))}
       </ReAreaChart>
     </ResponsiveContainer>

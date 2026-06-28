@@ -7,7 +7,7 @@ import { ScenarioAreaChart, CHART_COLORS } from '@/components/charts'
 import { formatCurrency, formatPercent } from '@/utils/currency'
 import { formatDate } from '@/utils/dates'
 import { calcTransactionCosts, calcMonthlyMortgage } from '@/utils/calculations'
-import { useForm } from 'react-hook-form'
+import { useForm, type UseFormRegister } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import type { Scenario, ScenarioResults } from '@/types'
@@ -22,6 +22,8 @@ const scenarioSchema = z.object({
   expense_inflation_pct: z.coerce.number().min(0).max(20),
   void_months_per_year: z.coerce.number().min(0).max(12),
 })
+
+type ScenarioFormValues = z.infer<typeof scenarioSchema>
 
 const inputCls = 'w-full px-3 py-2 rounded-md bg-input border border-border text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary'
 const labelCls = 'block text-xs font-medium text-muted-foreground mb-1'
@@ -277,7 +279,7 @@ export default function Scenarios() {
                 ].filter(Boolean).join(', ')
 
                 const PROP_COLORS = Object.values(CHART_COLORS)
-                let chartData: Record<string, string | number>[]
+                let chartData: Record<string, string | number | undefined>[]
                 let chartKeys: { key: string; name: string; color: string; dash?: boolean }[]
 
                 if (viewMode === 'property' && results.property_series?.length) {
@@ -441,7 +443,7 @@ export default function Scenarios() {
   )
 }
 
-function AssumptionsFields({ register }: { register: ReturnType<typeof useForm>['register'] }) {
+function AssumptionsFields({ register }: { register: UseFormRegister<ScenarioFormValues> }) {
   return (
     <div className="border-t border-border pt-3 mt-1 space-y-3">
       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Growth & Assumptions</p>
@@ -486,7 +488,7 @@ function CreateScenarioModal({ onClose, onCreated }: { onClose: () => void; onCr
     mutationFn: (data: any) => api.post<Scenario>('/scenarios', data),
     onSuccess: (s) => { qc.invalidateQueries({ queryKey: ['scenarios'] }); onCreated(s.id) },
   })
-  const { register, handleSubmit } = useForm({
+  const { register, handleSubmit } = useForm<ScenarioFormValues>({
     resolver: zodResolver(scenarioSchema) as any,
     defaultValues: { projection_years: 10, base_date: new Date().toISOString().slice(0, 10), ...parseAssumptions(null) },
   })
@@ -515,7 +517,7 @@ function EditScenarioModal({ scenario, onClose }: { scenario: Scenario; onClose:
     mutationFn: (data: any) => api.put(`/scenarios/${scenario.id}`, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['scenarios'] }); qc.invalidateQueries({ queryKey: ['scenarios', scenario.id] }); onClose() },
   })
-  const { register, handleSubmit } = useForm({
+  const { register, handleSubmit } = useForm<ScenarioFormValues>({
     resolver: zodResolver(scenarioSchema) as any,
     defaultValues: {
       name: scenario.name,
