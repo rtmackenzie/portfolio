@@ -293,6 +293,15 @@ function EventModal({ scenarioId, event, onClose }: { scenarioId: number; event?
   const [propertyId, setPropertyId] = useState<number | ''>(event?.property_id ?? '')
   const [params, setParams] = useState<Record<string, string | number>>(() => JSON.parse(event?.parameters_json ?? '{}'))
 
+  const deriveMortgageType = (p: Record<string, string | number>) => {
+    if (Number(p.deposit_percent) >= 100) return 'cash'
+    if (p.interest_only) return 'interest_only'
+    return 'repayment'
+  }
+  const [mortgageType, setMortgageType] = useState(() =>
+    deriveMortgageType(JSON.parse(event?.parameters_json ?? '{}'))
+  )
+
   const { data: properties } = useQuery({
     queryKey: ['properties'],
     queryFn: () => api.get<{ id: number; address_line1: string; town: string }[]>('/properties'),
@@ -300,6 +309,15 @@ function EventModal({ scenarioId, event, onClose }: { scenarioId: number; event?
 
   const setParam = (key: string, val: string) =>
     setParams(prev => ({ ...prev, [key]: val === '' ? '' : Number(val) }))
+
+  const handleMortgageTypeChange = (type: string) => {
+    setMortgageType(type)
+    if (type === 'cash') {
+      setParams(prev => ({ ...prev, interest_only: 0, deposit_percent: 100 }))
+    } else {
+      setParams(prev => ({ ...prev, interest_only: type === 'interest_only' ? 1 : 0 }))
+    }
+  }
 
   const save = useMutation({
     mutationFn: () => {
@@ -329,16 +347,31 @@ function EventModal({ scenarioId, event, onClose }: { scenarioId: number; event?
 
   const renderParams = () => {
     switch (eventType) {
-      case 'buy_property':
+      case 'buy_property': {
+        const isCash = mortgageType === 'cash'
         return (
           <div className="grid grid-cols-2 gap-3">
             {numField('purchase_price', 'Purchase Price (£)', '200000')}
             {numField('monthly_rent', 'Monthly Rent (£)', '1000')}
-            {numField('deposit_percent', 'Deposit (%)', '25')}
-            {numField('mortgage_rate', 'Interest Rate (%)', '5.5')}
+            <div className="col-span-2">
+              <label className={labelCls}>Purchase Type</label>
+              <select
+                value={mortgageType}
+                onChange={e => handleMortgageTypeChange(e.target.value)}
+                className={inputCls}
+              >
+                <option value="repayment">Repayment Mortgage</option>
+                <option value="interest_only">Interest Only Mortgage</option>
+                <option value="cash">Cash Purchase</option>
+              </select>
+            </div>
+            {!isCash && numField('deposit_percent', 'Deposit (%)', '25')}
+            {!isCash && numField('mortgage_rate', 'Interest Rate (%)', '5.5')}
+            {!isCash && numField('mortgage_term_years', 'Mortgage Term (years)', '25')}
             {numField('monthly_expenses', 'Monthly Expenses (£)', '200')}
           </div>
         )
+      }
       case 'remortgage':
         return numField('new_monthly_payment', 'New Monthly Payment (£)', '600')
       case 'rent_change':
@@ -365,7 +398,7 @@ function EventModal({ scenarioId, event, onClose }: { scenarioId: number; event?
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Event Type</label>
-              <select value={eventType} onChange={e => { setEventType(e.target.value); setParams({}) }} className={inputCls}>
+              <select value={eventType} onChange={e => { setEventType(e.target.value); setParams({}); setMortgageType('repayment') }} className={inputCls}>
                 {EVENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
