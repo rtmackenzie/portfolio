@@ -59,6 +59,29 @@ function goalSummary(g: Goal): string {
 const inputCls = 'w-full px-3 py-2 rounded-md bg-input border border-border text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary'
 const labelCls = 'block text-xs font-medium text-muted-foreground mb-1'
 
+// Hover tooltip wrapper. Uses React state, not CSS group-hover (which doesn't
+// work in this project's Tailwind v4 setup). Renders an inline dotted-underline
+// span with an absolutely-positioned popover above it.
+function Tip({ text, children, className = '' }: { text: string; children: string; className?: string }) {
+  const [show, setShow] = useState(false)
+  return (
+    <span className={`relative ${className}`}>
+      <span
+        className="underline decoration-dotted decoration-muted-foreground/40 cursor-default"
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+      >
+        {children}
+      </span>
+      {show && (
+        <div className="absolute bottom-full left-0 mb-1 w-56 rounded-md bg-popover border border-border text-xs font-normal normal-case text-popover-foreground p-2 shadow-lg z-50 whitespace-normal leading-relaxed">
+          {text}
+        </div>
+      )}
+    </span>
+  )
+}
+
 // ─── Goal Form ────────────────────────────────────────────────────────────────
 
 function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
@@ -148,11 +171,11 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
       {/* Basic */}
       <div className="grid grid-cols-2 gap-4">
         <div className="col-span-2">
-          <label className={labelCls}>Goal name *</label>
+          <label className={labelCls}><Tip text="A short name to identify this goal in your list.">Goal name *</Tip></label>
           <input {...register('name')} className={inputCls} placeholder="e.g. Financial independence by 2035" />
         </div>
         <div className="col-span-2">
-          <label className={labelCls}>Goal type *</label>
+          <label className={labelCls}><Tip text="What this goal tracks — monthly income, property count, net worth/equity, becoming mortgage-free, or a retirement date.">Goal type *</Tip></label>
           <select {...register('goal_type')} className={inputCls}>
             {(Object.entries(GOAL_TYPE_LABELS) as [GoalType, string][]).map(([v, l]) => (
               <option key={v} value={v}>{l}</option>
@@ -166,25 +189,25 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Target</p>
         {goalType === 'income' && (
           <div>
-            <label className={labelCls}>Monthly net income target (£/mo)</label>
+            <label className={labelCls}><Tip text="The net monthly cashflow (rent minus mortgage, expenses and voids) you want the portfolio to produce.">Monthly net income target (£/mo)</Tip></label>
             <input type="number" {...register('target_monthly_income')} className={inputCls} placeholder="e.g. 5000" />
           </div>
         )}
         {goalType === 'count' && (
           <div>
-            <label className={labelCls}>Target property count</label>
+            <label className={labelCls}><Tip text="The total number of properties you want to own.">Target property count</Tip></label>
             <input type="number" {...register('target_property_count')} className={inputCls} placeholder="e.g. 10" />
           </div>
         )}
         {goalType === 'net_worth' && (
           <div>
-            <label className={labelCls}>Target equity / net worth (£)</label>
+            <label className={labelCls}><Tip text="The total equity (property value minus outstanding debt) you want to reach.">Target equity / net worth (£)</Tip></label>
             <input type="number" {...register('target_equity')} className={inputCls} placeholder="e.g. 500000" />
           </div>
         )}
         {(goalType === 'mortgage_free' || goalType === 'retirement_date') && (
           <div>
-            <label className={labelCls}>{goalType === 'mortgage_free' ? 'Mortgage-free by' : 'Retirement date'}</label>
+            <label className={labelCls}><Tip text={goalType === 'mortgage_free' ? 'The date by which you want all mortgages cleared.' : 'The date by which you want to be able to retire on the portfolio income.'}>{goalType === 'mortgage_free' ? 'Mortgage-free by' : 'Retirement date'}</Tip></label>
             <input type="date" {...register('target_date')} className={inputCls} />
           </div>
         )}
@@ -195,15 +218,15 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Constraints <span className="font-normal normal-case text-muted-foreground/70">(optional)</span></p>
         <div className="grid grid-cols-3 gap-4">
           <div>
-            <label className={labelCls}>Max LTV (%)</label>
+            <label className={labelCls}><Tip text="Ceiling on portfolio loan-to-value. Pathways that exceed this in any month are marked infeasible.">Max LTV (%)</Tip></label>
             <input type="number" {...register('max_ltv_pct')} className={inputCls} placeholder="e.g. 75" />
           </div>
           <div>
-            <label className={labelCls}>Min DSCR (×)</label>
+            <label className={labelCls}><Tip text="Floor on Debt Service Coverage Ratio (rent ÷ mortgage). Below ~1.25× signals lender and cashflow stress.">Min DSCR (×)</Tip></label>
             <input type="number" step="0.01" {...register('min_dscr')} className={inputCls} placeholder="e.g. 1.25" />
           </div>
           <div>
-            <label className={labelCls}>Min cash/yr (£)</label>
+            <label className={labelCls}><Tip text="Minimum net cashflow per year the portfolio must sustain. Pathways dipping below this are infeasible.">Min cash/yr (£)</Tip></label>
             <input type="number" {...register('min_annual_cashflow')} className={inputCls} placeholder="e.g. 12000" />
           </div>
         </div>
@@ -215,11 +238,11 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
         <p className="text-xs text-muted-foreground">Cash injected annually from the company. Accumulates toward deposits and mortgage payoffs when generating pathways.</p>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelCls}>Annual loan amount (£/yr)</label>
+            <label className={labelCls}><Tip text="Cash injected from the company each year. It accumulates toward deposits and mortgage payoffs, accelerating the pathways.">Annual loan amount (£/yr)</Tip></label>
             <input type="number" {...register('director_loan_annual')} className={inputCls} placeholder="e.g. 15000" />
           </div>
           <div>
-            <label className={labelCls}>First loan date</label>
+            <label className={labelCls}><Tip text="When the first director-loan injection occurs. Defaults to the projection start date if left blank.">First loan date</Tip></label>
             <input type="date" {...register('director_loan_start_date')} className={inputCls} />
           </div>
         </div>
@@ -227,7 +250,7 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
 
       {/* Linked scenario */}
       <div>
-        <label className={labelCls}>Linked scenario (optional)</label>
+        <label className={labelCls}><Tip text="Optionally tie a manually-built What-If scenario to this goal so you can track progress against it.">Linked scenario (optional)</Tip></label>
         <select {...register('scenario_id')} className={inputCls}>
           <option value="">None — or pick a scenario to represent this goal</option>
           {scenarios.map(s => (
@@ -239,7 +262,7 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
 
       {/* Notes */}
       <div>
-        <label className={labelCls}>Notes</label>
+        <label className={labelCls}><Tip text="Free-text notes or assumptions for your own reference. Not used in any calculation.">Notes</Tip></label>
         <textarea {...register('notes')} className={inputCls} rows={2} placeholder="Any context or assumptions…" />
       </div>
 
@@ -330,31 +353,31 @@ function PathwaysPanel({ goal }: { goal: Goal }) {
       <form onSubmit={handleSubmit(onGenerate)} className="space-y-3">
         <div className="grid grid-cols-4 gap-3">
           <div>
-            <label className={labelCls}>Purchase price (£)</label>
+            <label className={labelCls}><Tip text="Assumed purchase price for each new property the pathways buy.">Purchase price (£)</Tip></label>
             <input type="number" {...register('purchase_price')} className={inputCls} />
           </div>
           <div>
-            <label className={labelCls}>Monthly rent (£)</label>
+            <label className={labelCls}><Tip text="Assumed gross monthly rent per new property, before costs.">Monthly rent (£)</Tip></label>
             <input type="number" {...register('monthly_rent')} className={inputCls} />
           </div>
           <div>
-            <label className={labelCls}>Monthly expenses (£)</label>
+            <label className={labelCls}><Tip text="Assumed monthly running costs per property — management, maintenance, insurance.">Monthly expenses (£)</Tip></label>
             <input type="number" {...register('monthly_expenses')} className={inputCls} />
           </div>
           <div>
-            <label className={labelCls}>Deposit (%)</label>
+            <label className={labelCls}><Tip text="Deposit as a percentage of price. The remainder is financed with a mortgage and drawn from accumulated cash.">Deposit (%)</Tip></label>
             <input type="number" {...register('deposit_percent')} className={inputCls} />
           </div>
           <div>
-            <label className={labelCls}>Mortgage rate (%)</label>
+            <label className={labelCls}><Tip text="Assumed annual interest rate on new mortgages.">Mortgage rate (%)</Tip></label>
             <input type="number" step="0.1" {...register('mortgage_rate')} className={inputCls} />
           </div>
           <div>
-            <label className={labelCls}>Term (years)</label>
+            <label className={labelCls}><Tip text="Mortgage repayment term in years.">Term (years)</Tip></label>
             <input type="number" {...register('mortgage_term_years')} className={inputCls} />
           </div>
           <div>
-            <label className={labelCls}>Projection (years)</label>
+            <label className={labelCls}><Tip text="How many years forward to project each pathway.">Projection (years)</Tip></label>
             <input type="number" {...register('projection_years')} className={inputCls} />
           </div>
           <div className="flex items-end">
@@ -413,27 +436,27 @@ function PathwaysPanel({ goal }: { goal: Goal }) {
               {pw.summary && (
                 <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
                   <div>
-                    <span className="text-muted-foreground">End equity</span>
+                    <Tip className="text-muted-foreground" text="Projected total equity (property value minus debt) at the end of the projection.">End equity</Tip>
                     <div className="font-medium">{formatCurrency(pw.summary.end_equity)}</div>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Ending CF/mo</span>
+                    <Tip className="text-muted-foreground" text="Net monthly cashflow in the final month — the steady-state income once the portfolio is fully built.">Ending CF/mo</Tip>
                     <div className={`font-medium ${(pw.summary.ending_monthly_cashflow ?? 0) >= 0 ? '' : 'text-red-400'}`}>
                       {formatCurrency(pw.summary.ending_monthly_cashflow ?? 0)}
                     </div>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Avg CF/mo</span>
+                    <Tip className="text-muted-foreground" text="Average monthly net cashflow across the whole projection. Lower than the ending figure because the early years hold fewer properties.">Avg CF/mo</Tip>
                     <div className={`font-medium ${pw.summary.avg_monthly_cashflow >= 0 ? '' : 'text-red-400'}`}>
                       {formatCurrency(pw.summary.avg_monthly_cashflow)}
                     </div>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Min DSCR</span>
+                    <Tip className="text-muted-foreground" text="Lowest Debt Service Coverage Ratio (rent ÷ mortgage) reached in any month.">Min DSCR</Tip>
                     <div className="font-medium">{pw.summary.min_dscr > 0 ? `${pw.summary.min_dscr.toFixed(2)}×` : '—'}</div>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Time to goal</span>
+                    <Tip className="text-muted-foreground" text="How long until this pathway first meets the goal, or 'Not reached' within the projection horizon.">Time to goal</Tip>
                     <div className="font-medium">{formatMonthsToGoal(pw.months_to_goal)}</div>
                   </div>
                 </div>
