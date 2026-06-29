@@ -391,6 +391,22 @@ export interface RiskHeatmap {
   factors: RiskFactor[]
 }
 
+export type InsightTone = 'positive' | 'info' | 'warning' | 'critical'
+
+export interface Insight {
+  id: string
+  category: string
+  tone: InsightTone
+  headline: string
+  detail: string
+  metrics?: { label: string; value: string }[]
+}
+
+export interface InsightsResult {
+  insights: Insight[]
+  generated: string
+}
+
 export interface TaxSettings {
   ownership: 'personal' | 'ltd'
   personal_marginal_rate_pct: number

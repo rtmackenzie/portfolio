@@ -3,6 +3,7 @@ import { queryAll, queryOne } from '../db/database.ts'
 import { calculatePortfolioKPIs } from '../services/calculations.ts'
 import { computeScorecard } from '../services/scorecard.ts'
 import { computeRiskHeatmap } from '../services/risk.ts'
+import { computeInsights } from '../services/insights.ts'
 import { loadScorecardInputs } from '../services/portfolioFacts.ts'
 
 const router = Router()
@@ -22,6 +23,15 @@ router.get('/scorecard', (_req, res) => {
 router.get('/risk', (_req, res) => {
   try {
     res.json(computeRiskHeatmap(loadScorecardInputs()))
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ message: String(err) })
+  }
+})
+
+router.get('/insights', (_req, res) => {
+  try {
+    res.json(computeInsights(loadScorecardInputs()))
   } catch (err) {
     console.error(err)
     res.status(500).json({ message: String(err) })

@@ -4,9 +4,11 @@ import { useFinancialSummary } from '@/hooks/useFinancials'
 import { useSettings, useUpdateSettings } from '@/hooks/useSettings'
 import { useScorecard } from '@/hooks/useScorecard'
 import { useRiskHeatmap } from '@/hooks/useRiskHeatmap'
+import { useInsights } from '@/hooks/useInsights'
 import { KPICard } from '@/components/shared/KPICard'
 import { PageLoader } from '@/components/shared/LoadingSpinner'
 import { RiskHeatmap } from '@/components/shared/RiskHeatmap'
+import { InsightsList } from '@/components/shared/InsightsList'
 import { ScorecardRadar } from '@/components/charts'
 import { formatCurrency, formatPercent } from '@/utils/currency'
 import type { TaxSettings, ScoreItem, ScoreRating } from '@/types'
@@ -80,6 +82,20 @@ function RiskSection() {
         <p className="text-xs text-muted-foreground mt-0.5">Likelihood × impact per risk factor, scored from your portfolio facts. Hover a marker; recomputes when data changes.</p>
       </div>
       <RiskHeatmap factors={risk.factors} />
+    </div>
+  )
+}
+
+function InsightsSection() {
+  const { data, isLoading } = useInsights()
+  if (isLoading || !data) return null
+  return (
+    <div className="bg-card rounded-lg p-6 space-y-4">
+      <div>
+        <h3 className="text-base font-semibold">Key insights</h3>
+        <p className="text-xs text-muted-foreground mt-0.5">Plain-English read on your portfolio, citing the numbers. Recomputes when data changes.</p>
+      </div>
+      <InsightsList insights={data.insights} />
     </div>
   )
 }
@@ -166,6 +182,8 @@ export default function BusinessOverview() {
       <ScorecardSection />
 
       <RiskSection />
+
+      <InsightsSection />
 
       <div className="grid grid-cols-4 gap-4">
         <KPICard label="Total Assets" value={formatCurrency(kpis?.total_portfolio_value ?? 0, true)} subtext="Property portfolio value" variant="success" />
