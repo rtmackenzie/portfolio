@@ -2,7 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useTheme } from 'next-themes'
 import {
   LayoutDashboard, Building2, TrendingUp, CalendarCheck, Search,
-  FlaskConical, Target, PieChart, FileText, Sun, Moon, Home
+  FlaskConical, Target, PieChart, FileText, Sun, Moon, Home, Settings
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -16,6 +16,7 @@ const navItems = [
   { to: '/goals', icon: Target, label: 'Goals' },
   { to: '/business', icon: PieChart, label: 'Overview' },
   { to: '/reports', icon: FileText, label: 'Reports' },
+  { to: '/settings', icon: Settings, label: 'Settings' },
 ]
 
 export default function AppLayout() {

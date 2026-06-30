@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Play, X, Trash2, Pencil, Copy, ChevronDown } from 'lucide-react'
+import { Plus, Play, X, Trash2, Pencil, Copy, ChevronDown, FileDown } from 'lucide-react'
 import { api } from '@/services/api'
 import { PageLoader } from '@/components/shared/LoadingSpinner'
 import { ScenarioAreaChart, CHART_COLORS } from '@/components/charts'
@@ -193,6 +193,7 @@ export default function Scenarios() {
               data={compareQuery.data ?? []}
               isLoading={compareQuery.isLoading}
               onExit={() => setCompareMode(false)}
+              onExport={() => window.open(`/brief/compare?ids=${[...compareIds].join(',')}`, '_blank')}
             />
           ) : !selectedId ? (
             <div className="bg-card rounded-lg p-8 text-center text-muted-foreground">
@@ -214,6 +215,11 @@ export default function Scenarios() {
                     >
                       <Play size={12} /> {calculate.isPending ? 'Running...' : 'Run Projection'}
                     </button>
+                    {results && (
+                      <button onClick={() => window.open(`/brief/scenario/${selected.id}`, '_blank')} title="PDF brief" className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-md text-xs text-muted-foreground hover:bg-accent">
+                        <FileDown size={12} /> PDF
+                      </button>
+                    )}
                     <button onClick={() => setShowEdit(true)} title="Edit scenario" className="px-3 py-1.5 border border-border rounded-md text-xs text-muted-foreground hover:bg-accent">
                       <Pencil size={12} />
                     </button>

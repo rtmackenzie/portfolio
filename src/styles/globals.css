@@ -135,3 +135,8 @@
   .rounded-md { border-radius: var(--radius-md); }
   .rounded-lg { border-radius: var(--radius-lg); }
 }
+
+@media print {
+  @page { size: A4; margin: 12mm; }
+  .no-print { display: none !important; }
+}

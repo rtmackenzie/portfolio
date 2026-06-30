@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { FileDown } from 'lucide-react'
 import type { ScenarioResults } from '@/types'
 import { formatCurrency, formatPercent, formatNumber } from '@/utils/currency'
 
@@ -11,9 +12,10 @@ interface Props {
   data: CompareResult[]
   isLoading: boolean
   onExit: () => void
+  onExport?: () => void
 }
 
-function deriveMetrics(results: ScenarioResults | null, targetEquity: number) {
+export function deriveMetrics(results: ScenarioResults | null, targetEquity: number) {
   if (!results) return null
   const { summary, months } = results
   const peakLtv = months.reduce((max, m) => {
@@ -91,7 +93,7 @@ function signedCurrency(delta: number): string {
   return `${sign}${formatCurrency(Math.abs(delta), true)}`
 }
 
-function buildDiff(a: Metrics, b: Metrics): string[] {
+export function buildDiff(a: Metrics, b: Metrics): string[] {
   const parts: string[] = []
 
   const eq = b.end_equity - a.end_equity
@@ -135,7 +137,7 @@ function buildDiff(a: Metrics, b: Metrics): string[] {
   return parts
 }
 
-export function ScenarioCompareTable({ data, isLoading, onExit }: Props) {
+export function ScenarioCompareTable({ data, isLoading, onExit, onExport }: Props) {
   const [targetInput, setTargetInput] = useState('')
   const targetEquity = Number(targetInput) || 0
   const allMetrics = data.map(d => deriveMetrics(d.results, targetEquity))
@@ -144,12 +146,22 @@ export function ScenarioCompareTable({ data, isLoading, onExit }: Props) {
     <div className="bg-card rounded-lg p-5 space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold">Scenario Comparison</h2>
-        <button
-          onClick={onExit}
-          className="px-3 py-1.5 border border-border rounded-md text-xs text-muted-foreground hover:bg-accent"
-        >
-          × Exit Compare
-        </button>
+        <div className="flex items-center gap-2">
+          {onExport && (
+            <button
+              onClick={onExport}
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-md text-xs text-muted-foreground hover:bg-accent"
+            >
+              <FileDown size={12} /> Export PDF
+            </button>
+          )}
+          <button
+            onClick={onExit}
+            className="px-3 py-1.5 border border-border rounded-md text-xs text-muted-foreground hover:bg-accent"
+          >
+            × Exit Compare
+          </button>
+        </div>
       </div>
 
       <div className="flex items-center gap-2">

@@ -10,10 +10,16 @@ import Scenarios from './pages/Scenarios'
 import BusinessOverview from './pages/BusinessOverview'
 import Reports from './pages/Reports'
 import Goals from './pages/Goals'
+import Settings from './pages/Settings'
+import ScenarioBriefPage from './pages/ScenarioBriefPage'
 
 export default function App() {
   return (
     <Routes>
+      {/* Bare print/export routes — no sidebar chrome */}
+      <Route path="/brief/scenario/:id" element={<ScenarioBriefPage />} />
+      <Route path="/brief/compare" element={<ScenarioBriefPage compare />} />
+
       <Route element={<AppLayout />}>
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<Dashboard />} />
@@ -26,6 +32,7 @@ export default function App() {
         <Route path="/goals" element={<Goals />} />
         <Route path="/business" element={<BusinessOverview />} />
         <Route path="/reports" element={<Reports />} />
+        <Route path="/settings" element={<Settings />} />
       </Route>
     </Routes>
   )
