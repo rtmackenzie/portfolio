@@ -1109,6 +1109,10 @@ footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--in
           </tbody>
         </table>
       </div>
+      <p><small><strong>Epic D sign-off notes (accepted caveats):</strong>
+      <strong>D1–D3</strong> recompute on change via the <code>['dashboard']</code> query-invalidation convention; all surface on Business Overview.
+      <strong>D3</strong> — the "optionally LLM" path is a documented seam (<code>renderInsights(…, {llm})</code>); the shipped path is templated-only (deterministic, offline) by decision.
+      <strong>D4</strong> — one-click PDF via jsPDF + html2canvas-pro; the canvas→PDF rasterisation can't be unit-tested, so it was verified by manual smoke test (scenario and comparison exports confirmed working).</small></p>
     </section>
     <section id="s13-metrics" class="section">
       <div class="section-tag"><span class="num">12</span><span class="kicker">Success Metrics</span></div>
