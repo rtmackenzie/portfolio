@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Independent Investment Review Board — What-If Scenario Engine Due Diligence</title>
+<style>
+:root{
+  --navy:#0b2545;--navy-2:#13315c;--teal:#0d9488;--teal-2:#0f766e;
+  --bg:#f4f6fb;--surface:#fff;--surface-2:#f8fafc;--surface-3:#eef2f8;
+  --ink:#0f1b2d;--ink-soft:#3b4a60;--ink-mute:#64748b;
+  --line:#e2e8f0;--line-2:#cbd5e1;
+  --accent:#0d9488;--accent-soft:#ccfbf1;--accent-ink:#115e59;
+  --gold:#b45309;--gold-soft:#fef3c7;--or:#c2410c;--or-soft:#fde4d3;
+  --good:#16a34a;--good-soft:#dcfce7;--warn:#d97706;--warn-soft:#fef3c7;
+  --bad:#dc2626;--bad-soft:#fee2e2;--info:#2563eb;--info-soft:#dbeafe;
+  --shadow:0 1px 2px rgba(15,27,45,.06),0 8px 24px rgba(15,27,45,.06);
+  --shadow-lg:0 12px 40px rgba(15,27,45,.12);
+  --radius:14px;--radius-sm:9px;--maxw:1180px;
+  --mono:"SFMono-Regular",ui-monospace,"Cascadia Code",Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+[data-theme="dark"]{
+  --navy:#0a1426;--navy-2:#0f2444;--teal:#2dd4bf;--teal-2:#14b8a6;
+  --bg:#0a1120;--surface:#111c30;--surface-2:#0d1628;--surface-3:#16233b;
+  --ink:#e8eef7;--ink-soft:#b6c2d4;--ink-mute:#8595ad;
+  --line:#22324c;--line-2:#2c405f;
+  --accent:#2dd4bf;--accent-soft:#0c3b36;--accent-ink:#5eead4;
+  --gold:#fbbf24;--gold-soft:#3a2c08;--or:#fdba74;--or-soft:#3d2710;
+  --good:#34d399;--good-soft:#0e3a2a;--warn:#fbbf24;--warn-soft:#3a2c08;
+  --bad:#f87171;--bad-soft:#3d1717;--info:#60a5fa;--info-soft:#13294d;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+  --shadow-lg:0 12px 40px rgba(0,0,0,.5);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15.5px;line-height:1.62;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{line-height:1.22;color:var(--ink);font-weight:700;letter-spacing:-.01em}
+h2{font-size:1.6rem;margin:0 0 .25em}
+h3{font-size:1.16rem;margin:1.5em 0 .4em}
+h4{font-size:1rem;margin:1.1em 0 .4em;color:var(--ink-soft)}
+p{margin:.5em 0 .9em;color:var(--ink-soft)}
+a{color:var(--teal);text-decoration:none}a:hover{text-decoration:underline}
+strong{color:var(--ink);font-weight:650}em{color:var(--ink-soft)}
+code{font-family:var(--mono);font-size:.84em;background:var(--surface-3);padding:.1em .42em;border-radius:5px;color:var(--accent-ink)}
+small{color:var(--ink-mute)}
+ul,ol{margin:.5em 0 1em;padding-left:1.25em}
+li{margin:.32em 0;color:var(--ink-soft)}li::marker{color:var(--teal)}
+
+.topbar{position:sticky;top:0;z-index:50;background:var(--navy);color:#fff;border-bottom:1px solid rgba(255,255,255,.08);box-shadow:0 2px 14px rgba(0,0,0,.18)}
+.topbar-in{max-width:var(--maxw);margin:0 auto;padding:11px 22px;display:flex;align-items:center;gap:16px}
+.brand{display:flex;align-items:center;gap:11px;font-weight:700;font-size:.97rem;letter-spacing:.02em;color:#fff}
+.brand .dot{width:11px;height:11px;border-radius:50%;background:linear-gradient(135deg,var(--teal),#67e8f9);box-shadow:0 0 12px var(--teal)}
+.brand small{color:#9fb3cf;font-weight:500}
+.topbar .spacer{flex:1}
+.tb-meta{color:#9fb3cf;font-size:.8rem;display:flex;gap:14px;align-items:center}
+.tb-meta .pin{color:#cbd9ec}
+.toggle{appearance:none;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:#fff;font:inherit;font-size:.8rem;padding:6px 12px;border-radius:999px;cursor:pointer;display:flex;align-items:center;gap:7px;transition:.18s}
+.toggle:hover{background:rgba(255,255,255,.14)}
+
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:248px minmax(0,1fr);gap:34px;padding:0 22px}
+.sidenav{position:sticky;top:74px;align-self:start;height:calc(100vh - 90px);overflow-y:auto;padding:22px 4px 40px;font-size:.86rem}
+.sidenav .nav-head{font-size:.7rem;text-transform:uppercase;letter-spacing:.13em;color:var(--ink-mute);font-weight:700;margin:0 10px 8px}
+.sidenav a{display:flex;gap:10px;align-items:baseline;padding:6.5px 10px;border-radius:8px;color:var(--ink-soft);text-decoration:none;border-left:2px solid transparent;transition:.14s;line-height:1.3}
+.sidenav a .n{color:var(--ink-mute);font-variant-numeric:tabular-nums;font-size:.78rem;font-weight:600;min-width:16px}
+.sidenav a:hover{background:var(--surface-3);color:var(--ink);text-decoration:none}
+.sidenav a.active{background:var(--accent-soft);color:var(--accent-ink);border-left-color:var(--teal);font-weight:600}
+.sidenav a.active .n{color:var(--teal)}
+.content{padding:30px 0 90px;min-width:0}
+
+.hero{background:linear-gradient(140deg,var(--navy) 0%,var(--navy-2) 62%,var(--teal-2) 165%);color:#fff;border-radius:var(--radius);padding:40px 40px 34px;margin:8px 0 14px;box-shadow:var(--shadow-lg);position:relative;overflow:hidden}
+.hero::after{content:"";position:absolute;right:-90px;top:-90px;width:340px;height:340px;background:radial-gradient(circle,rgba(45,212,191,.28),transparent 65%);pointer-events:none}
+.hero .eyebrow{text-transform:uppercase;letter-spacing:.2em;font-size:.72rem;color:#7fd9cb;font-weight:700;margin-bottom:14px}
+.hero h1{font-size:2.3rem;color:#fff;margin:0 0 .25em;max-width:24ch}
+.hero .lede{color:#c6d4e8;font-size:1.04rem;max-width:66ch;margin:0}
+.hero .hero-meta{display:flex;flex-wrap:wrap;gap:9px;margin-top:20px}
+.hero .chip{background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.16);color:#dce6f5;font-size:.76rem;padding:5px 11px;border-radius:999px}
+.hero .chip b{color:#fff}
+
+.glance{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin:18px 0 6px}
+.glance .g{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);padding:13px 14px;box-shadow:var(--shadow)}
+.glance .g .v{font-size:1.28rem;font-weight:750;color:var(--ink);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.glance .g .k{font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-mute);margin-top:3px;font-weight:600;line-height:1.3}
+.glance .g.accent .v{color:var(--teal)}
+
+.content section{padding:30px 0 8px;border-top:1px solid var(--line);margin-top:18px;scroll-margin-top:78px}
+.content section:first-of-type{border-top:none}
+.content section .wrap{display:block}
+h2 .sec-num{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:7px;background:var(--navy);color:#fff;font-size:.85rem;font-weight:700;margin-right:11px;vertical-align:middle}
+.lead{font-size:1.04rem;color:var(--ink-soft);max-width:78ch}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow);margin:14px 0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+table{border-collapse:collapse;width:100%;font-size:.88rem;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);margin:14px 0}
+thead th{background:var(--surface-3);text-align:left;font-weight:700;color:var(--ink);padding:11px 13px;border-bottom:1px solid var(--line-2);font-size:.74rem;text-transform:uppercase;letter-spacing:.04em}
+tbody td{padding:10px 13px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-soft)}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--surface-2)}
+td strong,td b{color:var(--ink)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+caption{caption-side:bottom;font-size:.76rem;color:var(--ink-mute);padding-top:8px;text-align:left}
+
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:.7rem;font-weight:700;padding:2.5px 9px;border-radius:999px;letter-spacing:.03em;white-space:nowrap}
+.p-crit{background:var(--bad-soft);color:var(--bad)}
+.p-high{background:var(--or-soft);color:var(--or)}
+.p-med{background:var(--warn-soft);color:var(--warn)}
+.p-low{background:var(--good-soft);color:var(--good)}
+.p-ok{background:var(--good-soft);color:var(--good)}
+.p-info{background:var(--info-soft);color:var(--info)}
+
+.callout{border-radius:var(--radius-sm);padding:14px 17px;margin:16px 0;border:1px solid var(--line);background:var(--surface-2)}
+.callout h4{margin:0 0 4px;color:var(--ink)}
+.callout.crit{background:var(--bad-soft);border-color:transparent}
+.callout.warn{background:var(--warn-soft);border-color:transparent}
+.callout.good{background:var(--good-soft);border-color:transparent}
+
+.verdict{display:flex;gap:18px;align-items:center;background:var(--or-soft);border:1px solid transparent;border-left:5px solid var(--or);border-radius:var(--radius);padding:20px 22px;margin:18px 0;box-shadow:var(--shadow)}
+.verdict .dot{font-size:34px;line-height:1}
+.verdict h3{margin:0 0 4px;color:var(--or);font-size:1.2rem}
+.verdict p{margin:0;color:var(--ink-soft)}
+
+footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--ink-mute);font-size:.82rem;border-top:1px solid var(--line)}
+footer .wrap{display:block}
+
+@media(max-width:980px){
+  .layout{grid-template-columns:1fr;gap:0}
+  .sidenav{position:static;height:auto;padding:14px 0 6px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px}
+  .sidenav .nav-head{width:100%}
+  .sidenav a{border-left:none;border-bottom:2px solid transparent;padding:6px 9px}
+  .sidenav a.active{border-left:none;border-bottom-color:var(--teal)}
+  .glance{grid-template-columns:repeat(3,1fr)}
+  .grid2{grid-template-columns:1fr}
+  .hero h1{font-size:1.9rem}
+}
+@media(max-width:600px){.glance{grid-template-columns:1fr 1fr}.topbar .tb-meta{display:none}}
+
+@media print{
+  :root{--bg:#fff}
+  .topbar{position:static;box-shadow:none}.toggle,.tb-meta{display:none}
+  .layout{grid-template-columns:1fr;display:block}.sidenav{display:none}.content{padding:0}
+  .content section{break-inside:avoid;border-top:1px solid #ccc}
+  .card,table,.callout,.verdict{box-shadow:none;break-inside:avoid}
+  .hero{box-shadow:none;color:#000;background:#eef2f8;border:1px solid #ccc}
+  .hero h1,.hero .lede,.hero .eyebrow{color:#000}
+  a{color:inherit}body{font-size:11pt}
+  @page{size:A4;margin:14mm}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="brand"><span class="dot"></span>Portfolio Intelligence&nbsp;<small>· Investment-Committee Review</small></div>
+    <div class="spacer"></div>
+    <div class="tb-meta"><span class="pin">v1.0</span><span>Confidential</span><span>Jun 2026</span></div>
+    <button class="toggle" id="themeBtn" onclick="toggleTheme()" aria-label="Toggle dark mode"><span id="themeIco">🌙</span><span id="themeTxt">Dark</span></button>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="sidenav" id="sidenav" aria-label="Table of contents">
+    <div class="nav-head">Contents</div>
+    <a href="#top"><span class="n">—</span><span>Overview</span></a>
+    <a href="#summary"><span class="n">1</span><span>Executive Summary</span></a>
+    <a href="#verdict"><span class="n">2</span><span>Overall Verdict</span></a>
+    <a href="#method"><span class="n">3</span><span>Methodology</span></a>
+    <a href="#strategies"><span class="n">4</span><span>The Strategies</span></a>
+    <a href="#detail"><span class="n">5</span><span>Strategy Analysis</span></a>
+    <a href="#logic"><span class="n">6</span><span>Financial Logic</span></a>
+    <a href="#feasibility"><span class="n">7</span><span>Feasibility</span></a>
+    <a href="#missing"><span class="n">8</span><span>Missing Variables</span></a>
+    <a href="#modelling"><span class="n">9</span><span>Modelling Critique</span></a>
+    <a href="#sensitivity"><span class="n">10</span><span>Sensitivity</span></a>
+    <a href="#risk"><span class="n">11</span><span>Risk Matrix</span></a>
+    <a href="#engine"><span class="n">12</span><span>Engine Review</span></a>
+    <a href="#goal"><span class="n">13</span><span>Goal Engine</span></a>
+    <a href="#roadmap"><span class="n">14</span><span>Roadmap</span></a>
+    <a href="#final"><span class="n">15</span><span>Final Verdict</span></a>
+  </nav>
+
+  <main class="content" id="top">
+    <div class="hero">
+      <div class="eyebrow">Independent Investment Review Board · Due-Diligence Report</div>
+      <h1>What-If Scenario Engine — Investment-Committee Review</h1>
+      <p class="lede">An independent assessment of whether the platform's scenario and goal engines produce financially realistic, internally consistent and professionally credible investment plans — to the standard required to support real decisions involving hundreds of thousands of pounds.</p>
+      <div class="hero-meta">
+        <span class="chip">Verdict: <b>🟠 Significant Improvements Required</b></span>
+        <span class="chip">Goal: <b>£5,000/month income</b></span>
+        <span class="chip">Evidence: <b>live code + stored outputs</b></span>
+      </div>
+      <div class="hero-meta">
+        <span class="chip">CFA</span><span class="chip">MRICS</span><span class="chip">BTL Investor 20yr+</span>
+        <span class="chip">Credit Risk</span><span class="chip">Mortgage Underwriter</span><span class="chip">UK Tax</span>
+        <span class="chip">Financial Modelling</span><span class="chip">Principal Architect</span>
+      </div>
+    </div>
+
+    <div class="glance">
+      <div class="g accent"><div class="v">🟠</div><div class="k">Overall verdict</div></div>
+      <div class="g"><div class="v">30</div><div class="k">Properties built (goal needs ~13)</div></div>
+      <div class="g"><div class="v">£13.4k</div><div class="k">Plan income vs £5k goal</div></div>
+      <div class="g"><div class="v">£1,246</div><div class="k">Minimum cash reserve</div></div>
+      <div class="g accent"><div class="v">4</div><div class="k">P0 fixes to sign-off</div></div>
+      <div class="g"><div class="v">2 of 3</div><div class="k">Strategies near-identical</div></div>
+    </div>
+
+<section id="summary"><div class="wrap">
+  <h2><span class="sec-num">1</span>Executive Summary</h2>
+  <p class="lead">The engine is materially better than the spreadsheets most landlords use — it models a true cash account, draws deposits and transaction taxes (LBTT + 8% ADS) from that account, amortises debt month-by-month, and now layers post-tax cashflow (S24 / corporation tax) on top. That foundation is genuinely creditable. <strong>However, in its current state the committee would not allow it to drive a six-figure decision.</strong></p>
+
+  <p>Three issues move it from "useful indicator" to "not yet decision-grade":</p>
+  <ul>
+    <li><strong>An optimism bias baked into the projection.</strong> Capital growth, rent growth and cost inflation are all measured from the <em>portfolio start date</em>, not each property's <em>purchase date</em>. A property bought in year 9 is instantly marked up ~25–30% in value and ~20% in rent the moment it is acquired. Because the recommended strategies buy 27 properties over 15 years, this systematically overstates equity and income — most for the acquisition-heavy plans.</li>
+    <li><strong>The goal engine maximises acquisition rather than solving the goal.</strong> The target is £5,000/month. The "Steady" and "Accelerated" plans keep buying to the horizon and finish at <strong>30 properties, £4.09m of assets, £1.62m of debt and £13,412/month</strong> — overshooting the goal by ~2.7×. A real investor seeking £5k/month would stop at ~12–14 properties.</li>
+    <li><strong>The plans hold essentially no reserves.</strong> Every plan runs the cash account down to a minimum of <strong>£1,246</strong> — across portfolios of up to £4m. There is no emergency fund, no capex reserve, no lender stress buffer. One boiler or one void breaks the plan.</li>
+  </ul>
+
+  <p>Two of the three "strategies" are also nearly identical (Steady and Accelerated produce the same 30 properties, the same ~£4.09m, the same 27 purchases), so the investor is really being offered <em>two</em> distinct routes, not three. Several costs an underwriter and tax specialist would insist on — mortgage arrangement fees, repricing of fixed rates, lumpy capex (boiler/roof/EPC), arrears, director-loan tax (s455/DLA) — are not modelled at all.</p>
+
+  <div class="callout good"><h4>What is already credible</h4>
+  True-cash modelling (deposits &amp; costs leave the account); Scottish LBTT + ADS on purchase; monthly amortisation with a real interest/principal split; post-tax cashflow with an S24 vs corporation-tax toggle; CGT on disposal; liquidity-gated generation that will not spend cash it does not have; pathway ranking with a stated binding constraint. This is ahead of typical practitioner tooling.</div>
+</div></section>
+
+<section id="verdict"><div class="wrap">
+  <h2><span class="sec-num">2</span>Overall Verdict</h2>
+  <div class="verdict">
+    <div class="dot">🟠</div>
+    <div>
+      <h3>Significant Modelling Improvements Required</h3>
+      <p>Sound engineering and an honest cash model, undermined by an optimism bias in the growth timing, a goal engine that overshoots rather than optimises, near-zero modelled reserves, and several missing institutional-grade costs and risks. Suitable today as an <em>exploratory</em> and educational tool; not yet suitable as the basis of a real capital-allocation decision.</p>
+    </div>
+  </div>
+  <p><strong>Why not 🔴 “Not Suitable”:</strong> the core accounting is internally coherent and the cash model is honest — the defects are correctable assumptions and scope gaps, not a broken foundation. <strong>Why not 🟡 “Minor Improvements”:</strong> the growth-timing bias and goal-overshoot are not cosmetic — they change the headline numbers and the recommended action, which is the bar a committee cares about.</p>
+</div></section>
+
+<section id="method"><div class="wrap">
+  <h2><span class="sec-num">3</span>Review Methodology</h2>
+  <p>This was a code-and-output due diligence, not a black-box opinion. The board:</p>
+  <ol>
+    <li>Read the projection engine (<code>server/services/scenarioEngine.ts</code>), the strategy generator (<code>pathwayGenerator.ts</code>), the tax module (<code>tax.ts</code>) and the cost calculators (<code>calculations.ts</code>) to establish exactly how each number is produced.</li>
+    <li>Extracted the engine's <em>own</em> stored projection results for the three live strategies (scenario ids 58/59/60) and recomputed independent checks (peak LTV, month the £5k target is actually met pre- and post-tax, event counts) directly from the month-by-month series.</li>
+    <li>Tested each assumption against UK lending criteria, tax rules and 20+ years of portfolio experience, treating every default with scepticism.</li>
+    <li>Graded findings by severity — <span class="pill p-crit">Critical</span> <span class="pill p-high">High</span> <span class="pill p-med">Medium</span> — where Critical means it would change the recommended decision.</li>
+  </ol>
+  <p class="lead">All figures quoted below are the engine's outputs, reproduced to test internal consistency — not the board's own forecasts.</p>
+</div></section>
+
+<section id="strategies"><div class="wrap">
+  <h2><span class="sec-num">4</span>The Three Strategies — As the Engine Built Them</h2>
+  <p>Goal: <strong>£5,000/month rental income</strong>, 15-year horizon from 2026, starting from the existing 3-property Falkirk/Larbert portfolio, with a <strong>£15,000/year director's loan</strong> assumption (14 injections ≈ £210k of external capital) and new purchases modelled at £100k price, £800 rent, 25% deposit, 5.5% repayment mortgage over 25 years. Figures below are the engine's stored outputs.</p>
+  <table>
+    <thead><tr>
+      <th>Metric</th><th class="num">Steady Growth</th><th class="num">Accelerated Growth</th><th class="num">Mortgage Recycler</th>
+    </tr></thead>
+    <tbody>
+      <tr><td>Properties at year 15</td><td class="num">30</td><td class="num">30</td><td class="num">11</td></tr>
+      <tr><td>Purchases / payoffs</td><td class="num">27 / 0</td><td class="num">27 / 0</td><td class="num">8 / 8</td></tr>
+      <tr><td>Portfolio value</td><td class="num">£4,087,374</td><td class="num">£4,087,374</td><td class="num">£1,429,804</td></tr>
+      <tr><td>Debt outstanding</td><td class="num">£1,622,635</td><td class="num">£1,620,977</td><td class="num">£66,206</td></tr>
+      <tr><td>End equity</td><td class="num">£2,464,739</td><td class="num">£2,466,397</td><td class="num">£1,363,598</td></tr>
+      <tr><td>Ending CF / month (pre-tax)</td><td class="num">£13,412</td><td class="num">£13,412</td><td class="num">£8,547</td></tr>
+      <tr><td>Ending CF / month (post-tax)</td><td class="num">£10,095</td><td class="num">£10,094</td><td class="num">£6,902</td></tr>
+      <tr><td>Month £5k/mo first met (post-tax)</td><td class="num">132 (11.0y)</td><td class="num">132 (11.0y)</td><td class="num">149 (12.4y)</td></tr>
+      <tr><td>Min portfolio DSCR*</td><td class="num">2.38×</td><td class="num">2.38×</td><td class="num">3.63×</td></tr>
+      <tr><td>Peak aggregate LTV</td><td class="num">48.4%</td><td class="num">48.6%</td><td class="num">37.7%</td></tr>
+      <tr><td>Minimum cash reserve</td><td class="num">£1,246</td><td class="num">£1,246</td><td class="num">£1,246</td></tr>
+      <tr><td>Total tax paid (15y)</td><td class="num">£211,879</td><td class="num">£212,732</td><td class="num">£136,683</td></tr>
+    </tbody>
+    <caption>* "DSCR" here is portfolio rent ÷ total monthly mortgage payment — not a lender's interest-cover ratio (see §6). Source: engine stored results, scenario ids 58/59/60.</caption>
+  </table>
+
+  <div class="callout warn"><h4>Immediate observation: there are really only two strategies</h4>
+  Steady and Accelerated finish within £1,658 of equity and £1/month of cashflow of each other, with identical property counts and purchase counts. Because generation is cash-gated ("buy as soon as affordable"), the only differentiator — a 6-month expense buffer on Steady — barely changes the cadence. The investor is being shown a false choice between two near-identical plans.</div>
+</div></section>
+
+<section id="detail"><div class="wrap">
+  <h2><span class="sec-num">5</span>Detailed Analysis of Each Strategy</h2>
+
+  <h3>5.1 Steady Growth &nbsp;<span class="pill p-high">Risk: Medium-High</span></h3>
+  <div class="grid2">
+    <div class="card"><h4>Strengths</h4><ul>
+      <li>Aggregate LTV peaks at only 48% — on paper, conservative leverage.</li>
+      <li>Reported DSCR floor 2.38× and zero DSCR breaches across 180 months.</li>
+      <li>Largest end equity (£2.46m) and income (£10.1k/mo post-tax) of the three.</li>
+    </ul></div>
+    <div class="card"><h4>Weaknesses</h4><ul>
+      <li><strong>Overshoots the goal 2.7×</strong> — 30 properties / £13.4k pre-tax for a £5k target. Capital is committed long after the objective is met.</li>
+      <li><strong>Reserve of £1,246</strong> against ~£1.6m debt and 30 tenancies — operationally unrealistic.</li>
+      <li>Headline value/income inflated by the growth-timing bias (§6.1); the true figures are lower.</li>
+      <li>27 acquisitions ≈ 1 completion every 6–7 months sustained for 15 years — execution-heavy.</li>
+    </ul></div>
+  </div>
+  <p><strong>Board view:</strong> the most "complete" plan and the one the engine recommends, but also the one most distorted by the growth-timing bias and the one demanding the most relentless execution. Attractive on screen, demanding in reality.</p>
+
+  <h3>5.2 Accelerated Growth &nbsp;<span class="pill p-high">Risk: Medium-High</span></h3>
+  <div class="card"><p>Functionally a duplicate of Steady (see §4). In principle "Accelerated" should trade reserve buffer for speed and reach the goal sooner at higher risk; in practice it reaches £5k/mo in the <em>same</em> month (132) with the <em>same</em> 30 properties. <strong>The label promises a risk/speed trade-off the engine does not actually deliver.</strong> Until the templates diverge meaningfully, this should not be presented as a separate option.</p></div>
+
+  <h3>5.3 Mortgage Recycler &nbsp;<span class="pill p-med">Risk: Medium</span></h3>
+  <div class="grid2">
+    <div class="card"><h4>Strengths</h4><ul>
+      <li>Lowest leverage (peak LTV 38%, ends with just £66k debt) and highest DSCR floor (3.63×) — the most resilient to rate shocks.</li>
+      <li>Simplest balance sheet: 11 properties, mostly unencumbered.</li>
+      <li>Still meets the income goal (£6.9k/mo post-tax) with far less debt.</li>
+    </ul></div>
+    <div class="card"><h4>Weaknesses</h4><ul>
+      <li><strong>Capital-inefficient:</strong> ends 95% equity (£1.36m equity on £1.43m value). Paying mortgages down forgoes leveraged growth — the opposite of how experienced investors compound.</li>
+      <li><strong>The name is a misnomer.</strong> Real "mortgage recycling" means <em>refinancing to pull equity out</em> and redeploy it (BRRR). This template <em>pays debt down</em> — it de-leverages. Mislabelling a de-gearing plan as "recycling" is a credibility risk.</li>
+      <li>Reaches the goal latest (month 149) and leaves the most growth on the table.</li>
+    </ul></div>
+  </div>
+  <p><strong>Board view:</strong> paradoxically the most <em>defensible</em> risk profile of the three despite the misleading name — but it sacrifices so much leverage that a sophisticated investor would question whether de-gearing to 95% equity is rational while the goal is "income", not "debt-free".</p>
+</div></section>
+
+<section id="logic"><div class="wrap">
+  <h2><span class="sec-num">6</span>Financial Logic &amp; Internal Consistency</h2>
+  <p>The accounting is mostly coherent — but three findings are material enough to change the headline numbers, and one changes the recommended action.</p>
+
+  <h3>6.1 Growth is measured from the portfolio start, not the purchase date <span class="pill p-crit">Critical</span></h3>
+  <p>In the monthly loop, every property's value, rent and costs are scaled by a factor based on the <em>absolute</em> month index <code>i</code> from the projection's base date:</p>
+  <ul>
+    <li><code>scenarioEngine.ts:285</code> — <code>growthFactor = (1 + growthRate/100)^(i/12)</code>, then <code>value = state.value × growthFactor</code></li>
+    <li><code>:304</code> — <code>rentGrowthFactor = (1 + rentGrowthRate/100)^(i/12)</code></li>
+    <li><code>:306</code> — <code>inflationFactor = (1 + inflationRate/100)^(i/12)</code></li>
+  </ul>
+  <p>A property purchased in month 110 is therefore valued at <code>£100,000 × 1.03^(110/12) ≈ £130,700</code> the instant it is bought, and its rent is set to <code>£800 × 1.025^(110/12) × void ≈ £962</code> — even though the modelled purchase price was £100,000 and the modelled rent £800. The asset is marked up ~31% and the rent ~20% on day one, then continues to grow. <strong>Because the recommended plans buy 27 properties spread across 15 years, the £4.09m portfolio value, the £2.46m equity and the £13.4k/month income are all overstated.</strong> The correct treatment grows each property from <em>its own</em> acquisition month (<code>(i − acquiredMonth)/12</code>). This is the single most important finding: it biases every strategy optimistic, and most the acquisition-heavy ones.</p>
+  <div class="callout crit"><h4>Consequence</h4>The goal may be reported as "reached" earlier and with fewer properties than reality. An investor acting on month-132 / 30-property figures could be making a decision on numbers inflated by a five-figure-per-asset margin.</div>
+
+  <h3>6.2 The reported "DSCR" is not a lender's cover ratio <span class="pill p-high">High</span></h3>
+  <p><code>scenarioEngine.ts:333</code> computes <code>dscr = totalRent ÷ totalMonthlyMortgagePayment</code>, using the <em>full repayment</em> instalment (capital + interest). A lender's BTL stress test is an <strong>Interest Coverage Ratio</strong>: rent ÷ (interest-only payment at a <em>stressed</em> rate, typically ~5.5% or pay-rate + 2%), required to clear 125% (basic-rate) or 145% (higher-rate / limited company). The engine's metric and a lender's metric are different animals; a healthy-looking 2.38× here does not mean the purchases would actually pass underwriting. The two should not share the label "DSCR".</p>
+
+  <h3>6.3 Mortgage rates never reprice <span class="pill p-high">High</span></h3>
+  <p>Each mortgage's <code>monthly_mortgage</code> is fixed at purchase and held for the full 15 years; the loop only amortises principal (<code>:295–299</code>). In reality BTL fixes run 2–5 years and then revert/refix at the prevailing rate. Holding 5.5% for 15 years across a £1.6m debt book is a large, unstated optimism — and it is the assumption a credit analyst would stress first. (The What-If tool offers a manual rate-shock, but the <em>generated</em> strategies contain no repricing events.)</p>
+
+  <h3>6.4 What the engine gets right <span class="pill p-low">Confirmed sound</span></h3>
+  <ul>
+    <li><strong>True cash model:</strong> on a purchase the deposit + LBTT + 8% ADS + £2,000 legal are deducted from the cash account (<code>buy_property</code> handler; <code>calculations.ts</code> cost calculators), and a mortgage payoff removes the cleared balance from cash (<code>:253–254</code>). Cash cannot be spent twice.</li>
+    <li><strong>Amortisation</strong> uses a correct interest/principal split (<code>:292–299</code>) and the interest portion feeds the tax calc.</li>
+    <li><strong>Post-tax cashflow</strong> (<code>:330</code>, <code>tax.ts</code>) applies S24 (rental profit × marginal rate − 20% interest credit) or corporation tax, and CGT on disposal — a genuine differentiator.</li>
+    <li><strong>Liquidity gating:</strong> the generator only schedules a purchase when the <em>post-tax</em> cash account can fund deposit + costs, so plans never rely on money that isn't there (min cash stays positive at £1,246).</li>
+  </ul>
+</div></section>
+
+<section id="feasibility"><div class="wrap">
+  <h2><span class="sec-num">7</span>Real-World Feasibility</h2>
+  <p>Could an experienced UK investor actually execute these plans? Partially — but several real-world frictions are absent.</p>
+  <table>
+    <thead><tr><th>Constraint</th><th>Modelled?</th><th>Reality check</th></tr></thead>
+    <tbody>
+      <tr><td>Lender ICR / affordability stress</td><td><span class="pill p-crit">No</span></td><td>Purchases are gated on <em>cash</em>, not on whether a lender would lend. At 5.5% on a £100k/75% LTV loan, rent of £800 gives ICR ≈ 800 ÷ (75,000×5.5%/12) ≈ 2.33× at pay-rate — but lenders stress at ~5.5%+ and require 125–145%. Marginal deals would fail underwriting the model assumes succeed.</td></tr>
+      <tr><td>Portfolio-landlord limits (PRA)</td><td><span class="pill p-crit">No</span></td><td>Reaching 30 mortgaged properties triggers PRA "portfolio landlord" underwriting, lender exposure caps (many cap 10 loans or £2–3m), and stricter aggregate stress. 27 new loans in 15 years is plausible but not frictionless; the model treats lending as unlimited.</td></tr>
+      <tr><td>Mortgage type</td><td><span class="pill p-med">Partial</span></td><td>New buys default to <strong>repayment</strong>; most BTL investors use interest-only to maximise cashflow and ICR. Repayment is the conservative choice for cashflow but inconsistent with how the strategy would really be financed.</td></tr>
+      <tr><td>Transaction timing / legal delays</td><td><span class="pill p-high">No</span></td><td>Purchases complete instantly on the chosen month. Real completions take 8–16 weeks and chains fail; a "buy every 6–7 months" cadence has no slack for fall-throughs.</td></tr>
+      <tr><td>Refurbishment / refinance lag</td><td><span class="pill p-high">No</span></td><td>No void-on-acquisition, no refurb period before letting, no 6-month ownership rule before refinancing.</td></tr>
+      <tr><td>Refinancing availability &amp; cost</td><td><span class="pill p-med">Partial</span></td><td>A <code>remortgage</code> event exists with an arrangement fee, but the generated plans don't use it, and it assumes a refinance is always available at the chosen terms regardless of market conditions.</td></tr>
+      <tr><td>Void periods</td><td><span class="pill p-med">Optimistic</span></td><td>Flat 0.5 months/year (~4.2%). Prudent underwriting assumes ~1 month (8%); HMO/lower-demand stock more. Halving the void roughly doubles this drag.</td></tr>
+      <tr><td>Taxation</td><td><span class="pill p-med">Simplified</span></td><td>S24 uses a single marginal rate (no personal allowance / band transitions); corporation tax is a flat rate (no marginal relief £50–250k); CGT is a single rate with the annual exemption applied per disposal. Defensible simplifications, but not what a tax specialist would sign.</td></tr>
+      <tr><td>SDLT vs LBTT</td><td><span class="pill p-med">Scotland-only</span></td><td>Transaction tax is hard-wired to Scottish LBTT + 8% ADS. Correct for the Falkirk portfolio, wrong for English/Welsh stock — there is no jurisdiction switch.</td></tr>
+      <tr><td>Director-loan capital</td><td><span class="pill p-high">Assumed</span></td><td>£15k/year for 14 years (~£210k) of external cash is assumed available and injected on schedule — a large precondition, and its own tax consequences (below) are ignored.</td></tr>
+    </tbody>
+  </table>
+</div></section>
+
+<section id="missing"><div class="wrap">
+  <h2><span class="sec-num">8</span>Missing Variables That Could Change the Outcome</h2>
+  <p>Beyond the items above, the following are not modelled. Several are individually five-figure over the plan horizon.</p>
+  <table>
+    <thead><tr><th>Variable</th><th>Modelled?</th><th class="num">Indicative impact over 15y</th><th>Severity</th></tr></thead>
+    <tbody>
+      <tr><td>Mortgage arrangement / product fees</td><td>No</td><td class="num">~£1–2k × 27 ≈ £27–54k</td><td><span class="pill p-high">High</span></td></tr>
+      <tr><td>Fixed-rate repricing (rate risk over time)</td><td>No</td><td class="num">Each +1% on £1.6m ≈ £16k/yr</td><td><span class="pill p-crit">Critical</span></td></tr>
+      <tr><td>Lumpy capex (boiler, roof, rewire, kitchens)</td><td>No</td><td class="num">~£2–4k/property/decade</td><td><span class="pill p-high">High</span></td></tr>
+      <tr><td>EPC C upgrade (MEES, expected late-2020s)</td><td>No</td><td class="num">£3–10k/property</td><td><span class="pill p-high">High</span></td></tr>
+      <tr><td>Rent arrears / bad debt (distinct from voids)</td><td>No</td><td class="num">~1–2% of rent roll</td><td><span class="pill p-med">Medium</span></td></tr>
+      <tr><td>Cash reserve / emergency fund requirement</td><td>No</td><td class="num">Plan holds only £1,246 minimum</td><td><span class="pill p-crit">Critical</span></td></tr>
+      <tr><td>Early repayment charges (on payoff/refinance)</td><td>No</td><td class="num">1–5% of balance</td><td><span class="pill p-med">Medium</span></td></tr>
+      <tr><td>Valuation fees / surveys / broker fees</td><td>No</td><td class="num">~£0.5–1k/purchase</td><td><span class="pill p-med">Medium</span></td></tr>
+      <tr><td>Director-loan tax (s455, overdrawn DLA, BIK)</td><td>No</td><td class="num">Up to 33.75% temporary charge</td><td><span class="pill p-high">High</span></td></tr>
+      <tr><td>Insurance premium inflation (separate line)</td><td>Partial</td><td class="num">Folded into 2.5% cost inflation</td><td><span class="pill p-low">Low</span></td></tr>
+      <tr><td>Concentration risk (geographic / unit type)</td><td>No</td><td class="num">30 near-identical £100k units</td><td><span class="pill p-high">High</span></td></tr>
+      <tr><td>Stochastic / scenario uncertainty (Monte Carlo)</td><td>No</td><td class="num">Single deterministic path only</td><td><span class="pill p-high">High</span></td></tr>
+    </tbody>
+    <caption>Impacts are order-of-magnitude practitioner estimates to convey materiality, not engine outputs.</caption>
+  </table>
+</div></section>
+
+<section id="modelling"><div class="wrap">
+  <h2><span class="sec-num">9</span>Financial Modelling Critique</h2>
+  <p>Are the assumptions too optimistic, too conservative, or industry standard? A mixed picture — the cashflow side leans conservative, the growth and friction side leans optimistic, and the two partly mask each other.</p>
+  <table>
+    <thead><tr><th>Assumption</th><th class="num">Value</th><th>Stance</th><th>Comment</th></tr></thead>
+    <tbody>
+      <tr><td>Capital growth</td><td class="num">3.0% p.a.</td><td><span class="pill p-med">Optimistic (timing)</span></td><td>3% is reasonable long-run, but applied from base date to new buys (§6.1) — the <em>timing</em> is the problem, not the rate.</td></tr>
+      <tr><td>Rent growth</td><td class="num">2.5% p.a.</td><td><span class="pill p-low">Reasonable</span></td><td>Credible long-run; same timing caveat as growth.</td></tr>
+      <tr><td>Cost inflation</td><td class="num">2.5% p.a.</td><td><span class="pill p-low">Reasonable</span></td><td>Sensible, but excludes lumpy capex and EPC step-changes.</td></tr>
+      <tr><td>Void allowance</td><td class="num">0.5 mth/yr</td><td><span class="pill p-med">Optimistic</span></td><td>~4.2%; prudent is ~8% (1 month). Understates the single most common cashflow drag.</td></tr>
+      <tr><td>Mortgage rate</td><td class="num">5.5% fixed 15y</td><td><span class="pill p-high">Optimistic</span></td><td>Held flat for the whole horizon — no repricing (§6.3).</td></tr>
+      <tr><td>Mortgage basis</td><td class="num">Repayment</td><td><span class="pill p-low">Conservative</span></td><td>Suppresses cashflow vs the interest-only most investors use — a conservative offset.</td></tr>
+      <tr><td>Transaction taxes</td><td class="num">LBTT + 8% ADS</td><td><span class="pill p-ok">Correct</span></td><td>Properly modelled — ahead of most tools.</td></tr>
+      <tr><td>Reserves held</td><td class="num">~£0</td><td><span class="pill p-crit">Unrealistic</span></td><td>No professional operates a 30-unit book on a £1,246 buffer.</td></tr>
+    </tbody>
+  </table>
+  <p><strong>Would a lender accept these?</strong> Not as an affordability case — there is no ICR stress, no portfolio aggregation, no rate buffer. <strong>Would an experienced investor rely on them?</strong> As a directional sketch yes; as the basis for committing £945k of deposits, no — they would first strip out the growth-timing uplift, halve the void optimism, add repricing and capex, and insist on a 3–6 month reserve.</p>
+</div></section>
+
+<section id="sensitivity"><div class="wrap">
+  <h2><span class="sec-num">10</span>Sensitivity Analysis</h2>
+  <p>Which assumptions actually move the recommendation? Ranked by influence on the outcome and on which strategy wins.</p>
+  <table>
+    <thead><tr><th>Assumption</th><th>Sensitivity</th><th>Effect if it moves against the investor</th><th>Changes the recommended strategy?</th></tr></thead>
+    <tbody>
+      <tr><td>Interest rate (repricing)</td><td><span class="pill p-crit">Very high</span></td><td>+2% on £1.6m ≈ £32k/yr off cashflow; could turn Steady/Accelerated cash-negative and push the goal years later. The Recycler (low debt) barely moves.</td><td><strong>Yes</strong> — favours the Recycler.</td></tr>
+      <tr><td>Growth-timing correction (§6.1)</td><td><span class="pill p-crit">Very high</span></td><td>Removing the day-one uplift lowers value, equity and rent on every later purchase; the acquisition-heavy plans lose the most, so the goal is met later / needs more units.</td><td><strong>Yes</strong> — narrows Steady's apparent lead.</td></tr>
+      <tr><td>Void rate</td><td><span class="pill p-high">High</span></td><td>0.5→1.0 mth/yr removes ~4% of gross rent across the book — compounding over 30 tenancies.</td><td>Possibly — erodes the high-unit plans most.</td></tr>
+      <tr><td>Capital growth rate</td><td><span class="pill p-high">High</span></td><td>Equity goal is growth-geared; 3%→1.5% roughly halves equity accretion.</td><td>Possibly.</td></tr>
+      <tr><td>Reserve requirement</td><td><span class="pill p-high">High</span></td><td>Forcing a 3–6 month reserve diverts cash from deposits, slowing every plan's acquisition cadence and pushing the goal later.</td><td><strong>Yes</strong> — penalises Steady/Accelerated.</td></tr>
+      <tr><td>Director-loan availability</td><td><span class="pill p-med">Medium</span></td><td>Remove £210k of injected capital and the buy cadence slows materially.</td><td>Possibly.</td></tr>
+      <tr><td>Rent growth</td><td><span class="pill p-med">Medium</span></td><td>Directly scales the income goal's timing.</td><td>Rarely.</td></tr>
+    </tbody>
+  </table>
+  <div class="callout warn"><h4>Headline</h4>The two assumptions that most distort the result — <strong>rate repricing</strong> and the <strong>growth-timing bias</strong> — both currently flatter the leveraged, acquisition-heavy strategies. Correct either and the safer Mortgage Recycler becomes relatively more attractive. The engine's current recommendation is therefore sensitive to its two weakest assumptions.</div>
+</div></section>
+
+<section id="risk"><div class="wrap">
+  <h2><span class="sec-num">11</span>Risk Matrix</h2>
+  <p>Ratings: <span class="pill p-low">Low</span> <span class="pill p-med">Medium</span> <span class="pill p-high">High</span> <span class="pill p-crit">Critical</span>. Assessed on the <em>real-world</em> position, not the on-screen figures.</p>
+  <table>
+    <thead><tr><th>Risk</th><th>Steady</th><th>Accelerated</th><th>Recycler</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Liquidity</td><td><span class="pill p-crit">Critical</span></td><td><span class="pill p-crit">Critical</span></td><td><span class="pill p-high">High</span></td><td>All run to a £1,246 minimum; no reserve for capex/voids/voids-on-acquisition.</td></tr>
+      <tr><td>Interest-rate</td><td><span class="pill p-high">High</span></td><td><span class="pill p-high">High</span></td><td><span class="pill p-low">Low</span></td><td>£1.6m debt with no repricing vs Recycler's £66k.</td></tr>
+      <tr><td>Leverage</td><td><span class="pill p-med">Medium</span></td><td><span class="pill p-med">Medium</span></td><td><span class="pill p-low">Low</span></td><td>Aggregate LTV 48% masks 75% on each new asset; Recycler de-geared.</td></tr>
+      <tr><td>Cashflow</td><td><span class="pill p-med">Medium</span></td><td><span class="pill p-med">Medium</span></td><td><span class="pill p-low">Low</span></td><td>Healthy on paper but void/capex/repricing unmodelled.</td></tr>
+      <tr><td>Refinancing</td><td><span class="pill p-med">Medium</span></td><td><span class="pill p-med">Medium</span></td><td><span class="pill p-low">Low</span></td><td>30 loans assume continuous lender appetite.</td></tr>
+      <tr><td>Concentration</td><td><span class="pill p-high">High</span></td><td><span class="pill p-high">High</span></td><td><span class="pill p-med">Medium</span></td><td>30 near-identical units, single market, one tenant demographic.</td></tr>
+      <tr><td>Market</td><td><span class="pill p-high">High</span></td><td><span class="pill p-high">High</span></td><td><span class="pill p-med">Medium</span></td><td>Equity geared to one region's 3% growth assumption.</td></tr>
+      <tr><td>Execution</td><td><span class="pill p-high">High</span></td><td><span class="pill p-high">High</span></td><td><span class="pill p-med">Medium</span></td><td>27 completions on schedule with no fall-throughs.</td></tr>
+      <tr><td>Tax</td><td><span class="pill p-med">Medium</span></td><td><span class="pill p-med">Medium</span></td><td><span class="pill p-med">Medium</span></td><td>Simplified S24/corp; director-loan tax ignored.</td></tr>
+      <tr><td>Operational</td><td><span class="pill p-high">High</span></td><td><span class="pill p-high">High</span></td><td><span class="pill p-med">Medium</span></td><td>Managing 30 tenancies/compliance vs 11.</td></tr>
+      <tr><td><strong>Overall</strong></td><td><span class="pill p-high">Medium-High</span></td><td><span class="pill p-high">Medium-High</span></td><td><span class="pill p-med">Medium</span></td><td>Recycler is the most resilient profile despite its misleading name.</td></tr>
+    </tbody>
+  </table>
+</div></section>
+
+<section id="engine"><div class="wrap">
+  <h2><span class="sec-num">12</span>Scenario-Engine Design Review</h2>
+  <p>The engine is a clean, deterministic month-by-month simulator with a real cash account and an event model (buy, sell, remortgage, payoff, rate-change, rent-change, vacancy, director-loan, major-expense). For decision support, these gaps matter:</p>
+  <div class="grid2">
+    <div class="card"><h4>Missing event types</h4><ul>
+      <li>Per-property <strong>refurb / void-on-acquisition</strong> period</li>
+      <li><strong>Fixed-rate expiry / auto-reprice</strong> (revert-to-rate)</li>
+      <li><strong>Capex events</strong> (boiler, roof, EPC upgrade) on a schedule</li>
+      <li><strong>Arrears / bad-debt</strong> shock distinct from voids</li>
+      <li><strong>Equity-release refinance</strong> used as a deposit source (true BRRR)</li>
+    </ul></div>
+    <div class="card"><h4>Missing calculations</h4><ul>
+      <li>Lender <strong>ICR at a stress rate</strong> (125/145%)</li>
+      <li><strong>Per-property acquisition-dated growth</strong> (fixes §6.1)</li>
+      <li><strong>Reserve / liquidity-runway</strong> metric (months of cover)</li>
+      <li>Mortgage <strong>arrangement &amp; exit (ERC) fees</strong></li>
+      <li><strong>Return metrics</strong>: IRR, money-on-money, ROCE, net yield on cost</li>
+    </ul></div>
+    <div class="card"><h4>Missing reports / KPIs</h4><ul>
+      <li>IRR / equity multiple / payback period per strategy</li>
+      <li>Debt maturity &amp; refix calendar</li>
+      <li>Stressed-case cashflow (rate +2%, void 8%) as a <em>standing</em> output, not a manual toggle</li>
+      <li>Reserve adequacy &amp; "months to insolvency under shock"</li>
+    </ul></div>
+    <div class="card"><h4>Missing validations / warnings</h4><ul>
+      <li>Warn when a buy would <strong>fail lender ICR</strong></li>
+      <li>Warn when reserves fall below an N-month floor</li>
+      <li>Warn on <strong>concentration</strong> (area / unit-type)</li>
+      <li>Flag when a plan <strong>overshoots the goal</strong> (see §13)</li>
+      <li>Surface the growth-timing assumption explicitly</li>
+    </ul></div>
+  </div>
+  <p>Missing scenario types worth adding: a <strong>downturn</strong> case (negative growth + higher voids + rate spike), an <strong>interest-only vs repayment</strong> comparison, and a <strong>stochastic / Monte-Carlo</strong> band around the single deterministic path so the user sees a range, not a false-precision point estimate.</p>
+</div></section>
+
+<section id="goal"><div class="wrap">
+  <h2><span class="sec-num">13</span>Goal-Engine Review — Does It Optimise?</h2>
+  <p>The goal engine is genuinely innovative (cash-gated generation, post-tax solving, ranked pathways with a binding constraint). But on the evidence it does <strong>not</strong> yet produce <em>optimal</em> strategies for the stated goal.</p>
+  <h3>13.1 It maximises, it doesn't optimise <span class="pill p-crit">Critical</span></h3>
+  <p>The goal is £5,000/month. The engine keeps buying whenever cash allows, all the way to the horizon, finishing at 30 properties and £13,412/month — <strong>~2.7× the target</strong>. It treats "more" as "better" rather than solving for "reach £5k/month with the least capital, debt and risk, then stop." A human investor told "I want £5k/month" would not take on £1.6m of debt and 30 tenancies to get there. The engine answers a different question than the one asked.</p>
+  <h3>13.2 The pathways are not meaningfully different <span class="pill p-high">High</span></h3>
+  <p>Steady and Accelerated converge on the same plan (§4). True optionality would span a genuine frontier — e.g. <em>fewest properties</em>, <em>lowest debt</em>, <em>fastest to goal</em>, <em>most resilient to a rate shock</em>. Today the user gets two copies of one idea plus a de-gearing plan.</p>
+  <h3>13.3 It optimises on flattering inputs <span class="pill p-high">High</span></h3>
+  <p>Because ranking uses the same projection that carries the growth-timing bias and no rate repricing, the "recommended" pathway is chosen on optimistic numbers. Fix §6.1 and §6.3 and the ranking could change.</p>
+  <div class="callout warn"><h4>Would a human investor make the same choice?</h4>No. A seasoned investor targeting £5k/month would buy ~12–14 leveraged units (interest-only), stop once the goal is met with a margin, hold a 6-month reserve, and keep debt working rather than paying it off. None of the three generated plans is that plan — the engine should be able to produce it.</div>
+
+  <h3>13.4 Strategy comparison &amp; the board's pick</h3>
+  <table>
+    <thead><tr><th>Dimension</th><th>Steady</th><th>Accelerated</th><th>Recycler</th></tr></thead>
+    <tbody>
+      <tr><td>Capital efficiency</td><td>High (but over-levered for goal)</td><td>High</td><td>Low (de-geared)</td></tr>
+      <tr><td>Expected return</td><td>Highest (overstated)</td><td>Highest (overstated)</td><td>Lower, more robust</td></tr>
+      <tr><td>Execution difficulty</td><td>Hard (27 buys)</td><td>Hard (27 buys)</td><td>Moderate (8 buys/8 payoffs)</td></tr>
+      <tr><td>Risk</td><td>Medium-High</td><td>Medium-High</td><td>Medium</td></tr>
+      <tr><td>Likelihood of success</td><td>Moderate</td><td>Moderate</td><td>Higher</td></tr>
+      <tr><td>Suitability</td><td>Aggressive scaler</td><td>(duplicate)</td><td>Income-focused / cautious</td></tr>
+    </tbody>
+  </table>
+  <p><strong>Of the three as generated, the board would approve the Mortgage Recycler</strong> — not because de-gearing is optimal, but because it is the only plan whose risk profile survives the two corrections that matter most (rate repricing and the growth-timing fix). <strong>However, the board's actual recommendation is "none of the above as-is":</strong> the right answer for a £5k/month goal is a ~12–14-unit, interest-only, reserve-backed plan that the engine does not currently generate. That gap — not any single number — is the core finding.</p>
+</div></section>
+
+<section id="roadmap"><div class="wrap">
+  <h2><span class="sec-num">14</span>Professional Recommendations &amp; Prioritised Roadmap</h2>
+  <p>Ordered by impact on decision-grade credibility. P0 items are prerequisites before any real investor, adviser or lender should rely on the output.</p>
+  <table>
+    <thead><tr><th>#</th><th>Priority</th><th>Recommendation</th><th>Why it matters</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><span class="pill p-crit">P0</span></td><td>Grow each property from its <strong>own acquisition month</strong>, not the portfolio base date</td><td>Removes the systematic optimism bias inflating value, equity and rent on every later purchase (§6.1).</td></tr>
+      <tr><td>2</td><td><span class="pill p-crit">P0</span></td><td>Make the goal engine <strong>solve to the goal and stop</strong> (least-capital / least-debt to reach £5k, with a margin)</td><td>Stops 2.7× overshoot; produces the plan a human would actually choose (§13.1).</td></tr>
+      <tr><td>3</td><td><span class="pill p-crit">P0</span></td><td>Enforce a <strong>configurable cash reserve</strong> (e.g. 3–6 months outgoings + £/property capex float)</td><td>Ends the £1,246-reserve fiction; makes liquidity risk real in generation.</td></tr>
+      <tr><td>4</td><td><span class="pill p-crit">P0</span></td><td>Add <strong>lender ICR stress</strong> (rent ÷ interest at ~5.5% / pay-rate+2%, 125–145%) as a buy gate and KPI; rename the current ratio</td><td>Aligns "can I borrow this?" with reality; stops modelling un-financeable deals (§6.2, §7).</td></tr>
+      <tr><td>5</td><td><span class="pill p-high">P1</span></td><td>Model <strong>fixed-rate expiry &amp; repricing</strong> over the horizon</td><td>Largest single sensitivity; removes the 15-year-flat-rate optimism (§6.3, §10).</td></tr>
+      <tr><td>6</td><td><span class="pill p-high">P1</span></td><td>Add <strong>capex, EPC upgrade, arrears and acquisition fees</strong> (arrangement/valuation/ERC)</td><td>Restores tens of thousands of unmodelled cost over the plan (§8).</td></tr>
+      <tr><td>7</td><td><span class="pill p-high">P1</span></td><td>Differentiate the templates into a real <strong>efficient frontier</strong> (fewest units / lowest debt / fastest / most resilient); collapse duplicates</td><td>Gives genuine optionality instead of two identical plans (§13.2).</td></tr>
+      <tr><td>8</td><td><span class="pill p-high">P1</span></td><td>Raise void to a prudent default (~1 mth/yr) and expose it; add interest-only as a financing option</td><td>Aligns cashflow with underwriting norms (§9).</td></tr>
+      <tr><td>9</td><td><span class="pill p-med">P2</span></td><td>Add <strong>IRR / equity multiple / ROCE</strong> and a debt-maturity calendar to every strategy</td><td>The return metrics professionals actually compare on (§12).</td></tr>
+      <tr><td>10</td><td><span class="pill p-med">P2</span></td><td>Add a <strong>downturn scenario</strong> and a <strong>Monte-Carlo band</strong>; surface concentration warnings; model director-loan (s455/DLA) tax; add an SDLT/LBTT jurisdiction switch</td><td>Moves from single-path false precision to range-based, jurisdiction-correct planning (§8, §12).</td></tr>
+      <tr><td>11</td><td><span class="pill p-med">P2</span></td><td>Rename "Mortgage Recycler" to reflect that it <strong>de-gears</strong>; build a true equity-release/BRRR recycler</td><td>Removes a labelling credibility risk (§5.3).</td></tr>
+    </tbody>
+  </table>
+  <h3>14.1 Readiness by audience</h3>
+  <table>
+    <thead><tr><th>Audience</th><th>Usable today?</th><th>Gate</th></tr></thead>
+    <tbody>
+      <tr><td>Professional landlords (self-directed)</td><td><span class="pill p-med">As a sketch</span></td><td>P0 items 1–3</td></tr>
+      <tr><td>Property companies / portfolio scaling</td><td><span class="pill p-high">Not yet</span></td><td>P0 + P1 (rate repricing, ICR, costs)</td></tr>
+      <tr><td>Financial advisers / wealth managers</td><td><span class="pill p-crit">No</span></td><td>All P0/P1 + audit trail of assumptions + ranges</td></tr>
+      <tr><td>Mortgage advisers</td><td><span class="pill p-crit">No</span></td><td>ICR stress + repricing are prerequisites</td></tr>
+    </tbody>
+  </table>
+</div></section>
+
+<section id="final"><div class="wrap">
+  <h2><span class="sec-num">15</span>Final Verdict &amp; Investment-Committee Decision</h2>
+  <div class="verdict">
+    <div class="dot">🟠</div>
+    <div>
+      <h3>Significant Modelling Improvements Required</h3>
+      <p>A well-engineered, honestly-accounted cash engine that is currently too optimistic and answers the wrong optimisation question to drive a six-figure decision.</p>
+    </div>
+  </div>
+
+  <h3>Would the committee approve this engine for making real investment decisions?</h3>
+  <p class="lead"><strong>Not yet — approved for exploration and education, declined for capital allocation.</strong></p>
+  <p>The decision is finely balanced and deliberately not red. The foundations a committee cares about most — money that cannot be spent twice, real transaction taxes, genuine amortisation, post-tax cashflow — are present and correct, which is more than can be said for most landlord spreadsheets. But three things stop it being decision-grade: the projection <strong>flatters every later purchase</strong> (growth measured from the wrong date), the goal engine <strong>overshoots the objective ~2.7×</strong> instead of solving it, and the plans <strong>carry no reserves</strong> while ignoring rate repricing and lumpy costs. Each of these changes the headline figures or the recommended action — the precise bar at which a committee must say "fix this first."</p>
+
+  <h4>Ranked highest-priority improvements (the four that unlock sign-off)</h4>
+  <ol>
+    <li><strong>Acquisition-dated growth</strong> — eliminate the optimism bias (P0, item 1).</li>
+    <li><strong>Solve-to-goal-and-stop</strong> — make the goal engine optimise, not maximise (P0, item 2).</li>
+    <li><strong>Mandatory cash reserve</strong> — model liquidity like a professional operates (P0, item 3).</li>
+    <li><strong>Lender ICR stress + rate repricing</strong> — make affordability and rate risk real (P0/P1, items 4–5).</li>
+  </ol>
+
+  <div class="callout crit"><h4>Committee Decision</h4>
+  <strong>🟠 Significant Modelling Improvements Required.</strong> Re-submit for sign-off once the four items above are implemented. On re-review, with those fixes and a prudent void/cost set, the board's expectation is that this engine would reach <strong>🟡 Production-Ready with Minor Improvements</strong> — it is much closer to credible than most tools in this space, and the remaining gaps are well-defined and fixable rather than structural.</div>
+
+  <p style="margin-top:18px;color:var(--muted);font-size:13px">Signed, the Independent Investment Review Board — CFA · MRICS · BTL Investor (20yr+) · Credit Risk Analyst · Mortgage Underwriter · UK Tax Specialist · Financial Modelling Expert · Principal Software Architect.</p>
+</div></section>
+
+  </main>
+</div>
+
+<footer><div class="wrap">
+  Prepared as an independent due-diligence exercise on the modelling engine. This document critiques software behaviour and modelling assumptions; it is not investment advice and does not constitute a regulated recommendation. All figures quoted are the engine's own outputs, reproduced to assess internal consistency.
+</div></footer>
+
+<script>
+function applyTheme(t){document.documentElement.setAttribute('data-theme',t);document.getElementById('themeIco').textContent=t==='dark'?'☀️':'🌙';document.getElementById('themeTxt').textContent=t==='dark'?'Light':'Dark';}
+function toggleTheme(){var c=document.documentElement.getAttribute('data-theme');var n=c==='dark'?'light':'dark';try{localStorage.setItem('icr-theme',n)}catch(e){}applyTheme(n);}
+(function(){var s;try{s=localStorage.getItem('icr-theme')}catch(e){}if(!s&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)s='dark';applyTheme(s||'light');})();
+(function(){var links=[].slice.call(document.querySelectorAll('.sidenav a'));var map={};links.forEach(function(a){map[a.getAttribute('href').slice(1)]=a;});var obs=new IntersectionObserver(function(es){es.forEach(function(en){if(en.isIntersecting){links.forEach(function(l){l.classList.remove('active');});var a=map[en.target.id];if(a)a.classList.add('active');}});},{rootMargin:'-40% 0px -55% 0px'});Object.keys(map).forEach(function(id){var el=document.getElementById(id);if(el)obs.observe(el);});})();
+</script>
+
+</body>
+</html>
