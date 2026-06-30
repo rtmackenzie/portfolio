@@ -31,6 +31,7 @@ export interface PropertyState {
   mortgage_rate: number      // annual %, 0 = no mortgage
   is_interest_only: boolean  // if true, principal is never reduced
   purchase_price: number     // cost basis for CGT on disposal
+  acquired_month?: number    // absolute month index when acquired; 0 (default) = held at projection start
 }
 
 interface MonthSnapshot {
@@ -146,6 +147,7 @@ export function buildProjection(
             mortgage_rate: rate,
             is_interest_only: isIO,
             purchase_price: price,
+            acquired_month: i,
           })
           debtMap.set(newId, debt)
           propLabels.set(newId, params.address ?? `New Property ${newId}`)
@@ -282,7 +284,10 @@ export function buildProjection(
     let totalInterest = 0
 
     for (const [propId, state] of stateMap) {
-      const growthFactor = Math.pow(1 + growthRate / 100, i / 12)
+      // Grow each property from its own acquisition month — not the projection
+      // base date — so mid-projection purchases enter at price/base rent (§D1 fix).
+      const age = Math.max(0, i - (state.acquired_month ?? 0)) / 12
+      const growthFactor = Math.pow(1 + growthRate / 100, age)
       const currentValue = state.value * growthFactor
 
       // Iterative amortisation: subtract principal portion of payment from running balance.
@@ -301,9 +306,9 @@ export function buildProjection(
       totalValue += currentValue
       totalDebt += currentDebt
 
-      const rentGrowthFactor = Math.pow(1 + rentGrowthRate / 100, i / 12)
+      const rentGrowthFactor = Math.pow(1 + rentGrowthRate / 100, age)
       const rent = state.is_vacant ? 0 : state.monthly_rent * voidFactor * rentGrowthFactor
-      const inflationFactor = Math.pow(1 + inflationRate / 100, i / 12)
+      const inflationFactor = Math.pow(1 + inflationRate / 100, age)
       const expenses = state.monthly_other_expenses * inflationFactor
       const propCashflow = rent - state.monthly_mortgage - expenses
       monthlyCashflow += propCashflow
@@ -457,6 +462,7 @@ export function loadPortfolioState(): {
       mortgage_rate: primaryMortgage?.interest_rate ?? 0,
       is_interest_only: primaryMortgage?.type === 'interest_only',
       purchase_price: p.purchase_price ?? p.current_value ?? 0,
+      acquired_month: 0,   // held at projection start — grows from base date
     })
   }
 

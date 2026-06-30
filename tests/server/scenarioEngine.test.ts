@@ -212,6 +212,39 @@ describe('buildProjection — true cash model', () => {
   })
 })
 
+// ─── Acquisition-dated growth (D1 fix) ────────────────────────────────────────
+
+describe('buildProjection — acquisition-dated growth', () => {
+  const CFG = {
+    base_date: '2026-01-01', projection_years: 3,
+    assumptions_json: JSON.stringify({ property_growth_pct: 10, rent_growth_pct: 10, expense_inflation_pct: 0, void_months_per_year: 0 }),
+  }
+
+  it('a mid-projection purchase enters at price/base rent, then grows from its own acquisition month', () => {
+    const buy = makeEvent({
+      event_type: 'buy_property', date: '2027-01-01', // month 12
+      parameters_json: JSON.stringify({ purchase_price: 100000, monthly_rent: 800, deposit_percent: 100, monthly_expenses: 0 }),
+    })
+    const proj = buildProjection(new Map(), [buy], CFG)
+    const ps = proj.property_series.find(s => s.label.startsWith('New Property'))!
+    const at = (ym: string) => ps.months.find(m => m.date === ym)!
+    // Purchase month: value == price, cashflow (= rent, no mortgage/expense/void) == base 800
+    expect(at('2027-01').value).toBe(100000)
+    expect(at('2027-01').monthly_cashflow).toBe(800)
+    // One year after acquisition: grown ~10% (not from the projection base date)
+    expect(at('2028-01').value).toBe(Math.round(100000 * 1.10))
+    expect(at('2028-01').monthly_cashflow).toBe(Math.round(800 * 1.10))
+  })
+
+  it('an initial holding still grows from the projection base date (regression)', () => {
+    const state = makeState({ id: 1, value: 100000, monthly_rent: 800, monthly_mortgage: 0, monthly_other_expenses: 0, debt: 0 })
+    const proj = buildProjection(makeMap(state), [], CFG)
+    const ps = proj.property_series.find(s => s.property_id === 1)!
+    const m12 = ps.months.find(m => m.date === '2027-01')!
+    expect(m12.value).toBe(Math.round(100000 * 1.10)) // 12 months from base
+  })
+})
+
 // ─── Post-tax cashflow (C4) ───────────────────────────────────────────────────
 
 describe('buildProjection — post-tax cashflow', () => {
