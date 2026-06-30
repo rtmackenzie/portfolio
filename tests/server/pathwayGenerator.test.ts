@@ -84,7 +84,7 @@ describe('generatePathways — goal solver uses post-tax cashflow', () => {
     const taxed = generatePathways(incomeGoal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1, TAX_PERSONAL)
 
     const pick = (ps: ReturnType<typeof generatePathways>) =>
-      ps.find(p => p.template_name === 'accelerated_growth')!
+      ps.find(p => p.template_name === 'steady_growth')!
     const u = pick(untaxed).months_to_goal ?? Infinity
     const t = pick(taxed).months_to_goal ?? Infinity
     expect(t).toBeGreaterThanOrEqual(u)
@@ -96,6 +96,20 @@ describe('generatePathways — goal solver uses post-tax cashflow', () => {
     expect(p.results.summary.ending_monthly_cashflow_posttax)
       .toBeLessThan(p.results.summary.ending_monthly_cashflow)
     expect(p.results.summary.total_tax_paid).toBeGreaterThan(0)
+  })
+})
+
+describe('generatePathways — mixed frontier (solve-and-stop)', () => {
+  it('Target & Hold stops at the goal; Steady Growth runs to the horizon', () => {
+    // Count goal: tax-independent and reached early, so the stop is clean to assert.
+    const goal = { goal_type: 'count' as const, target_property_count: 5, director_loan_annual: 200000 }
+    const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const hold = ps.find(p => p.template_name === 'target_hold')!
+    const steady = ps.find(p => p.template_name === 'steady_growth')!
+    expect(hold.reaches_goal).toBe(true)
+    // Target & Hold buys the minimum to reach 5 properties; Steady Growth keeps acquiring.
+    expect(buyCount(hold.events)).toBeLessThan(buyCount(steady.events))
+    expect(hold.results.months[hold.results.months.length - 1].property_count).toBe(5)
   })
 })
 
@@ -119,8 +133,8 @@ describe('generatePathways — director loans drive the schedule', () => {
     const small = generatePathways({ ...baseGoal, director_loan_annual: 15000 }, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
     const large = generatePathways({ ...baseGoal, director_loan_annual: 200000 }, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
 
-    const firstSmall = firstBuyDate(small.find(p => p.template_name === 'accelerated_growth')!.events)!
-    const firstLarge = firstBuyDate(large.find(p => p.template_name === 'accelerated_growth')!.events)!
+    const firstSmall = firstBuyDate(small.find(p => p.template_name === 'steady_growth')!.events)!
+    const firstLarge = firstBuyDate(large.find(p => p.template_name === 'steady_growth')!.events)!
 
     expect(firstLarge < firstSmall).toBe(true)
   })
@@ -129,8 +143,8 @@ describe('generatePathways — director loans drive the schedule', () => {
     const small = generatePathways({ ...baseGoal, director_loan_annual: 15000 }, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
     const large = generatePathways({ ...baseGoal, director_loan_annual: 200000 }, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
 
-    const accelLarge = large.find(p => p.template_name === 'accelerated_growth')!
-    const accelSmall = small.find(p => p.template_name === 'accelerated_growth')!
+    const accelLarge = large.find(p => p.template_name === 'steady_growth')!
+    const accelSmall = small.find(p => p.template_name === 'steady_growth')!
 
     expect(accelLarge.reaches_goal).toBe(true)
     if (accelSmall.reaches_goal && accelSmall.months_to_goal != null && accelLarge.months_to_goal != null) {

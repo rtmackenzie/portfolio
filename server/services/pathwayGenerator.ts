@@ -161,6 +161,17 @@ function activeBalancesAt(proj: ProjectionResult, i: number): number[] {
   return out
 }
 
+// Reach 105% of a numeric target so the plan stops with a small buffer, not on a
+// knife-edge. Count / date targets are left exact.
+const GOAL_MARGIN = 1.05
+function withMargin(goal: Goal): Goal {
+  return {
+    ...goal,
+    target_monthly_income: goal.target_monthly_income != null ? goal.target_monthly_income * GOAL_MARGIN : goal.target_monthly_income,
+    target_equity:         goal.target_equity != null ? goal.target_equity * GOAL_MARGIN : goal.target_equity,
+  }
+}
+
 function buildCashGatedEvents(
   strategy: Strategy,
   baseDate: string,
@@ -168,7 +179,9 @@ function buildCashGatedEvents(
   a: PropertyAssumptions,
   initialState: Map<number, PropertyState>,
   loanEvents: ScenarioEvent[],
-  tax?: TaxSettings
+  tax: TaxSettings | undefined,
+  goal: Goal,
+  stopAtGoal: boolean
 ): ScenarioEvent[] {
   const totalMonths = projYears * 12
   const config = { base_date: baseDate, projection_years: projYears, tax }
@@ -176,6 +189,7 @@ function buildCashGatedEvents(
   const monthlyExp = a.monthly_expenses ?? 200
   const buffer = strategy === 'steady' ? monthlyExp * 6 : 0  // steady keeps a reserve
   const cap = projYears * 4                                   // hard ceiling on decisions
+  const marginGoal = withMargin(goal)
 
   const decisions: ScenarioEvent[] = []
   let lastMonth = 0
@@ -184,10 +198,17 @@ function buildCashGatedEvents(
     const events = [...loanEvents, ...decisions].sort((x, y) => x.date.localeCompare(y.date))
     const proj = buildProjection(cloneState(initialState), events, config) as ProjectionResult
 
+    // Stop acquiring once the goal is met (+margin); the projection still runs to the horizon.
+    let goalCap = totalMonths
+    if (stopAtGoal) {
+      const reach = checkGoalReached(proj.months, marginGoal)
+      if (reach.reached && reach.monthIndex != null) goalCap = reach.monthIndex
+    }
+
     let decided: ScenarioEvent | null = null
     let decidedMonth = -1
 
-    for (let i = lastMonth; i < proj.months.length && i < totalMonths; i++) {
+    for (let i = lastMonth; i < proj.months.length && i < totalMonths && i < goalCap; i++) {
       // Gate on post-tax cash — taxes genuinely reduce deposit capital.
       const cash = proj.months[i].cumulative_cashflow_posttax ?? proj.months[i].cumulative_cashflow
 
@@ -404,15 +425,16 @@ export function generatePathways(
     ? buildDirectorLoanEvents(baseDate, projectionYears, goal.director_loan_annual, goal.director_loan_start_date)
     : []
 
-  const templates: Array<{ template_name: string; label: string; strategy: Strategy }> = [
-    { template_name: 'steady_growth',      label: 'Steady Growth',      strategy: 'steady' },
-    { template_name: 'accelerated_growth', label: 'Accelerated Growth', strategy: 'accelerated' },
-    { template_name: 'mortgage_recycler',  label: 'Mortgage Recycler',  strategy: 'recycler' },
+  // Mixed frontier: Target & Hold stops at the goal; the others grow to the horizon.
+  const templates: Array<{ template_name: string; label: string; strategy: Strategy; stopAtGoal: boolean }> = [
+    { template_name: 'target_hold',       label: 'Target & Hold',     strategy: 'steady',   stopAtGoal: true  },
+    { template_name: 'steady_growth',     label: 'Steady Growth',     strategy: 'steady',   stopAtGoal: false },
+    { template_name: 'mortgage_recycler', label: 'Mortgage Recycler', strategy: 'recycler', stopAtGoal: false },
   ]
 
   return templates.map(t => {
     // Cash-gated decisions (buys/payoffs), then merge loan events for the final run
-    const decisions = buildCashGatedEvents(t.strategy, baseDate, projectionYears, assumptions, initialState, loanEvents, tax)
+    const decisions = buildCashGatedEvents(t.strategy, baseDate, projectionYears, assumptions, initialState, loanEvents, tax, goal, t.stopAtGoal)
     const allEvents = [...decisions, ...loanEvents].sort((a, b) => a.date.localeCompare(b.date))
 
     const results = buildProjection(cloneState(initialState), allEvents, config) as ProjectionResult
