@@ -212,6 +212,96 @@ describe('buildProjection — true cash model', () => {
   })
 })
 
+// ─── Fixed-rate expiry & repricing (P1 #5 fix) ────────────────────────────────
+
+describe('buildProjection — fixed-rate repricing', () => {
+  const NO_GROWTH_ASSUMPTIONS = { void_months_per_year: 0, expense_inflation_pct: 0, rent_growth_pct: 0, property_growth_pct: 0 }
+
+  it('a fixed-rate property reprices exactly at the scheduled month, off the current balance', () => {
+    const state = makeState({
+      id: 1, debt: 100000, mortgage_rate: 5, monthly_mortgage: calcMonthlyPayment(100000, 5, 300),
+      is_fixed_rate: true, mortgage_term_months: 300, next_reprice_month: 12,
+      monthly_rent: 0, monthly_other_expenses: 0,
+    })
+    const { months } = buildProjection(makeMap(state), [], {
+      base_date: '2026-01-01', projection_years: 2,
+      assumptions_json: JSON.stringify({ ...NO_GROWTH_ASSUMPTIONS, mortgage_reprice_years: 5, mortgage_reprice_uplift_bps: 200 }),
+    })
+    // Payment unchanged for months 0..11
+    expect(months[11].monthly_cashflow).toBe(months[0].monthly_cashflow)
+    // At month 12 (index 12), rate rises 5% -> 7% and payment re-amortises off the balance
+    // remaining at that point (not the original £100k) over the remaining term.
+    const balAtReprice = months[11].total_debt   // balance carried into month 12
+    const expectedNewPayment = calcMonthlyPayment(balAtReprice, 7, 300 - 12)
+    const preRepriceCashflow = months[0].monthly_cashflow
+    const postRepriceCashflow = months[12].monthly_cashflow
+    expect(postRepriceCashflow).not.toBe(preRepriceCashflow)
+    expect(preRepriceCashflow - postRepriceCashflow).toBe(Math.round(expectedNewPayment) - Math.round(calcMonthlyPayment(100000, 5, 300)))
+  })
+
+  it('a tracker (is_fixed_rate false) never reprices — payment stays flat (regression)', () => {
+    const state = makeState({
+      id: 1, debt: 100000, mortgage_rate: 5, monthly_mortgage: calcMonthlyPayment(100000, 5, 300),
+      is_fixed_rate: false, mortgage_term_months: 300, next_reprice_month: 12,
+      monthly_rent: 0, monthly_other_expenses: 0,
+    })
+    const { months } = buildProjection(makeMap(state), [], {
+      base_date: '2026-01-01', projection_years: 2,
+      assumptions_json: JSON.stringify({ ...NO_GROWTH_ASSUMPTIONS, mortgage_reprice_years: 5, mortgage_reprice_uplift_bps: 200 }),
+    })
+    expect(months[12].monthly_cashflow).toBe(months[0].monthly_cashflow)
+    expect(months[23].monthly_cashflow).toBe(months[0].monthly_cashflow)
+  })
+
+  it('a property bought mid-projection reprices from its own acquisition month, not the base date', () => {
+    const buy = makeEvent({
+      event_type: 'buy_property', date: '2027-01-01', // month 12
+      parameters_json: JSON.stringify({ purchase_price: 100000, monthly_rent: 0, deposit_percent: 25, monthly_expenses: 0, mortgage_rate: 5, mortgage_term_years: 25 }),
+    })
+    const proj = buildProjection(new Map(), [buy], {
+      base_date: '2026-01-01', projection_years: 3,
+      assumptions_json: JSON.stringify({ ...NO_GROWTH_ASSUMPTIONS, mortgage_reprice_years: 1, mortgage_reprice_uplift_bps: 200 }),
+    })
+    const ps = proj.property_series.find(s => s.label.startsWith('New Property'))!
+    const at = (ym: string) => ps.months.find(m => m.date === ym)!
+    // Bought at month 12 (2027-01); reprice 1yr later = month 24 (2028-01), not month 12 (base+1y).
+    expect(at('2027-12').monthly_cashflow).toBe(at('2027-01').monthly_cashflow)
+    expect(at('2028-01').monthly_cashflow).not.toBe(at('2027-01').monthly_cashflow)
+  })
+
+  it('a paid-off mortgage is never repriced', () => {
+    const state = makeState({
+      id: 1, debt: 100000, mortgage_rate: 5, monthly_mortgage: calcMonthlyPayment(100000, 5, 300),
+      is_fixed_rate: true, mortgage_term_months: 300, next_reprice_month: 12,
+      monthly_rent: 0, monthly_other_expenses: 0,
+    })
+    const { months } = buildProjection(
+      makeMap(state),
+      [makeEvent({ event_type: 'payoff_mortgage', date: '2026-06-01', property_id: 1, parameters_json: '{}' })], // month 5
+      { base_date: '2026-01-01', projection_years: 2, assumptions_json: JSON.stringify({ ...NO_GROWTH_ASSUMPTIONS, mortgage_reprice_years: 5, mortgage_reprice_uplift_bps: 200 }) }
+    )
+    expect(months[12].monthly_cashflow).toBe(0)   // no rent, mortgage cleared -> flat zero, not repriced
+    expect(months[23].monthly_cashflow).toBe(0)
+  })
+
+  it('repricing recurs on schedule (twice over 15 years at the 5-year default)', () => {
+    const state = makeState({
+      id: 1, debt: 200000, mortgage_rate: 5, monthly_mortgage: calcMonthlyPayment(200000, 5, 300),
+      is_fixed_rate: true, mortgage_term_months: 300, next_reprice_month: 60,
+      monthly_rent: 0, monthly_other_expenses: 0,
+    })
+    const { months } = buildProjection(makeMap(state), [], {
+      base_date: '2026-01-01', projection_years: 15,
+      assumptions_json: JSON.stringify(NO_GROWTH_ASSUMPTIONS), // reprice_years/uplift default to 5 / 200bps
+    })
+    const cf0 = months[0].monthly_cashflow
+    const cf60 = months[60].monthly_cashflow
+    const cf120 = months[120].monthly_cashflow
+    expect(cf60).not.toBe(cf0)
+    expect(cf120).not.toBe(cf60)
+  })
+})
+
 // ─── Acquisition-dated growth (D1 fix) ────────────────────────────────────────
 
 describe('buildProjection — acquisition-dated growth', () => {

@@ -32,6 +32,10 @@ export interface PropertyState {
   is_interest_only: boolean  // if true, principal is never reduced
   purchase_price: number     // cost basis for CGT on disposal
   acquired_month?: number    // absolute month index when acquired; 0 (default) = held at projection start
+  is_fixed_rate?: boolean       // only fixed-rate mortgages auto-reprice; trackers hold flat
+  fixed_period_end?: string | null  // calendar date; consumed once at init to seed next_reprice_month
+  mortgage_term_months?: number     // needed to compute remaining term at reprice (repayment only)
+  next_reprice_month?: number | null  // absolute month index of the next scheduled reprice
 }
 
 interface MonthSnapshot {
@@ -101,6 +105,9 @@ export function buildProjection(
   const rentGrowthRate = assumptions.rent_growth_pct       ?? 2.5
   const voidMonths     = assumptions.void_months_per_year  ?? 0.5
   const voidFactor     = 1 - voidMonths / 12
+  // Fixed-rate mortgages revert/refix on a schedule; trackers hold flat (§6.3 fix).
+  const repriceYears     = assumptions.mortgage_reprice_years      ?? 5
+  const repriceUpliftBps = assumptions.mortgage_reprice_uplift_bps ?? 200
 
   const snapshots: MonthSnapshot[] = []
   let cumulativeCashflow = 0
@@ -113,6 +120,16 @@ export function buildProjection(
   const baseYear = baseDate.getUTCFullYear()
   const baseMonth = baseDate.getUTCMonth()
   const totalMonths = (config.projection_years ?? 10) * 12
+
+  // Seed the first scheduled reprice for existing fixed-rate holdings from their real
+  // fixed_period_end date (properties bought mid-projection are seeded in buy_property).
+  for (const state of stateMap.values()) {
+    if (state.is_fixed_rate && state.fixed_period_end) {
+      const end = new Date(state.fixed_period_end)
+      const absEndMonth = (end.getUTCFullYear() - baseYear) * 12 + (end.getUTCMonth() - baseMonth)
+      state.next_reprice_month = absEndMonth >= 0 ? absEndMonth : 0
+    }
+  }
 
   for (let i = 0; i < totalMonths; i++) {
     const absMonth = baseMonth + i
@@ -148,6 +165,9 @@ export function buildProjection(
             is_interest_only: isIO,
             purchase_price: price,
             acquired_month: i,
+            is_fixed_rate: true,   // pathway-generated / manually-added purchases assumed fixed
+            mortgage_term_months: isIO ? undefined : termYears * 12,
+            next_reprice_month: isIO ? null : i + repriceYears * 12,
           })
           debtMap.set(newId, debt)
           propLabels.set(newId, params.address ?? `New Property ${newId}`)
@@ -203,6 +223,9 @@ export function buildProjection(
             state.monthly_mortgage = calcMonthlyPayment(newDebt, newRate, isIO ? 0 : newTermYrs * 12)
             state.mortgage_rate    = newRate
             state.is_interest_only = isIO
+            // Keep scheduled auto-repricing (§6.3) in sync with the new deal.
+            state.mortgage_term_months = isIO ? undefined : newTermYrs * 12
+            state.next_reprice_month = isIO ? null : i + repriceYears * 12
             debtMap.set(propId, newDebt)
           }
           break
@@ -293,6 +316,21 @@ export function buildProjection(
       // Iterative amortisation: subtract principal portion of payment from running balance.
       // Interest-only and no-mortgage properties keep their balance constant.
       let currentDebt = debtMap.get(propId) ?? 0
+
+      // Fixed-rate expiry & repricing (§6.3 fix): revert to a higher rate on schedule,
+      // re-amortising over the remaining term at the current balance. Trackers
+      // (is_fixed_rate falsy) and paid-off mortgages are never repriced.
+      if (state.is_fixed_rate && state.next_reprice_month != null && i === state.next_reprice_month && currentDebt > 0) {
+        const newRate = state.mortgage_rate + repriceUpliftBps / 100
+        const elapsed = i - (state.acquired_month ?? 0)
+        const remainingTermMonths = state.is_interest_only ? 0 : Math.max(1, (state.mortgage_term_months ?? 300) - elapsed)
+        state.monthly_mortgage = state.is_interest_only
+          ? (currentDebt * newRate / 100) / 12
+          : calcMonthlyPayment(currentDebt, newRate, remainingTermMonths)
+        state.mortgage_rate = newRate
+        state.next_reprice_month = i + repriceYears * 12
+      }
+
       // Interest portion of this month's payment (for tax — principal is not deductible).
       const monthlyInterest = (currentDebt > 0 && state.mortgage_rate > 0)
         ? currentDebt * (state.mortgage_rate / 100 / 12)
@@ -412,9 +450,9 @@ export function loadPortfolioState(): {
 
   const dbMortgages = queryAll<{
     property_id: number; monthly_payment: number; current_balance: number;
-    is_active: number; interest_rate: number; type: string;
+    is_active: number; interest_rate: number; type: string; fixed_period_end: string | null;
   }>(
-    'SELECT property_id, monthly_payment, current_balance, is_active, interest_rate, type FROM mortgages WHERE is_active=1'
+    'SELECT property_id, monthly_payment, current_balance, is_active, interest_rate, type, fixed_period_end FROM mortgages WHERE is_active=1'
   )
 
   const dbExpenses = queryAll<{ property_id: number | null; amount: number; frequency: string; active: number }>(
@@ -463,6 +501,11 @@ export function loadPortfolioState(): {
       is_interest_only: primaryMortgage?.type === 'interest_only',
       purchase_price: p.purchase_price ?? p.current_value ?? 0,
       acquired_month: 0,   // held at projection start — grows from base date
+      is_fixed_rate: primaryMortgage?.type === 'fixed',
+      fixed_period_end: primaryMortgage?.fixed_period_end ?? null,
+      // DB has no original-term column for existing mortgages; 300mo (25y) is a
+      // documented approximation used only to size the post-reprice payment.
+      mortgage_term_months: 300,
     })
   }
 
