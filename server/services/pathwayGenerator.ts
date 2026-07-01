@@ -505,6 +505,9 @@ export function generatePathways(
     mortgage_reprice_years: goal.mortgage_reprice_years ?? 5,
     mortgage_reprice_uplift_bps: goal.mortgage_reprice_uplift_bps ?? 200,
     erc_pct: goal.erc_pct ?? 3,
+    capex_cycle_years: settings?.capex_cycle_years ?? 10,
+    capex_cost_per_property: settings?.capex_cost_per_property ?? 3000,
+    arrears_pct: settings?.arrears_pct ?? 1.5,
   })
 
   const config = {

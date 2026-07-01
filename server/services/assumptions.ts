@@ -15,6 +15,9 @@ export interface AssumptionSettings {
   default_void_months_per_year: number    // e.g. 1
   icr_stress_uplift_bps: number           // e.g. 200 (+2% added to pay rate for the ICR stress test)
   icr_stress_floor_pct: number            // e.g. 5.5 (stress-rate floor)
+  capex_cycle_years: number               // e.g. 10 (lumpy capex — boiler/roof/kitchens — recurs every N years/property)
+  capex_cost_per_property: number         // e.g. 3000 (£ charged per property at each capex cycle)
+  arrears_pct: number                     // e.g. 1.5 (rent arrears/bad debt, distinct from void)
 }
 
 export const DEFAULT_ASSUMPTION_SETTINGS: AssumptionSettings = {
@@ -29,4 +32,7 @@ export const DEFAULT_ASSUMPTION_SETTINGS: AssumptionSettings = {
   default_void_months_per_year: 1,
   icr_stress_uplift_bps: 200,
   icr_stress_floor_pct: 5.5,
+  capex_cycle_years: 10,
+  capex_cost_per_property: 3000,
+  arrears_pct: 1.5,
 }

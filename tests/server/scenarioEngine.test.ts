@@ -39,7 +39,7 @@ function makeEvent(overrides: Partial<ScenarioEvent> & { event_type: string }): 
 const BASE_CONFIG = {
   base_date: '2026-01-01',
   projection_years: 1,
-  assumptions_json: JSON.stringify({ void_months_per_year: 0, expense_inflation_pct: 0, rent_growth_pct: 0 }),
+  assumptions_json: JSON.stringify({ void_months_per_year: 0, expense_inflation_pct: 0, rent_growth_pct: 0, arrears_pct: 0 }),
 }
 
 // ─── Snapshot structure ───────────────────────────────────────────────────────
@@ -344,12 +344,77 @@ describe('buildProjection — fixed-rate repricing', () => {
   })
 })
 
+// ─── Maintenance costs: lumpy capex + rent arrears (§6b fix) ──────────────────
+
+describe('buildProjection — maintenance costs', () => {
+  const NO_GROWTH_ASSUMPTIONS = { void_months_per_year: 0, expense_inflation_pct: 0, rent_growth_pct: 0, property_growth_pct: 0, arrears_pct: 0 }
+
+  it('capex fires at the scheduled cycle for an initial holding and reschedules', () => {
+    const state = makeState({ id: 1, debt: 0, mortgage_rate: 0, monthly_mortgage: 0, monthly_rent: 0, monthly_other_expenses: 0 })
+    const { months } = buildProjection(makeMap(state), [], {
+      base_date: '2026-01-01', projection_years: 21,
+      assumptions_json: JSON.stringify({ ...NO_GROWTH_ASSUMPTIONS, capex_cycle_years: 10, capex_cost_per_property: 3000 }),
+    })
+    // First cycle at month 120 (10y), second at month 240 (20y) — clean £3,000 step-downs
+    expect(months[119].cumulative_cashflow - months[120].cumulative_cashflow).toBe(3000)
+    expect(months[120].cumulative_cashflow - months[121].cumulative_cashflow).toBe(0)
+    expect(months[239].cumulative_cashflow - months[240].cumulative_cashflow).toBe(3000)
+  })
+
+  it('a property bought mid-projection has its first capex cycle from its own acquisition month, not the base date', () => {
+    const buy = makeEvent({
+      event_type: 'buy_property', date: '2027-01-01', // month 12
+      parameters_json: JSON.stringify({ purchase_price: 100000, monthly_rent: 0, deposit_percent: 100, monthly_expenses: 0 }),
+    })
+    const { months } = buildProjection(new Map(), [buy], {
+      base_date: '2026-01-01', projection_years: 12,
+      assumptions_json: JSON.stringify({ ...NO_GROWTH_ASSUMPTIONS, capex_cycle_years: 10, capex_cost_per_property: 3000 }),
+    })
+    // Bought at month 12; first capex 10y later = month 132, not month 120 (base+10y).
+    expect(months[119].cumulative_cashflow - months[120].cumulative_cashflow).toBe(0)
+    expect(months[131].cumulative_cashflow - months[132].cumulative_cashflow).toBe(3000)
+  })
+
+  it('capex_cost_per_property: 0 reproduces pre-change output exactly (regression)', () => {
+    const state = makeState({ id: 1, debt: 0, mortgage_rate: 0, monthly_mortgage: 0, monthly_rent: 0, monthly_other_expenses: 0 })
+    const { months } = buildProjection(makeMap(state), [], {
+      base_date: '2026-01-01', projection_years: 11,
+      assumptions_json: JSON.stringify({ ...NO_GROWTH_ASSUMPTIONS, capex_cycle_years: 10, capex_cost_per_property: 0 }),
+    })
+    expect(months[120].cumulative_cashflow).toBe(months[0].cumulative_cashflow)
+  })
+
+  it('arrears reduces rent by the expected % alongside void', () => {
+    const state = makeState({ id: 1, debt: 0, mortgage_rate: 0, monthly_mortgage: 0, monthly_rent: 1000, monthly_other_expenses: 0, is_vacant: false })
+    const { months } = buildProjection(makeMap(state), [], {
+      base_date: '2026-01-01', projection_years: 1,
+      assumptions_json: JSON.stringify({ void_months_per_year: 0, expense_inflation_pct: 0, rent_growth_pct: 0, property_growth_pct: 0, arrears_pct: 2 }),
+    })
+    expect(months[0].monthly_cashflow).toBe(980)   // 1000 × (1 - 2%)
+  })
+
+  it('a vacant month still shows £0 rent — arrears does not apply on top of a void', () => {
+    const state = makeState({ id: 1, debt: 0, mortgage_rate: 0, monthly_mortgage: 0, monthly_rent: 1000, monthly_other_expenses: 0, is_vacant: true })
+    const { months } = buildProjection(makeMap(state), [], {
+      base_date: '2026-01-01', projection_years: 1,
+      assumptions_json: JSON.stringify({ void_months_per_year: 0, expense_inflation_pct: 0, rent_growth_pct: 0, property_growth_pct: 0, arrears_pct: 2 }),
+    })
+    expect(months[0].monthly_cashflow).toBe(0)
+  })
+
+  it('arrears_pct: 0 reproduces pre-change output exactly (regression)', () => {
+    const state = makeState({ id: 1, debt: 0, mortgage_rate: 0, monthly_mortgage: 0, monthly_rent: 1000, monthly_other_expenses: 0 })
+    const { months } = buildProjection(makeMap(state), [], BASE_CONFIG)
+    expect(months[0].monthly_cashflow).toBe(1000)
+  })
+})
+
 // ─── Acquisition-dated growth (D1 fix) ────────────────────────────────────────
 
 describe('buildProjection — acquisition-dated growth', () => {
   const CFG = {
     base_date: '2026-01-01', projection_years: 3,
-    assumptions_json: JSON.stringify({ property_growth_pct: 10, rent_growth_pct: 10, expense_inflation_pct: 0, void_months_per_year: 0 }),
+    assumptions_json: JSON.stringify({ property_growth_pct: 10, rent_growth_pct: 10, expense_inflation_pct: 0, void_months_per_year: 0, arrears_pct: 0 }),
   }
 
   it('a mid-projection purchase enters at price/base rent, then grows from its own acquisition month', () => {
@@ -460,7 +525,7 @@ describe('buildProjection — cashflow', () => {
     const { months } = buildProjection(makeMap(state), [], {
       base_date: '2026-01-01',
       projection_years: 2,
-      assumptions_json: JSON.stringify({ void_months_per_year: 0, expense_inflation_pct: 0, rent_growth_pct: 10 }),
+      assumptions_json: JSON.stringify({ void_months_per_year: 0, expense_inflation_pct: 0, rent_growth_pct: 10, arrears_pct: 0 }),
     })
     expect(months[0].monthly_cashflow).toBe(1000)                       // base year, factor 1
     expect(months[12].monthly_cashflow).toBeGreaterThan(months[0].monthly_cashflow)

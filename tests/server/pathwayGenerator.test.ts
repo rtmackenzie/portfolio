@@ -392,6 +392,17 @@ describe('generatePathways — configurable starting cash & rate repricing (UI/D
       expect(a.mortgage_reprice_uplift_bps).toBe(300)
     }
   })
+
+  it('assumptions_json carries the global maintenance-cost settings it was run with (§6b)', () => {
+    const settings = { capex_cycle_years: 7, capex_cost_per_property: 4500, arrears_pct: 2.25 } as any
+    const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1, undefined, settings)
+    for (const p of ps) {
+      const a = JSON.parse(p.assumptions_json)
+      expect(a.capex_cycle_years).toBe(7)
+      expect(a.capex_cost_per_property).toBe(4500)
+      expect(a.arrears_pct).toBe(2.25)
+    }
+  })
 })
 
 describe('generatePathways — lender ICR buy gate (P0 #4)', () => {

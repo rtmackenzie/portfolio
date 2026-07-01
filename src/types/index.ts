@@ -437,6 +437,9 @@ export interface AssumptionSettings {
   default_void_months_per_year: number
   icr_stress_uplift_bps: number
   icr_stress_floor_pct: number
+  capex_cycle_years: number
+  capex_cost_per_property: number
+  arrears_pct: number
 }
 
 export type Settings = TaxSettings & AssumptionSettings

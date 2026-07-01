@@ -39,6 +39,7 @@ export interface PropertyState {
   fixed_period_end?: string | null  // calendar date; consumed once at init to seed next_reprice_month
   mortgage_term_months?: number     // needed to compute remaining term at reprice (repayment only)
   next_reprice_month?: number | null  // absolute month index of the next scheduled reprice
+  next_capex_month?: number | null    // absolute month index of the next scheduled lumpy-capex hit (§6b)
 }
 
 interface MonthSnapshot {
@@ -109,6 +110,9 @@ export function buildProjection(
   const rentGrowthRate = assumptions.rent_growth_pct       ?? config.defaults?.default_rent_growth_pct       ?? 2.5
   const voidMonths     = assumptions.void_months_per_year  ?? config.defaults?.default_void_months_per_year  ?? 1
   const voidFactor     = 1 - voidMonths / 12
+  // Rent arrears/bad debt: a flat % rent reduction every month, distinct from void (§6b).
+  const arrearsPct     = assumptions.arrears_pct ?? config.defaults?.arrears_pct ?? 1.5
+  const arrearsFactor  = 1 - arrearsPct / 100
   // Fixed-rate mortgages revert/refix on a schedule; trackers hold flat (§6.3 fix).
   const repriceYears     = assumptions.mortgage_reprice_years      ?? 5
   const repriceUpliftBps = assumptions.mortgage_reprice_uplift_bps ?? 200
@@ -119,6 +123,10 @@ export function buildProjection(
   // of pay-rate+uplift or a rate floor — the standard UK BTL affordability test.
   const stressUplift = (config.defaults?.icr_stress_uplift_bps ?? 200) / 100
   const stressFloor = config.defaults?.icr_stress_floor_pct ?? 5.5
+  // Lumpy capex (boiler/roof/kitchens): a lump sum charged per property every N years,
+  // mirroring the fixed-rate reprice schedule (§6b).
+  const capexCycleYears = assumptions.capex_cycle_years ?? config.defaults?.capex_cycle_years ?? 10
+  const capexCostPerProperty = assumptions.capex_cost_per_property ?? config.defaults?.capex_cost_per_property ?? 3000
 
   const snapshots: MonthSnapshot[] = []
   let cumulativeCashflow = config.starting_cash ?? 0
@@ -139,6 +147,12 @@ export function buildProjection(
       const end = new Date(state.fixed_period_end)
       const absEndMonth = (end.getUTCFullYear() - baseYear) * 12 + (end.getUTCMonth() - baseMonth)
       state.next_reprice_month = absEndMonth >= 0 ? absEndMonth : 0
+    }
+    // Seed the first capex cycle for existing holdings. There's no real "last refurb
+    // date" in the DB, so — like the mortgage-term-months approximation above — this
+    // assumes a fresh cycle starts at the projection base date (§6b).
+    if (state.next_capex_month == null) {
+      state.next_capex_month = (state.acquired_month ?? 0) + capexCycleYears * 12
     }
   }
 
@@ -179,6 +193,7 @@ export function buildProjection(
             is_fixed_rate: true,   // pathway-generated / manually-added purchases assumed fixed
             mortgage_term_months: isIO ? undefined : termYears * 12,
             next_reprice_month: isIO ? null : i + repriceYears * 12,
+            next_capex_month: i + capexCycleYears * 12,
           })
           debtMap.set(newId, debt)
           propLabels.set(newId, params.address ?? `New Property ${newId}`)
@@ -355,6 +370,15 @@ export function buildProjection(
         state.next_reprice_month = i + repriceYears * 12
       }
 
+      // Lumpy capex (boiler/roof/kitchens): a one-off lump sum every N years per
+      // property, independent of financing — a capital event, so it's applied directly
+      // to cumulativeCashflow rather than through this property's monthly P&L line,
+      // the same treatment already given to deposits, fees and ERC (§6b).
+      if (state.next_capex_month != null && i === state.next_capex_month) {
+        cumulativeCashflow -= capexCostPerProperty
+        state.next_capex_month = i + capexCycleYears * 12
+      }
+
       // Interest portion of this month's payment (for tax — principal is not deductible).
       const monthlyInterest = (currentDebt > 0 && state.mortgage_rate > 0)
         ? currentDebt * (state.mortgage_rate / 100 / 12)
@@ -371,7 +395,7 @@ export function buildProjection(
       totalDebt += currentDebt
 
       const rentGrowthFactor = Math.pow(1 + rentGrowthRate / 100, age)
-      const rent = state.is_vacant ? 0 : state.monthly_rent * voidFactor * rentGrowthFactor
+      const rent = state.is_vacant ? 0 : state.monthly_rent * voidFactor * arrearsFactor * rentGrowthFactor
       const inflationFactor = Math.pow(1 + inflationRate / 100, age)
       const expenses = state.monthly_other_expenses * inflationFactor
       const propCashflow = rent - state.monthly_mortgage - expenses

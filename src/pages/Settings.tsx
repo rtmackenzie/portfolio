@@ -107,6 +107,10 @@ function AssumptionSettingsCard() {
         <div><label className={taxLabelCls}>ICR stress uplift (bps)</label>{num('icr_stress_uplift_bps', '1')}</div>
         <div><label className={taxLabelCls}>ICR stress rate floor (%)</label>{num('icr_stress_floor_pct')}</div>
         <div className="col-span-4 text-xs text-muted-foreground">The lender ICR stress test uses the higher of (mortgage rate + uplift) and the floor.</div>
+        <div><label className={taxLabelCls}>Capex cycle (years)</label>{num('capex_cycle_years', '1')}</div>
+        <div><label className={taxLabelCls}>Capex cost per property (£)</label>{num('capex_cost_per_property', '1')}</div>
+        <div><label className={taxLabelCls}>Rent arrears (% of rent)</label>{num('arrears_pct')}</div>
+        <div className="col-span-4 text-xs text-muted-foreground">Every property incurs a lump-sum capex cost (boiler/roof/kitchens) each cycle. Arrears reduces effective rent every month, distinct from void.</div>
       </div>
     </div>
   )
