@@ -482,7 +482,7 @@ export function generatePathways(
     property_growth_pct: 3.0,
     rent_growth_pct: 2.5,
     expense_inflation_pct: 2.5,
-    void_months_per_year: 0.5,
+    void_months_per_year: 1,
     mortgage_reprice_years: goal.mortgage_reprice_years ?? 5,
     mortgage_reprice_uplift_bps: goal.mortgage_reprice_uplift_bps ?? 200,
   })

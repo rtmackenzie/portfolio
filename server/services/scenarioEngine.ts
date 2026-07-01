@@ -105,7 +105,7 @@ export function buildProjection(
   const growthRate     = assumptions.property_growth_pct   ?? 3.0
   const inflationRate  = assumptions.expense_inflation_pct ?? 2.5
   const rentGrowthRate = assumptions.rent_growth_pct       ?? 2.5
-  const voidMonths     = assumptions.void_months_per_year  ?? 0.5
+  const voidMonths     = assumptions.void_months_per_year  ?? 1
   const voidFactor     = 1 - voidMonths / 12
   // Fixed-rate mortgages revert/refix on a schedule; trackers hold flat (§6.3 fix).
   const repriceYears     = assumptions.mortgage_reprice_years      ?? 5

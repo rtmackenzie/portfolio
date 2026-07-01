@@ -544,7 +544,7 @@ function parseAssumptions(json?: string | null) {
   return {
     property_growth_pct:   a.property_growth_pct   ?? 3.0,
     expense_inflation_pct: a.expense_inflation_pct ?? 2.5,
-    void_months_per_year:  a.void_months_per_year  ?? 0.5,
+    void_months_per_year:  a.void_months_per_year  ?? 1,
   }
 }
 
