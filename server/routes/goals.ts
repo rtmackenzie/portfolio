@@ -3,7 +3,7 @@ import { queryAll, queryOne, execute, transaction } from '../db/database.ts'
 import { logActivity } from '../services/activityLogger.ts'
 import { loadPortfolioState } from '../services/scenarioEngine.ts'
 import { generatePathways, rankPathways, type PropertyAssumptions, type RankablePathway } from '../services/pathwayGenerator.ts'
-import { loadTaxSettings } from '../services/settings.ts'
+import { loadTaxSettings, loadAssumptionSettings } from '../services/settings.ts'
 
 const router = Router()
 
@@ -39,8 +39,9 @@ router.post('/', (req, res) => {
       `INSERT INTO goals (name, goal_type, target_monthly_income, target_property_count, target_equity,
         target_date, max_ltv_pct, min_icr, min_annual_cashflow, scenario_id,
         director_loan_annual, director_loan_start_date,
-        starting_cash, mortgage_reprice_years, mortgage_reprice_uplift_bps, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        starting_cash, mortgage_reprice_years, mortgage_reprice_uplift_bps,
+        min_cash_reserve_months, capex_reserve_per_property, erc_pct, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [d.name, d.goal_type,
        d.target_monthly_income ?? null, d.target_property_count ?? null,
        d.target_equity ?? null, d.target_date ?? null,
@@ -48,6 +49,7 @@ router.post('/', (req, res) => {
        d.scenario_id ?? null,
        d.director_loan_annual ?? null, d.director_loan_start_date ?? null,
        d.starting_cash ?? null, d.mortgage_reprice_years ?? null, d.mortgage_reprice_uplift_bps ?? null,
+       d.min_cash_reserve_months ?? null, d.capex_reserve_per_property ?? null, d.erc_pct ?? null,
        d.notes ?? null]
     )
     const goal = queryOne(GOAL_SELECT + 'WHERE g.id = ?', [result.lastInsertRowid])
@@ -67,6 +69,7 @@ router.put('/:id', (req, res) => {
         target_equity=?, target_date=?, max_ltv_pct=?, min_icr=?, min_annual_cashflow=?,
         scenario_id=?, director_loan_annual=?, director_loan_start_date=?,
         starting_cash=?, mortgage_reprice_years=?, mortgage_reprice_uplift_bps=?,
+        min_cash_reserve_months=?, capex_reserve_per_property=?, erc_pct=?,
         notes=?, updated_at=datetime('now') WHERE id=?`,
       [d.name, d.goal_type,
        d.target_monthly_income ?? null, d.target_property_count ?? null,
@@ -75,6 +78,7 @@ router.put('/:id', (req, res) => {
        d.scenario_id ?? null,
        d.director_loan_annual ?? null, d.director_loan_start_date ?? null,
        d.starting_cash ?? null, d.mortgage_reprice_years ?? null, d.mortgage_reprice_uplift_bps ?? null,
+       d.min_cash_reserve_months ?? null, d.capex_reserve_per_property ?? null, d.erc_pct ?? null,
        d.notes ?? null, id]
     )
     const goal = queryOne(GOAL_SELECT + 'WHERE g.id = ?', [id])
@@ -136,17 +140,22 @@ router.post('/:id/pathways/generate', (req, res) => {
       max_ltv_pct: number | null; min_icr: number | null; min_annual_cashflow: number | null;
       director_loan_annual: number | null; director_loan_start_date: string | null;
       starting_cash: number | null; mortgage_reprice_years: number | null; mortgage_reprice_uplift_bps: number | null;
+      min_cash_reserve_months: number | null; capex_reserve_per_property: number | null; erc_pct: number | null;
     }>('SELECT * FROM goals WHERE id=?', [id])
     if (!goal) return res.status(404).json({ message: 'Goal not found' })
 
+    const assumptionSettings = loadAssumptionSettings()
     const body = req.body as PropertyAssumptions & { projection_years?: number }
     const assumptions: PropertyAssumptions = {
       purchase_price:      body.purchase_price,
       monthly_rent:        body.monthly_rent,
       monthly_expenses:    body.monthly_expenses ?? 200,
-      deposit_percent:     body.deposit_percent ?? 25,
-      mortgage_rate:       body.mortgage_rate ?? 5.5,
+      deposit_percent:     body.deposit_percent ?? assumptionSettings.default_deposit_percent,
+      mortgage_rate:       body.mortgage_rate ?? assumptionSettings.default_mortgage_rate_pct,
       mortgage_term_years: body.mortgage_term_years ?? 25,
+      legal_fees:          body.legal_fees ?? assumptionSettings.default_legal_fees,
+      arrangement_fee:     body.arrangement_fee ?? assumptionSettings.default_arrangement_fee,
+      valuation_fee:       body.valuation_fee ?? assumptionSettings.default_valuation_fee,
     }
     const projectionYears = body.projection_years ?? 15
 
@@ -158,7 +167,8 @@ router.post('/:id/pathways/generate', (req, res) => {
       assumptions,
       projectionYears,
       activeMortgageCount,
-      loadTaxSettings()
+      loadTaxSettings(),
+      assumptionSettings
     )
 
     const created = transaction(() => {

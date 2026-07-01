@@ -266,6 +266,9 @@ export interface Goal {
   starting_cash?: number | null
   mortgage_reprice_years?: number | null
   mortgage_reprice_uplift_bps?: number | null
+  min_cash_reserve_months?: number | null
+  capex_reserve_per_property?: number | null
+  erc_pct?: number | null
   notes?: string | null
   created_at: string
   updated_at: string
@@ -421,6 +424,22 @@ export interface TaxSettings {
   cgt_annual_exempt: number
   selling_costs_pct: number
 }
+
+export interface AssumptionSettings {
+  default_deposit_percent: number
+  default_mortgage_rate_pct: number
+  default_legal_fees: number
+  default_arrangement_fee: number
+  default_valuation_fee: number
+  default_property_growth_pct: number
+  default_rent_growth_pct: number
+  default_expense_inflation_pct: number
+  default_void_months_per_year: number
+  icr_stress_uplift_bps: number
+  icr_stress_floor_pct: number
+}
+
+export type Settings = TaxSettings & AssumptionSettings
 
 export interface MonthSnapshot {
   [key: string]: string | number

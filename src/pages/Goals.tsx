@@ -25,6 +25,9 @@ const goalSchema = z.object({
   starting_cash:              z.coerce.number().min(0).optional(),
   mortgage_reprice_years:     z.coerce.number().min(1).optional(),
   mortgage_reprice_uplift_bps: z.coerce.number().min(0).optional(),
+  min_cash_reserve_months:    z.coerce.number().min(0).optional(),
+  capex_reserve_per_property: z.coerce.number().min(0).optional(),
+  erc_pct:                    z.coerce.number().min(0).optional(),
   scenario_id:            z.coerce.number().optional(),
   notes: z.string().optional(),
 })
@@ -126,6 +129,9 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
       starting_cash:              goal.starting_cash ?? undefined,
       mortgage_reprice_years:     goal.mortgage_reprice_years ?? undefined,
       mortgage_reprice_uplift_bps: goal.mortgage_reprice_uplift_bps ?? undefined,
+      min_cash_reserve_months:    goal.min_cash_reserve_months ?? undefined,
+      capex_reserve_per_property: goal.capex_reserve_per_property ?? undefined,
+      erc_pct:                    goal.erc_pct ?? undefined,
       scenario_id:           goal.scenario_id ?? undefined,
       notes:                 goal.notes ?? '',
     } : { goal_type: 'net_worth' },
@@ -147,6 +153,9 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
       starting_cash:              goal.starting_cash ?? undefined,
       mortgage_reprice_years:     goal.mortgage_reprice_years ?? undefined,
       mortgage_reprice_uplift_bps: goal.mortgage_reprice_uplift_bps ?? undefined,
+      min_cash_reserve_months:    goal.min_cash_reserve_months ?? undefined,
+      capex_reserve_per_property: goal.capex_reserve_per_property ?? undefined,
+      erc_pct:                    goal.erc_pct ?? undefined,
       scenario_id:           goal.scenario_id ?? undefined,
       notes:                 goal.notes ?? '',
     } : { goal_type: 'net_worth' })
@@ -172,6 +181,9 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
       starting_cash:              d.starting_cash ?? null,
       mortgage_reprice_years:     d.mortgage_reprice_years ?? null,
       mortgage_reprice_uplift_bps: d.mortgage_reprice_uplift_bps ?? null,
+      min_cash_reserve_months:    d.min_cash_reserve_months ?? null,
+      capex_reserve_per_property: d.capex_reserve_per_property ?? null,
+      erc_pct:                    d.erc_pct ?? null,
       scenario_id:          d.scenario_id || null,
       notes:                d.notes || null,
     }
@@ -275,6 +287,18 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
           <div>
             <label className={labelCls}><Tip text="Rate increase applied each time a mortgage reprices (200 = +2%). Defaults to 200.">Reprice uplift (bps)</Tip></label>
             <input type="number" {...register('mortgage_reprice_uplift_bps')} className={inputCls} placeholder="e.g. 200" />
+          </div>
+          <div>
+            <label className={labelCls}><Tip text="Minimum months of outgoings the portfolio must keep in cash at all times. Pathways dipping below this are infeasible. Defaults to 3.">Cash reserve (months)</Tip></label>
+            <input type="number" {...register('min_cash_reserve_months')} className={inputCls} placeholder="e.g. 3" />
+          </div>
+          <div>
+            <label className={labelCls}><Tip text="Extra cash float held per property for maintenance/capex, on top of the monthly-outgoings reserve. Defaults to £1,000.">Capex reserve per property (£)</Tip></label>
+            <input type="number" {...register('capex_reserve_per_property')} className={inputCls} placeholder="e.g. 1000" />
+          </div>
+          <div>
+            <label className={labelCls}><Tip text="Early Repayment Charge — the % of balance charged when a fixed-rate deal is paid off or refinanced before its fix ends. Defaults to 3%.">Early repayment charge (%)</Tip></label>
+            <input type="number" step="0.1" {...register('erc_pct')} className={inputCls} placeholder="e.g. 3" />
           </div>
         </div>
       </div>

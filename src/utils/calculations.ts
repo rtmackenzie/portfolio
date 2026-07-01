@@ -23,11 +23,13 @@ export function calcADS(price: number): number {
 export function calcTransactionCosts(
   price: number,
   legalFees = 2000,
-  refurbCosts = 0
+  refurbCosts = 0,
+  arrangementFee = 0,
+  valuationFee = 0
 ): { lbtt: number; ads: number; fees: number; total: number } {
   const lbtt = calcLBTT(price)
   const ads = calcADS(price)
-  const fees = legalFees + refurbCosts
+  const fees = legalFees + refurbCosts + arrangementFee + valuationFee
   return { lbtt, ads, fees, total: lbtt + ads + fees }
 }
 

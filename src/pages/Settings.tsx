@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSettings, useUpdateSettings } from '@/hooks/useSettings'
-import type { TaxSettings } from '@/types'
+import type { TaxSettings, AssumptionSettings } from '@/types'
 
 const taxInputCls = 'w-full px-3 py-2 rounded-md bg-input border border-border text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary'
 const taxLabelCls = 'block text-xs font-medium text-muted-foreground mb-1'
@@ -64,6 +64,54 @@ function TaxSettingsCard() {
   )
 }
 
+function AssumptionSettingsCard() {
+  const { data: settings } = useSettings()
+  const update = useUpdateSettings()
+  const [form, setForm] = useState<AssumptionSettings | null>(null)
+
+  useEffect(() => { if (settings) setForm(settings) }, [settings])
+  if (!form) return null
+
+  const set = <K extends keyof AssumptionSettings>(k: K, v: AssumptionSettings[K]) => setForm({ ...form, [k]: v })
+  const num = (k: keyof AssumptionSettings, step = '0.1') => (
+    <input type="number" step={step} value={form[k] as number}
+      onChange={e => set(k, Number(e.target.value) as never)} className={taxInputCls} />
+  )
+
+  return (
+    <div className="bg-card rounded-lg p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-base font-semibold">Assumptions</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Default deal terms, growth/inflation rates and lender stress test used whenever a scenario or goal pathway doesn't specify its own value.</p>
+        </div>
+        <button
+          onClick={() => update.mutate(form)}
+          disabled={update.isPending}
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium disabled:opacity-50"
+        >
+          {update.isPending ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+
+      <div className="grid grid-cols-4 gap-4">
+        <div><label className={taxLabelCls}>Default deposit (%)</label>{num('default_deposit_percent')}</div>
+        <div><label className={taxLabelCls}>Default mortgage rate (%)</label>{num('default_mortgage_rate_pct')}</div>
+        <div><label className={taxLabelCls}>Default legal fees (£)</label>{num('default_legal_fees', '1')}</div>
+        <div><label className={taxLabelCls}>Default arrangement fee (£)</label>{num('default_arrangement_fee', '1')}</div>
+        <div><label className={taxLabelCls}>Default valuation fee (£)</label>{num('default_valuation_fee', '1')}</div>
+        <div><label className={taxLabelCls}>Property growth (%/yr)</label>{num('default_property_growth_pct')}</div>
+        <div><label className={taxLabelCls}>Rent growth (%/yr)</label>{num('default_rent_growth_pct')}</div>
+        <div><label className={taxLabelCls}>Expense inflation (%/yr)</label>{num('default_expense_inflation_pct')}</div>
+        <div><label className={taxLabelCls}>Void (months/yr)</label>{num('default_void_months_per_year')}</div>
+        <div><label className={taxLabelCls}>ICR stress uplift (bps)</label>{num('icr_stress_uplift_bps', '1')}</div>
+        <div><label className={taxLabelCls}>ICR stress rate floor (%)</label>{num('icr_stress_floor_pct')}</div>
+        <div className="col-span-4 text-xs text-muted-foreground">The lender ICR stress test uses the higher of (mortgage rate + uplift) and the floor.</div>
+      </div>
+    </div>
+  )
+}
+
 export default function Settings() {
   return (
     <div className="space-y-6">
@@ -72,6 +120,7 @@ export default function Settings() {
         <p className="text-sm text-muted-foreground mt-0.5">Configuration that applies across the app</p>
       </div>
       <TaxSettingsCard />
+      <AssumptionSettingsCard />
     </div>
   )
 }

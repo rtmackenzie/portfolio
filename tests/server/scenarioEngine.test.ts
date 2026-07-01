@@ -190,7 +190,7 @@ describe('buildProjection — true cash model', () => {
         parameters_json: JSON.stringify({
           purchase_price: price, monthly_rent: 0, deposit_percent: depositPct,
           monthly_expenses: 0, mortgage_rate: rate, mortgage_term_years: term,
-          legal_fees: 2000, refurb_costs: 0,
+          legal_fees: 2000, refurb_costs: 0, arrangement_fee: 0, valuation_fee: 0,
         }),
       })],
       BASE_CONFIG
@@ -208,6 +208,48 @@ describe('buildProjection — true cash model', () => {
       BASE_CONFIG
     )
     // The £120k capital outflow lands in the payoff month — a clean step down from the prior month
+    expect(months[5].cumulative_cashflow - months[4].cumulative_cashflow).toBe(-120000)
+  })
+
+  it('payoff_mortgage charges ERC when clearing a fixed deal before its fix ends (§P1-6)', () => {
+    const state = makeState({
+      id: 1, debt: 120000, is_interest_only: true, monthly_rent: 0, monthly_other_expenses: 0,
+      is_fixed_rate: true, next_reprice_month: 12,   // month 5 payoff is well before month 12
+    })
+    const { months } = buildProjection(
+      makeMap(state),
+      [makeEvent({ event_type: 'payoff_mortgage', date: '2026-06-01', property_id: 1, parameters_json: '{}' })],
+      { ...BASE_CONFIG, assumptions_json: JSON.stringify({ void_months_per_year: 0, expense_inflation_pct: 0, rent_growth_pct: 0, erc_pct: 3 }) }
+    )
+    // £120k cleared + 3% ERC (£3,600) = £123,600 step down
+    expect(months[5].cumulative_cashflow - months[4].cumulative_cashflow).toBe(-123600)
+  })
+
+  it('payoff_mortgage charges no ERC once the fix has naturally ended', () => {
+    // next_reprice_month === payoff month: the fix has already run its course, so
+    // `i < next_reprice_month` is false and no early-exit charge applies.
+    const state = makeState({
+      id: 1, debt: 120000, is_interest_only: true, monthly_rent: 0, monthly_other_expenses: 0,
+      is_fixed_rate: true, next_reprice_month: 5,
+    })
+    const { months } = buildProjection(
+      makeMap(state),
+      [makeEvent({ event_type: 'payoff_mortgage', date: '2026-06-01', property_id: 1, parameters_json: '{}' })],
+      { ...BASE_CONFIG, assumptions_json: JSON.stringify({ void_months_per_year: 0, expense_inflation_pct: 0, rent_growth_pct: 0, erc_pct: 3 }) }
+    )
+    expect(months[5].cumulative_cashflow - months[4].cumulative_cashflow).toBe(-120000)
+  })
+
+  it('a tracker never incurs ERC on payoff, regardless of timing (regression)', () => {
+    const state = makeState({
+      id: 1, debt: 120000, is_interest_only: true, monthly_rent: 0, monthly_other_expenses: 0,
+      is_fixed_rate: false, next_reprice_month: 12,
+    })
+    const { months } = buildProjection(
+      makeMap(state),
+      [makeEvent({ event_type: 'payoff_mortgage', date: '2026-06-01', property_id: 1, parameters_json: '{}' })],
+      { ...BASE_CONFIG, assumptions_json: JSON.stringify({ void_months_per_year: 0, expense_inflation_pct: 0, rent_growth_pct: 0, erc_pct: 3 }) }
+    )
     expect(months[5].cumulative_cashflow - months[4].cumulative_cashflow).toBe(-120000)
   })
 })
@@ -473,6 +515,7 @@ describe('buildProjection — buy_property event', () => {
         parameters_json: JSON.stringify({
           purchase_price: 66000, monthly_rent: 700, deposit_percent: 100,
           monthly_expenses: 0, legal_fees: 2000, refurb_costs: 0,
+          arrangement_fee: 0, valuation_fee: 0,
         }),
       })],
       BASE_CONFIG
@@ -640,6 +683,54 @@ describe('buildProjection — remortgage event', () => {
       BASE_CONFIG
     )
     expect(withFee.months[5].cumulative_cashflow).toBe(noFee.months[5].cumulative_cashflow - 1500)
+  })
+
+  // Compare an erc_pct:3 run against an erc_pct:0 run on the same state/event so the
+  // assertion isolates exactly the ERC line item, without hand-deriving amortisation math.
+  function remortgageWithErc(state: PropertyState, ercPct: number) {
+    const cfg = {
+      ...BASE_CONFIG,
+      assumptions_json: JSON.stringify({ void_months_per_year: 0, expense_inflation_pct: 0, rent_growth_pct: 0, erc_pct: ercPct }),
+    }
+    return buildProjection(
+      makeMap(state),
+      [makeEvent({
+        event_type: 'remortgage', date: '2026-06-01', property_id: 1,
+        parameters_json: JSON.stringify({ new_rate: 5, new_term_years: 25, new_balance: 100000 }),
+      })],
+      cfg
+    ).months
+  }
+
+  it('charges ERC on the pre-remortgage balance when refinancing away from a fixed deal early (§P1-6)', () => {
+    const state = makeState({
+      id: 1, debt: 100000, monthly_rent: 0, monthly_mortgage: 500, monthly_other_expenses: 0,
+      is_fixed_rate: true, next_reprice_month: 12,   // month 5 remortgage is before the fix ends
+    })
+    const withErc = remortgageWithErc(state, 3)
+    const noErc = remortgageWithErc(state, 0)
+    // 3% ERC on the £100k balance being replaced (small tolerance for per-month rounding drift)
+    expect(Math.abs((noErc[5].cumulative_cashflow - withErc[5].cumulative_cashflow) - 3000)).toBeLessThanOrEqual(10)
+  })
+
+  it('charges no ERC on remortgage once the fix has naturally ended', () => {
+    const state = makeState({
+      id: 1, debt: 100000, monthly_rent: 0, monthly_mortgage: 500, monthly_other_expenses: 0,
+      is_fixed_rate: true, next_reprice_month: 5,   // reprice coincides with the remortgage month
+    })
+    const withErc = remortgageWithErc(state, 3)
+    const noErc = remortgageWithErc(state, 0)
+    expect(withErc[5].cumulative_cashflow).toBe(noErc[5].cumulative_cashflow)
+  })
+
+  it('a tracker never incurs ERC on remortgage, regardless of timing (regression)', () => {
+    const state = makeState({
+      id: 1, debt: 100000, monthly_rent: 0, monthly_mortgage: 500, monthly_other_expenses: 0,
+      is_fixed_rate: false, next_reprice_month: 12,
+    })
+    const withErc = remortgageWithErc(state, 3)
+    const noErc = remortgageWithErc(state, 0)
+    expect(withErc[5].cumulative_cashflow).toBe(noErc[5].cumulative_cashflow)
   })
 
   it('interest-only refinance does not reduce debt', () => {

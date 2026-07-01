@@ -1,7 +1,8 @@
 import { queryAll } from '../db/database.ts'
 import { calcMonthlyPayment, calcTransactionCosts } from './calculations.ts'
 import { incomeTaxForMonth, disposalTax, icrThresholdPct, type TaxSettings } from './tax.ts'
-import { loadTaxSettings } from './settings.ts'
+import { loadTaxSettings, loadAssumptionSettings } from './settings.ts'
+import type { AssumptionSettings } from './assumptions.ts'
 
 interface ScenarioConfig {
   base_date: string
@@ -12,6 +13,7 @@ interface ScenarioConfig {
   propertyLabels?: Record<number, string>
   tax?: TaxSettings   // global tax settings; when absent, post-tax == pre-tax
   starting_cash?: number   // real cash on hand at month 0; default 0 (today's behaviour)
+  defaults?: Partial<AssumptionSettings>   // global assumption defaults; caller-injected, engine literal is the final fallback
 }
 
 export interface ScenarioEvent {
@@ -70,7 +72,7 @@ export function buildProjection(
   for (const [id] of stateMap) {
     propLabels.set(id, config.propertyLabels?.[id] ?? `Property ${id}`)
   }
-  type PropMonthEntry = { date: string; value: number; debt: number; equity: number; monthly_cashflow: number; cumulative_cashflow: number }
+  type PropMonthEntry = { date: string; value: number; debt: number; equity: number; monthly_cashflow: number; cumulative_cashflow: number; is_fixed_rate: boolean; next_reprice_month: number | null }
   const propMonths = new Map<number, PropMonthEntry[]>()
   const propCumCashflow = new Map<number, number>()
   for (const [id] of stateMap) { propMonths.set(id, []); propCumCashflow.set(id, 0) }
@@ -102,14 +104,21 @@ export function buildProjection(
   }
 
   const assumptions = JSON.parse(config.assumptions_json ?? '{}')
-  const growthRate     = assumptions.property_growth_pct   ?? 3.0
-  const inflationRate  = assumptions.expense_inflation_pct ?? 2.5
-  const rentGrowthRate = assumptions.rent_growth_pct       ?? 2.5
-  const voidMonths     = assumptions.void_months_per_year  ?? 1
+  const growthRate     = assumptions.property_growth_pct   ?? config.defaults?.default_property_growth_pct   ?? 3.0
+  const inflationRate  = assumptions.expense_inflation_pct ?? config.defaults?.default_expense_inflation_pct ?? 2.5
+  const rentGrowthRate = assumptions.rent_growth_pct       ?? config.defaults?.default_rent_growth_pct       ?? 2.5
+  const voidMonths     = assumptions.void_months_per_year  ?? config.defaults?.default_void_months_per_year  ?? 1
   const voidFactor     = 1 - voidMonths / 12
   // Fixed-rate mortgages revert/refix on a schedule; trackers hold flat (§6.3 fix).
   const repriceYears     = assumptions.mortgage_reprice_years      ?? 5
   const repriceUpliftBps = assumptions.mortgage_reprice_uplift_bps ?? 200
+  // Early Repayment Charge: a flat % of balance charged when a fixed deal is paid
+  // off or refinanced away before its fix naturally ends (§P1-6 acquisition-fees fix).
+  const ercPct = assumptions.erc_pct ?? 3
+  // Lender ICR stress test (P0 #4): rent vs. an interest-only payment at the higher
+  // of pay-rate+uplift or a rate floor — the standard UK BTL affordability test.
+  const stressUplift = (config.defaults?.icr_stress_uplift_bps ?? 200) / 100
+  const stressFloor = config.defaults?.icr_stress_floor_pct ?? 5.5
 
   const snapshots: MonthSnapshot[] = []
   let cumulativeCashflow = config.starting_cash ?? 0
@@ -145,9 +154,9 @@ export function buildProjection(
 
       switch (ev.event_type) {
         case 'buy_property': {
-          const depositPct = params.deposit_percent ?? 25
+          const depositPct = params.deposit_percent ?? config.defaults?.default_deposit_percent ?? 25
           const price = params.purchase_price ?? 0
-          const rate = (params.mortgage_rate ?? 5.5) + (config.rate_shock_bps ?? 0) / 100
+          const rate = (params.mortgage_rate ?? config.defaults?.default_mortgage_rate_pct ?? 5.5) + (config.rate_shock_bps ?? 0) / 100
           const termYears = params.mortgage_term_years ?? 25
           const debt = price * (1 - depositPct / 100)
           const isIO = params.interest_only ?? false
@@ -177,8 +186,10 @@ export function buildProjection(
           propCumCashflow.set(newId, 0)
           const { total: txCosts } = calcTransactionCosts(
             price,
-            params.legal_fees ?? 2000,
-            params.refurb_costs ?? 0
+            params.legal_fees ?? config.defaults?.default_legal_fees ?? 2000,
+            params.refurb_costs ?? 0,
+            params.arrangement_fee ?? config.defaults?.default_arrangement_fee ?? 999,
+            params.valuation_fee ?? config.defaults?.default_valuation_fee ?? 300
           )
           // Deposit + transaction costs are a real capital outflow drawn from the
           // accumulated cash pot (retained cashflow + director loans).
@@ -220,7 +231,12 @@ export function buildProjection(
             if (newDebt > currentDebt) {
               cumulativeCashflow += newDebt - currentDebt
             }
-            cumulativeCashflow -= params.arrangement_fee ?? 0
+            // ERC: refinancing away from a fixed deal before it naturally reprices
+            // is an early exit on the balance being replaced.
+            if (state.is_fixed_rate && state.next_reprice_month != null && i < state.next_reprice_month) {
+              cumulativeCashflow -= currentDebt * (ercPct / 100)
+            }
+            cumulativeCashflow -= (params.arrangement_fee ?? 0) + (params.valuation_fee ?? 0)
 
             state.monthly_mortgage = calcMonthlyPayment(newDebt, newRate, isIO ? 0 : newTermYrs * 12)
             state.mortgage_rate    = newRate
@@ -278,6 +294,11 @@ export function buildProjection(
             // Capital event — the cleared balance is a real outflow drawn from the
             // accumulated cash pot (retained cashflow + director loans).
             const clearedBalance = debtMap.get(targetId) ?? 0
+            // ERC: clearing a fixed deal before it naturally reprices is an early
+            // exit and typically costs 1–5% of the balance in reality.
+            if (state.is_fixed_rate && state.next_reprice_month != null && i < state.next_reprice_month) {
+              cumulativeCashflow -= clearedBalance * (ercPct / 100)
+            }
             cumulativeCashflow -= clearedBalance
             state.monthly_mortgage = 0
             state.debt = 0
@@ -338,10 +359,7 @@ export function buildProjection(
       const monthlyInterest = (currentDebt > 0 && state.mortgage_rate > 0)
         ? currentDebt * (state.mortgage_rate / 100 / 12)
         : 0
-      // Lender ICR stress test (P0 #4): rent vs. an interest-only payment at the
-      // higher of pay-rate+2% or a 5.5% floor — the standard UK BTL affordability test,
-      // independent of whether this property is actually financed on repayment/IO terms.
-      const stressRate = Math.max(state.mortgage_rate + 2, 5.5)
+      const stressRate = Math.max(state.mortgage_rate + stressUplift, stressFloor)
       const stressedInterest = currentDebt > 0 ? currentDebt * (stressRate / 100 / 12) : 0
       if (currentDebt > 0 && !state.is_interest_only && state.mortgage_rate > 0) {
         const principal = Math.max(0, state.monthly_mortgage - monthlyInterest)
@@ -374,6 +392,8 @@ export function buildProjection(
         equity: Math.round(currentValue - currentDebt),
         monthly_cashflow: Math.round(propCashflow),
         cumulative_cashflow: Math.round(newCum),
+        is_fixed_rate: !!state.is_fixed_rate,
+        next_reprice_month: state.next_reprice_month ?? null,
       })
     }
 
@@ -537,5 +557,6 @@ export function loadPortfolioState(): {
 export function runScenario(scenario: ScenarioConfig, events: ScenarioEvent[]) {
   const { initialState, propertyLabels } = loadPortfolioState()
   const tax = scenario.tax ?? loadTaxSettings()
-  return buildProjection(initialState, events, { ...scenario, propertyLabels, tax })
+  const defaults = scenario.defaults ?? loadAssumptionSettings()
+  return buildProjection(initialState, events, { ...scenario, propertyLabels, tax, defaults })
 }

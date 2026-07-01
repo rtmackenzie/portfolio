@@ -345,6 +345,14 @@ describe('generatePathways — configurable cash reserve (P0 #3)', () => {
       expect(cashAvail).toBeGreaterThanOrEqual(floor - 1)
     }
   })
+
+  it('the Mortgage Recycler ends up worse off once ERC is charged on its opportunistic payoffs (§P1-6)', () => {
+    const withErc = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const noErc = generatePathways({ ...goal, erc_pct: 0 }, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const recyclerWithErc = withErc.find(p => p.template_name === 'mortgage_recycler')!
+    const recyclerNoErc = noErc.find(p => p.template_name === 'mortgage_recycler')!
+    expect(recyclerWithErc.results.summary.end_equity).toBeLessThan(recyclerNoErc.results.summary.end_equity)
+  })
 })
 
 describe('generatePathways — configurable starting cash & rate repricing (UI/DB exposure)', () => {

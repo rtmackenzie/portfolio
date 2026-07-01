@@ -37,6 +37,14 @@ describe('calcTransactionCosts', () => {
     const result = calcTransactionCosts(0)
     expect(result).toEqual({ lbtt: 0, ads: 0, fees: 2000, total: 2000 })
   })
+  it('folds arrangement + valuation fees into fees/total when supplied (§P1-6)', () => {
+    const result = calcTransactionCosts(66000, 2000, 0, 999, 300)
+    expect(result).toEqual({ lbtt: 0, ads: 5280, fees: 3299, total: 8579 })
+  })
+  it('omitting arrangement/valuation fees leaves totals unchanged (regression)', () => {
+    const result = calcTransactionCosts(66000, 2000, 0)
+    expect(result).toEqual({ lbtt: 0, ads: 5280, fees: 2000, total: 7280 })
+  })
 })
 
 // ─── calculatePropertyFinancials ─────────────────────────────────────────────

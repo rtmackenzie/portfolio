@@ -1,6 +1,7 @@
 import { buildProjection, type PropertyState, type ScenarioEvent } from './scenarioEngine.ts'
 import { calcTransactionCosts } from './calculations.ts'
 import { icrThresholdPct, type TaxSettings } from './tax.ts'
+import type { AssumptionSettings } from './assumptions.ts'
 
 type GoalType = 'income' | 'count' | 'net_worth' | 'mortgage_free' | 'retirement_date'
 
@@ -21,6 +22,7 @@ interface Goal {
                                    // portfolio's own reserve requirement when unset (§P0-3)
   mortgage_reprice_years?: number | null       // fixed-rate term before reverting; default 5 (§P1-5)
   mortgage_reprice_uplift_bps?: number | null  // rate rise at each reprice; default 200 (§P1-5)
+  erc_pct?: number | null   // early-repayment-charge %, on payoffs/remortgages before a fix ends; default 3 (§P1-6)
 }
 
 export interface PropertyAssumptions {
@@ -30,6 +32,9 @@ export interface PropertyAssumptions {
   deposit_percent?: number
   mortgage_rate?: number
   mortgage_term_years?: number
+  legal_fees?: number        // legal/survey fee at purchase; default £2,000
+  arrangement_fee?: number   // mortgage product fee at purchase; default £999 (§P1-6)
+  valuation_fee?: number     // lender valuation/survey fee at purchase; default £300 (§P1-6)
 }
 
 type MonthSnapshot = {
@@ -54,6 +59,8 @@ type PropMonth = {
   equity: number
   monthly_cashflow: number
   cumulative_cashflow: number
+  is_fixed_rate: boolean
+  next_reprice_month: number | null
 }
 
 type PropSeries = {
@@ -129,6 +136,9 @@ function buyEvent(date: string, a: PropertyAssumptions, interestOnly = false): S
       mortgage_rate:      a.mortgage_rate ?? 5.5,
       mortgage_term_years: a.mortgage_term_years ?? 25,
       interest_only:      interestOnly,
+      legal_fees:         a.legal_fees ?? 2000,
+      arrangement_fee:    a.arrangement_fee ?? 999,
+      valuation_fee:      a.valuation_fee ?? 300,
     }),
   }
 }
@@ -153,7 +163,7 @@ type Strategy = 'steady' | 'accelerated' | 'recycler'
 function depositPlusCosts(a: PropertyAssumptions): number {
   const price = a.purchase_price
   const deposit = price * ((a.deposit_percent ?? 25) / 100)
-  const { total: txCosts } = calcTransactionCosts(price, 2000, 0)
+  const { total: txCosts } = calcTransactionCosts(price, a.legal_fees ?? 2000, 0, a.arrangement_fee ?? 999, a.valuation_fee ?? 300)
   return deposit + txCosts
 }
 
@@ -161,13 +171,16 @@ function cloneState(initial: Map<number, PropertyState>): Map<number, PropertySt
   return new Map(Array.from(initial.entries()).map(([k, v]) => [k, { ...v }]))
 }
 
-// Active mortgages / smallest balance at absolute month i, read from property_series
-function activeBalancesAt(proj: ProjectionResult, i: number): number[] {
+// Active mortgages at absolute month i, read from property_series — includes each
+// balance's ERC exposure so the payoff decision can gate on the true cash impact.
+function activeBalancesAt(proj: ProjectionResult, i: number): { debt: number; isEarlyExit: boolean }[] {
   const ym = proj.months[i].date
-  const out: number[] = []
+  const out: { debt: number; isEarlyExit: boolean }[] = []
   for (const ps of proj.property_series) {
     const pm = ps.months.find(m => m.date === ym)
-    if (pm && pm.debt > 0) out.push(pm.debt)
+    if (pm && pm.debt > 0) {
+      out.push({ debt: pm.debt, isEarlyExit: pm.is_fixed_rate && pm.next_reprice_month != null && i < pm.next_reprice_month })
+    }
   }
   return out
 }
@@ -204,20 +217,24 @@ function buildCashGatedEvents(
   stopAtGoal: boolean,
   interestOnly: boolean,
   startingCash: number,
-  assumptionsJson: string
+  assumptionsJson: string,
+  settings?: AssumptionSettings
 ): ScenarioEvent[] {
   const totalMonths = projYears * 12
   const config = { base_date: baseDate, projection_years: projYears, tax, starting_cash: startingCash, assumptions_json: assumptionsJson }
   const buyCost = depositPlusCosts(a)
   const monthlyExp = a.monthly_expenses ?? 200
+  const ercPct = goal.erc_pct ?? 3
   const cap = projYears * 4                                   // hard ceiling on decisions
   const marginGoal = withMargin(goal)
 
   // Lender ICR buy gate (P0 #4): this deal's own rent vs. a stressed interest-only
   // payment on the loan — the same test a real lender applies to one loan at a time,
   // so a single unfinanceable purchase can't be masked by other properties' cashflow.
-  const stressRate = Math.max((a.mortgage_rate ?? 5.5) + 2, 5.5)
-  const loanAmount = a.purchase_price * (1 - (a.deposit_percent ?? 25) / 100)
+  const stressUplift = (settings?.icr_stress_uplift_bps ?? 200) / 100
+  const stressFloor = settings?.icr_stress_floor_pct ?? 5.5
+  const stressRate = Math.max((a.mortgage_rate ?? settings?.default_mortgage_rate_pct ?? 5.5) + stressUplift, stressFloor)
+  const loanAmount = a.purchase_price * (1 - (a.deposit_percent ?? settings?.default_deposit_percent ?? 25) / 100)
   const candidateIcrPct = loanAmount > 0 ? (a.monthly_rent / (loanAmount * stressRate / 100 / 12)) * 100 : Infinity
   const icrFloor = goal.min_icr ?? icrThresholdPct(tax)
   const icrOk = candidateIcrPct >= icrFloor
@@ -250,8 +267,9 @@ function buildCashGatedEvents(
         if (balances.length < 2) {
           if (icrOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, a, interestOnly); decidedMonth = i; break }
         } else {
-          const smallest = Math.min(...balances)
-          if (cash - smallest >= reserveFloor(goal, monthlyExp, propCount)) { decided = payoffEvent(proj.months[i].date); decidedMonth = i; break }
+          const target = balances.reduce((min, b) => b.debt < min.debt ? b : min)
+          const ercCost = target.isEarlyExit ? target.debt * ercPct / 100 : 0
+          if (cash - target.debt - ercCost >= reserveFloor(goal, monthlyExp, propCount)) { decided = payoffEvent(proj.months[i].date); decidedMonth = i; break }
         }
       } else {
         if (icrOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, a, interestOnly); decidedMonth = i; break }
@@ -465,7 +483,8 @@ export function generatePathways(
   assumptions: PropertyAssumptions,
   projectionYears: number,
   _activeMortgageCount: number,  // retained for API stability; recycler now reads live debt
-  tax?: TaxSettings              // global tax settings → post-tax goal solving
+  tax?: TaxSettings,             // global tax settings → post-tax goal solving
+  settings?: AssumptionSettings  // global assumption defaults (growth/void/inflation/ICR stress)
 ): GeneratedPathway[] {
   const baseDate = new Date().toISOString().slice(0, 10)
   const monthlyExp = assumptions.monthly_expenses ?? 200
@@ -479,12 +498,13 @@ export function generatePathways(
   // Snapshot every assumption the projection actually uses onto the generated
   // scenario, so it's fully self-describing/editable afterward in What-If (§P1-5 fix).
   const assumptionsJson = JSON.stringify({
-    property_growth_pct: 3.0,
-    rent_growth_pct: 2.5,
-    expense_inflation_pct: 2.5,
-    void_months_per_year: 1,
+    property_growth_pct: settings?.default_property_growth_pct ?? 3.0,
+    rent_growth_pct: settings?.default_rent_growth_pct ?? 2.5,
+    expense_inflation_pct: settings?.default_expense_inflation_pct ?? 2.5,
+    void_months_per_year: settings?.default_void_months_per_year ?? 1,
     mortgage_reprice_years: goal.mortgage_reprice_years ?? 5,
     mortgage_reprice_uplift_bps: goal.mortgage_reprice_uplift_bps ?? 200,
+    erc_pct: goal.erc_pct ?? 3,
   })
 
   const config = {
@@ -511,7 +531,7 @@ export function generatePathways(
 
   return templates.map(t => {
     // Cash-gated decisions (buys/payoffs), then merge loan events for the final run
-    const decisions = buildCashGatedEvents(t.strategy, baseDate, projectionYears, assumptions, initialState, loanEvents, tax, goal, t.stopAtGoal, t.interestOnly, startingCash, assumptionsJson)
+    const decisions = buildCashGatedEvents(t.strategy, baseDate, projectionYears, assumptions, initialState, loanEvents, tax, goal, t.stopAtGoal, t.interestOnly, startingCash, assumptionsJson, settings)
     const allEvents = [...decisions, ...loanEvents].sort((a, b) => a.date.localeCompare(b.date))
 
     const results = buildProjection(cloneState(initialState), allEvents, config) as ProjectionResult

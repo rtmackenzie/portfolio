@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Play, X, Trash2, Pencil, Copy, ChevronDown, FileDown } from 'lucide-react'
 import { api } from '@/services/api'
@@ -10,8 +10,9 @@ import { calcTransactionCosts, calcMonthlyMortgage } from '@/utils/calculations'
 import { useForm, type UseFormRegister } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import type { Scenario, ScenarioResults } from '@/types'
+import type { Scenario, ScenarioResults, Settings } from '@/types'
 import { ScenarioCompareTable } from '@/components/shared/ScenarioCompareTable'
+import { useSettings } from '@/hooks/useSettings'
 
 const scenarioSchema = z.object({
   name: z.string().min(1),
@@ -539,25 +540,35 @@ function serializeScenarioPayload(d: z.infer<typeof scenarioSchema>) {
   return { ...rest, assumptions_json: JSON.stringify({ property_growth_pct, expense_inflation_pct, void_months_per_year }) }
 }
 
-function parseAssumptions(json?: string | null) {
+function parseAssumptions(json?: string | null, settings?: Settings) {
   const a = JSON.parse(json ?? '{}')
   return {
-    property_growth_pct:   a.property_growth_pct   ?? 3.0,
-    expense_inflation_pct: a.expense_inflation_pct ?? 2.5,
-    void_months_per_year:  a.void_months_per_year  ?? 1,
+    property_growth_pct:   a.property_growth_pct   ?? settings?.default_property_growth_pct   ?? 3.0,
+    expense_inflation_pct: a.expense_inflation_pct ?? settings?.default_expense_inflation_pct ?? 2.5,
+    void_months_per_year:  a.void_months_per_year  ?? settings?.default_void_months_per_year  ?? 1,
   }
 }
 
 function CreateScenarioModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: number) => void }) {
   const qc = useQueryClient()
+  const { data: settings } = useSettings()
   const create = useMutation({
     mutationFn: (data: any) => api.post<Scenario>('/scenarios', data),
     onSuccess: (s) => { qc.invalidateQueries({ queryKey: ['scenarios'] }); onCreated(s.id) },
   })
-  const { register, handleSubmit } = useForm<ScenarioFormValues>({
+  const { register, handleSubmit, setValue } = useForm<ScenarioFormValues>({
     resolver: zodResolver(scenarioSchema) as any,
     defaultValues: { projection_years: 10, base_date: new Date().toISOString().slice(0, 10), ...parseAssumptions(null) },
   })
+  // Settings loads async — sync the assumption fields once it arrives so a brand-new
+  // scenario reflects the current global defaults, not the code-level literal fallback.
+  useEffect(() => {
+    if (!settings) return
+    const a = parseAssumptions(null, settings)
+    setValue('property_growth_pct', a.property_growth_pct)
+    setValue('expense_inflation_pct', a.expense_inflation_pct)
+    setValue('void_months_per_year', a.void_months_per_year)
+  }, [settings, setValue])
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-card rounded-xl shadow-2xl w-full max-w-md p-6">
@@ -579,6 +590,7 @@ function CreateScenarioModal({ onClose, onCreated }: { onClose: () => void; onCr
 
 function EditScenarioModal({ scenario, onClose }: { scenario: Scenario; onClose: () => void }) {
   const qc = useQueryClient()
+  const { data: settings } = useSettings()
   const update = useMutation({
     mutationFn: (data: any) => api.put(`/scenarios/${scenario.id}`, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['scenarios'] }); qc.invalidateQueries({ queryKey: ['scenarios', scenario.id] }); onClose() },
@@ -590,7 +602,7 @@ function EditScenarioModal({ scenario, onClose }: { scenario: Scenario; onClose:
       description: scenario.description ?? '',
       base_date: scenario.base_date,
       projection_years: scenario.projection_years,
-      ...parseAssumptions((scenario as any).assumptions_json),
+      ...parseAssumptions((scenario as any).assumptions_json, settings),
     },
   })
   return (
@@ -636,6 +648,7 @@ function EventModal({ scenarioId, event, onClose }: { scenarioId: number; event?
     queryKey: ['properties'],
     queryFn: () => api.get<{ id: number; address_line1: string; town: string }[]>('/properties'),
   })
+  const { data: settings } = useSettings()
 
   const setParam = (key: string, val: string) =>
     setParams(prev => ({ ...prev, [key]: val === '' ? '' : Number(val) }))
@@ -695,19 +708,23 @@ function EventModal({ scenarioId, event, onClose }: { scenarioId: number; event?
                 <option value="cash">Cash Purchase</option>
               </select>
             </div>
-            {!isCash && numField('deposit_percent', 'Deposit (%)', '25')}
-            {!isCash && numField('mortgage_rate', 'Interest Rate (%)', '5.5')}
+            {!isCash && numField('deposit_percent', 'Deposit (%)', String(settings?.default_deposit_percent ?? 25))}
+            {!isCash && numField('mortgage_rate', 'Interest Rate (%)', String(settings?.default_mortgage_rate_pct ?? 5.5))}
             {!isCash && numField('mortgage_term_years', 'Mortgage Term (years)', '25')}
             {numField('monthly_expenses', 'Monthly Expenses (£)', '200')}
-            {numField('legal_fees', 'Legal & Survey Fees (£)', '2000')}
+            {numField('legal_fees', 'Legal & Survey Fees (£)', String(settings?.default_legal_fees ?? 2000))}
             {numField('refurb_costs', 'Refurbishment Costs (£)', '0')}
+            {!isCash && numField('arrangement_fee', 'Arrangement Fee (£)', String(settings?.default_arrangement_fee ?? 999))}
+            {!isCash && numField('valuation_fee', 'Valuation Fee (£)', String(settings?.default_valuation_fee ?? 300))}
             {(() => {
               const price = Number(params.purchase_price) || 0
               if (!price) return null
               const { lbtt, ads, total } = calcTransactionCosts(
                 price,
-                Number(params.legal_fees ?? 2000),
-                Number(params.refurb_costs ?? 0)
+                Number(params.legal_fees ?? settings?.default_legal_fees ?? 2000),
+                Number(params.refurb_costs ?? 0),
+                isCash ? 0 : Number(params.arrangement_fee ?? settings?.default_arrangement_fee ?? 999),
+                isCash ? 0 : Number(params.valuation_fee ?? settings?.default_valuation_fee ?? 300)
               )
               return (
                 <div className="col-span-2 rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
@@ -734,6 +751,7 @@ function EventModal({ scenarioId, event, onClose }: { scenarioId: number; event?
             {numField('new_term_years', 'New Term (years)', '25')}
             {numField('new_balance', 'New Loan Amount (£)')}
             {numField('arrangement_fee', 'Arrangement Fee (£)', '0')}
+            {numField('valuation_fee', 'Valuation Fee (£)', '0')}
             <div className="col-span-2">
               <label className={labelCls}>Mortgage Type</label>
               <select

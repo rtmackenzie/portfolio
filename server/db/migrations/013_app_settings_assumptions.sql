@@ -1,0 +1,11 @@
+ALTER TABLE app_settings ADD COLUMN default_deposit_percent REAL NOT NULL DEFAULT 25;
+ALTER TABLE app_settings ADD COLUMN default_mortgage_rate_pct REAL NOT NULL DEFAULT 5.5;
+ALTER TABLE app_settings ADD COLUMN default_legal_fees REAL NOT NULL DEFAULT 2000;
+ALTER TABLE app_settings ADD COLUMN default_arrangement_fee REAL NOT NULL DEFAULT 999;
+ALTER TABLE app_settings ADD COLUMN default_valuation_fee REAL NOT NULL DEFAULT 300;
+ALTER TABLE app_settings ADD COLUMN default_property_growth_pct REAL NOT NULL DEFAULT 3.0;
+ALTER TABLE app_settings ADD COLUMN default_rent_growth_pct REAL NOT NULL DEFAULT 2.5;
+ALTER TABLE app_settings ADD COLUMN default_expense_inflation_pct REAL NOT NULL DEFAULT 2.5;
+ALTER TABLE app_settings ADD COLUMN default_void_months_per_year REAL NOT NULL DEFAULT 1;
+ALTER TABLE app_settings ADD COLUMN icr_stress_uplift_bps REAL NOT NULL DEFAULT 200;
+ALTER TABLE app_settings ADD COLUMN icr_stress_floor_pct REAL NOT NULL DEFAULT 5.5;
