@@ -84,7 +84,7 @@ describe('generatePathways — goal solver uses post-tax cashflow', () => {
     const taxed = generatePathways(incomeGoal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1, TAX_PERSONAL)
 
     const pick = (ps: ReturnType<typeof generatePathways>) =>
-      ps.find(p => p.template_name === 'steady_growth')!
+      ps.find(p => p.template_name === 'max_cashflow')!
     const u = pick(untaxed).months_to_goal ?? Infinity
     const t = pick(taxed).months_to_goal ?? Infinity
     expect(t).toBeGreaterThanOrEqual(u)
@@ -92,7 +92,7 @@ describe('generatePathways — goal solver uses post-tax cashflow', () => {
 
   it('post-tax ending cashflow is below pre-tax under personal tax', () => {
     const taxed = generatePathways(incomeGoal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1, TAX_PERSONAL)
-    const p = taxed.find(x => x.template_name === 'steady_growth')!
+    const p = taxed.find(x => x.template_name === 'max_cashflow')!
     expect(p.results.summary.ending_monthly_cashflow_posttax)
       .toBeLessThan(p.results.summary.ending_monthly_cashflow)
     expect(p.results.summary.total_tax_paid).toBeGreaterThan(0)
@@ -100,16 +100,59 @@ describe('generatePathways — goal solver uses post-tax cashflow', () => {
 })
 
 describe('generatePathways — mixed frontier (solve-and-stop)', () => {
-  it('Target & Hold stops at the goal; Steady Growth runs to the horizon', () => {
+  it('Target & Hold stops at the goal; the growth plans run to the horizon', () => {
     // Count goal: tax-independent and reached early, so the stop is clean to assert.
     const goal = { goal_type: 'count' as const, target_property_count: 5, director_loan_annual: 200000 }
     const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
     const hold = ps.find(p => p.template_name === 'target_hold')!
-    const steady = ps.find(p => p.template_name === 'steady_growth')!
+    const grow = ps.find(p => p.template_name === 'max_cashflow')!
     expect(hold.reaches_goal).toBe(true)
-    // Target & Hold buys the minimum to reach 5 properties; Steady Growth keeps acquiring.
-    expect(buyCount(hold.events)).toBeLessThan(buyCount(steady.events))
+    // Target & Hold buys the minimum to reach 5 properties; the growth plan keeps acquiring.
+    expect(buyCount(hold.events)).toBeLessThan(buyCount(grow.events))
     expect(hold.results.months[hold.results.months.length - 1].property_count).toBe(5)
+  })
+})
+
+describe('generatePathways — interest-only frontier (P1 #7)', () => {
+  it('Maximise Cashflow finances interest-only and never amortises its debt', () => {
+    const goal = { goal_type: 'count' as const, target_property_count: 5, director_loan_annual: 200000 }
+    const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const io = ps.find(p => p.template_name === 'max_cashflow')!
+    const buy = io.events.find(e => e.event_type === 'buy_property')!
+    expect(JSON.parse(buy.parameters_json).interest_only).toBe(true)
+  })
+
+  it('interest-only is post-tax viable under S24 where repayment struggles', () => {
+    // S24 taxes rent-minus-expenses but only 20%-credits interest → repayment BTL is
+    // often post-tax negative; interest-only keeps more monthly cash, so it reaches sooner.
+    const goal = { goal_type: 'income' as const, target_monthly_income: 1200, director_loan_annual: 120000 }
+    const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1, TAX_PERSONAL)
+    const io = ps.find(p => p.template_name === 'max_cashflow')!
+    const hold = ps.find(p => p.template_name === 'target_hold')!
+    expect(io.reaches_goal).toBe(true)
+    const ioM = io.months_to_goal ?? Infinity
+    const holdM = hold.months_to_goal ?? Infinity
+    expect(ioM).toBeLessThanOrEqual(holdM)
+  })
+
+  it('interest-only is penalised and flagged so it cannot rank as safest', () => {
+    const goal = { goal_type: 'count' as const, target_property_count: 6, director_loan_annual: 200000 }
+    const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const io = ps.find(p => p.template_name === 'max_cashflow')!
+    const recycler = ps.find(p => p.template_name === 'mortgage_recycler')!
+    expect(io.risk_score).toBeGreaterThan(recycler.risk_score)
+    expect(io.binding_detail).toMatch(/interest-only/i)
+  })
+
+  it('the three strategies produce genuinely different portfolios', () => {
+    const goal = { goal_type: 'count' as const, target_property_count: 6, director_loan_annual: 200000 }
+    const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const endDebt = (name: string) => {
+      const m = ps.find(p => p.template_name === name)!.results.months
+      return m[m.length - 1].total_debt
+    }
+    const debts = [endDebt('target_hold'), endDebt('max_cashflow'), endDebt('mortgage_recycler')]
+    expect(new Set(debts).size).toBe(3) // all distinct ending debt levels
   })
 })
 
@@ -123,8 +166,8 @@ describe('generatePathways — director loans drive the schedule', () => {
     const small = generatePathways({ ...baseGoal, director_loan_annual: 15000 }, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
     const large = generatePathways({ ...baseGoal, director_loan_annual: 200000 }, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
 
-    const steadySmall = small.find(p => p.template_name === 'steady_growth')!
-    const steadyLarge = large.find(p => p.template_name === 'steady_growth')!
+    const steadySmall = small.find(p => p.template_name === 'max_cashflow')!
+    const steadyLarge = large.find(p => p.template_name === 'max_cashflow')!
 
     expect(buyCount(steadyLarge.events)).toBeGreaterThan(buyCount(steadySmall.events))
   })
@@ -133,8 +176,8 @@ describe('generatePathways — director loans drive the schedule', () => {
     const small = generatePathways({ ...baseGoal, director_loan_annual: 15000 }, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
     const large = generatePathways({ ...baseGoal, director_loan_annual: 200000 }, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
 
-    const firstSmall = firstBuyDate(small.find(p => p.template_name === 'steady_growth')!.events)!
-    const firstLarge = firstBuyDate(large.find(p => p.template_name === 'steady_growth')!.events)!
+    const firstSmall = firstBuyDate(small.find(p => p.template_name === 'max_cashflow')!.events)!
+    const firstLarge = firstBuyDate(large.find(p => p.template_name === 'max_cashflow')!.events)!
 
     expect(firstLarge < firstSmall).toBe(true)
   })
@@ -143,8 +186,8 @@ describe('generatePathways — director loans drive the schedule', () => {
     const small = generatePathways({ ...baseGoal, director_loan_annual: 15000 }, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
     const large = generatePathways({ ...baseGoal, director_loan_annual: 200000 }, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
 
-    const accelLarge = large.find(p => p.template_name === 'steady_growth')!
-    const accelSmall = small.find(p => p.template_name === 'steady_growth')!
+    const accelLarge = large.find(p => p.template_name === 'max_cashflow')!
+    const accelSmall = small.find(p => p.template_name === 'max_cashflow')!
 
     expect(accelLarge.reaches_goal).toBe(true)
     if (accelSmall.reaches_goal && accelSmall.months_to_goal != null && accelLarge.months_to_goal != null) {
@@ -155,7 +198,7 @@ describe('generatePathways — director loans drive the schedule', () => {
   it('no purchases are scheduled before the cash pot can afford a deposit', () => {
     // No loans, no starting cash buffer beyond modest rental surplus → first buy is delayed
     const result = generatePathways({ ...baseGoal }, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
-    const steady = result.find(p => p.template_name === 'steady_growth')!
+    const steady = result.find(p => p.template_name === 'max_cashflow')!
     const first = firstBuyDate(steady.events)
     // If a buy happens at all, it must be after enough months for the surplus to fund a deposit
     if (first) {

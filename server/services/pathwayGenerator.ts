@@ -106,7 +106,7 @@ function monthDiff(baseDate: string, targetDate: string): number {
 
 // ─── Event builder ────────────────────────────────────────────────────────────
 
-function buyEvent(date: string, a: PropertyAssumptions): ScenarioEvent {
+function buyEvent(date: string, a: PropertyAssumptions, interestOnly = false): ScenarioEvent {
   return {
     event_type: 'buy_property',
     property_id: null,
@@ -118,6 +118,7 @@ function buyEvent(date: string, a: PropertyAssumptions): ScenarioEvent {
       deposit_percent:    a.deposit_percent ?? 25,
       mortgage_rate:      a.mortgage_rate ?? 5.5,
       mortgage_term_years: a.mortgage_term_years ?? 25,
+      interest_only:      interestOnly,
     }),
   }
 }
@@ -181,7 +182,8 @@ function buildCashGatedEvents(
   loanEvents: ScenarioEvent[],
   tax: TaxSettings | undefined,
   goal: Goal,
-  stopAtGoal: boolean
+  stopAtGoal: boolean,
+  interestOnly: boolean
 ): ScenarioEvent[] {
   const totalMonths = projYears * 12
   const config = { base_date: baseDate, projection_years: projYears, tax }
@@ -215,13 +217,13 @@ function buildCashGatedEvents(
       if (strategy === 'recycler') {
         const balances = activeBalancesAt(proj, i)
         if (balances.length < 2) {
-          if (cash >= buyCost) { decided = buyEvent(proj.months[i].date, a); decidedMonth = i; break }
+          if (cash >= buyCost) { decided = buyEvent(proj.months[i].date, a, interestOnly); decidedMonth = i; break }
         } else {
           const smallest = Math.min(...balances)
           if (cash >= smallest) { decided = payoffEvent(proj.months[i].date); decidedMonth = i; break }
         }
       } else {
-        if (cash >= buyCost + buffer) { decided = buyEvent(proj.months[i].date, a); decidedMonth = i; break }
+        if (cash >= buyCost + buffer) { decided = buyEvent(proj.months[i].date, a, interestOnly); decidedMonth = i; break }
       }
     }
 
@@ -425,25 +427,37 @@ export function generatePathways(
     ? buildDirectorLoanEvents(baseDate, projectionYears, goal.director_loan_annual, goal.director_loan_start_date)
     : []
 
-  // Mixed frontier: Target & Hold stops at the goal; the others grow to the horizon.
-  const templates: Array<{ template_name: string; label: string; strategy: Strategy; stopAtGoal: boolean }> = [
-    { template_name: 'target_hold',       label: 'Target & Hold',     strategy: 'steady',   stopAtGoal: true  },
-    { template_name: 'steady_growth',     label: 'Steady Growth',     strategy: 'steady',   stopAtGoal: false },
-    { template_name: 'mortgage_recycler', label: 'Mortgage Recycler', strategy: 'recycler', stopAtGoal: false },
+  // Efficient frontier: three genuinely distinct strategies.
+  //  • Target & Hold  — repayment, stop at goal (fewest units, debt amortises, then holds)
+  //  • Maximise Cashflow — interest-only, grow (most income / fastest, highest rate risk)
+  //  • Mortgage Recycler — repayment + payoffs, grow (lowest debt, most resilient)
+  const templates: Array<{ template_name: string; label: string; strategy: Strategy; stopAtGoal: boolean; interestOnly: boolean }> = [
+    { template_name: 'target_hold',       label: 'Target & Hold',     strategy: 'steady',   stopAtGoal: true,  interestOnly: false },
+    { template_name: 'max_cashflow',      label: 'Maximise Cashflow', strategy: 'steady',   stopAtGoal: false, interestOnly: true  },
+    { template_name: 'mortgage_recycler', label: 'Mortgage Recycler', strategy: 'recycler', stopAtGoal: false, interestOnly: false },
   ]
 
   return templates.map(t => {
     // Cash-gated decisions (buys/payoffs), then merge loan events for the final run
-    const decisions = buildCashGatedEvents(t.strategy, baseDate, projectionYears, assumptions, initialState, loanEvents, tax, goal, t.stopAtGoal)
+    const decisions = buildCashGatedEvents(t.strategy, baseDate, projectionYears, assumptions, initialState, loanEvents, tax, goal, t.stopAtGoal, t.interestOnly)
     const allEvents = [...decisions, ...loanEvents].sort((a, b) => a.date.localeCompare(b.date))
 
     const results = buildProjection(cloneState(initialState), allEvents, config) as ProjectionResult
     const feasible = checkConstraints(results.months, goal) && results.summary.min_cumulative_cashflow >= 0
     const { reached, monthIndex } = checkGoalReached(results.months, goal)
 
-    const risk_score = computeRiskScore(results.summary)
-    const { key: binding_constraint, detail: binding_detail } =
-      analyzeBinding(goal, results.months, results.summary, reached, depositPlusCosts(assumptions))
+    // Interim risk penalty: interest-only carries rate + no-amortisation risk the model
+    // doesn't yet price (P1 #5). Penalise proportional to sustained (terminal) leverage so
+    // an IO book can't rank as "safest". Replaced by real repricing once P1 #5 lands.
+    const last = results.months[results.months.length - 1]
+    const terminalLtv = last && last.total_value > 0 ? (last.total_debt / last.total_value) * 100 : 0
+    const risk_score = computeRiskScore(results.summary) + (t.interestOnly ? Math.round(terminalLtv) : 0)
+
+    const binding = analyzeBinding(goal, results.months, results.summary, reached, depositPlusCosts(assumptions))
+    const binding_constraint = binding.key
+    const binding_detail = t.interestOnly
+      ? `Interest-only — rate-exposed, debt not amortised. ${binding.detail}`
+      : binding.detail
 
     return {
       template_name: t.template_name,
