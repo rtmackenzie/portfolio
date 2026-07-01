@@ -41,6 +41,10 @@ export function deriveMetrics(results: ScenarioResults | null, targetEquity: num
     liquidity:         summary.min_cumulative_cashflow ?? 0,
     months_to_target:  monthsToTarget,
     final_properties:  months[months.length - 1]?.property_count ?? 0,
+    equity_multiple:   summary.equity_multiple ?? NaN,
+    irr_pct:           summary.irr_pct ?? NaN,
+    roce_pct:          summary.roce_pct ?? NaN,
+    cash_on_cash_pct:  summary.cash_on_cash_pct ?? NaN,
   }
 }
 
@@ -71,6 +75,10 @@ const ROWS: {
   { label: 'Liquidity (min cash)', key: 'liquidity',       format: v => formatCurrency(v),          bestHighest: true  },
   { label: 'Time to Target',     key: 'months_to_target',  format: formatMonths,                    bestHighest: false },
   { label: 'Final Properties',   key: 'final_properties',  format: v => formatNumber(v),            bestHighest: null  },
+  { label: 'Equity Multiple',    key: 'equity_multiple',   format: v => Number.isNaN(v) ? '—' : `${v.toFixed(2)}x`, bestHighest: true },
+  { label: 'IRR',                key: 'irr_pct',           format: v => Number.isNaN(v) ? '—' : formatPercent(v),  bestHighest: true },
+  { label: 'ROCE',               key: 'roce_pct',          format: v => Number.isNaN(v) ? '—' : formatPercent(v),  bestHighest: true },
+  { label: 'Cash-on-Cash',       key: 'cash_on_cash_pct',  format: v => Number.isNaN(v) ? '—' : formatPercent(v),  bestHighest: true },
 ]
 
 function winnerIndex(metrics: (Metrics | null)[], key: keyof Metrics, bestHighest: boolean): number {

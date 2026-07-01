@@ -292,6 +292,13 @@ export interface ScenarioSummary {
   months_below_icr: number
   min_cumulative_cashflow: number
   min_cumulative_cashflow_posttax?: number
+  total_capital_invested?: number
+  equity_multiple?: number | null
+  irr_pct?: number | null
+  roce_pct?: number | null
+  cash_on_cash_pct?: number | null
+  net_yield_on_cost_pct?: number | null
+  months_to_payback?: number | null
 }
 
 export interface GoalPathway {
@@ -361,9 +368,17 @@ export interface PropertySeries {
   months: PropertyMonthSnapshot[]
 }
 
+export interface DebtCalendarEntry {
+  property_id: number
+  label: string
+  maturity_date: string | null
+  next_reprice_date: string | null
+}
+
 export interface ScenarioResults {
   months: MonthSnapshot[]
   property_series?: PropertySeries[]
+  debt_calendar?: DebtCalendarEntry[]
   summary: ScenarioSummary
 }
 
@@ -458,6 +473,7 @@ export interface MonthSnapshot {
   property_count: number
   monthly_cover_ratio: number
   monthly_icr: number
+  total_rent: number
 }
 
 export interface DashboardKPIs {

@@ -514,6 +514,18 @@ function PathwaysPanel({ goal }: { goal: Goal }) {
                     <Tip className="text-muted-foreground" text="How long until this pathway first meets the goal, or 'Not reached' within the projection horizon.">Time to goal</Tip>
                     <div className="font-medium">{formatMonthsToGoal(pw.months_to_goal)}</div>
                   </div>
+                  <div>
+                    <Tip className="text-muted-foreground" text="Total value created (ending equity + cumulative net cashflow) ÷ total capital invested. A multiple, not annualized.">Equity multiple</Tip>
+                    <div className="font-medium">{pw.summary.equity_multiple != null ? `${pw.summary.equity_multiple.toFixed(2)}x` : '—'}</div>
+                  </div>
+                  <div>
+                    <Tip className="text-muted-foreground" text="Annualized internal rate of return from the actual monthly cashflow timeline, including an as-if-liquidated terminal equity value. Time-value-adjusted.">IRR</Tip>
+                    <div className="font-medium">{pw.summary.irr_pct != null ? `${pw.summary.irr_pct.toFixed(1)}%` : '—'}</div>
+                  </div>
+                  <div>
+                    <Tip className="text-muted-foreground" text="Simple annualized total return on capital employed: (equity multiple − 1) ÷ years held. Ignores cashflow timing, unlike IRR.">ROCE</Tip>
+                    <div className="font-medium">{pw.summary.roce_pct != null ? `${pw.summary.roce_pct.toFixed(1)}%` : '—'}</div>
+                  </div>
                 </div>
               )}
 

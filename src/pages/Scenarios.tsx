@@ -440,6 +440,46 @@ export default function Scenarios() {
                       ))}
                     </div>
 
+                    {/* Return metrics (§P2-9) */}
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { label: 'Capital Invested', value: formatCurrency(results.summary.total_capital_invested ?? 0, true), tooltip: 'Total capital actually contributed over the projection — deposits, transaction costs, capex and early-repayment charges. The denominator for every return metric below.' },
+                        { label: 'Equity Multiple',  value: results.summary.equity_multiple != null ? `${results.summary.equity_multiple.toFixed(2)}x` : '—', tooltip: 'Total value created (ending equity + cumulative net cashflow received) ÷ total capital invested. A multiple, not annualized.' },
+                        { label: 'IRR',              value: results.summary.irr_pct != null ? formatPercent(results.summary.irr_pct) : '—', tooltip: 'Annualized internal rate of return from the actual monthly cashflow timeline (capital calls, operating cashflow, and an as-if-liquidated terminal equity value). Time-value-adjusted — accounts for when cashflows happen, not just their total.' },
+                        { label: 'ROCE',             value: results.summary.roce_pct != null ? formatPercent(results.summary.roce_pct) : '—', tooltip: 'Simple annualized total return on capital employed: (equity multiple − 1) ÷ years held. Unlike IRR, this ignores the timing of cashflows — an average, not a time-value-adjusted rate.' },
+                        { label: 'Cash-on-Cash',     value: results.summary.cash_on_cash_pct != null ? formatPercent(results.summary.cash_on_cash_pct) : '—', tooltip: 'Money-on-money return: the final month\'s net cashflow (post-tax), annualized, ÷ total capital invested. An income-only yield — excludes equity growth.' },
+                        { label: 'Net Yield on Cost', value: results.summary.net_yield_on_cost_pct != null ? formatPercent(results.summary.net_yield_on_cost_pct) : '—', tooltip: 'Final month\'s gross rent, annualized, ÷ total capital invested.' },
+                        { label: 'Payback Period',   value: results.summary.months_to_payback != null ? `${results.summary.months_to_payback} mo` : '—', tooltip: 'Months from the point of maximum capital deployed until cumulative cashflow recovers back to the starting cash position.' },
+                      ].map(k => (
+                        <KpiCard key={k.label} label={k.label} value={k.value} tooltip={k.tooltip} />
+                      ))}
+                    </div>
+
+                    {/* Debt Maturity Calendar (§P2-9) */}
+                    {results.debt_calendar && results.debt_calendar.length > 0 && (
+                      <div className="bg-card rounded-lg p-5">
+                        <h3 className="text-sm font-semibold mb-4">Debt Maturity Calendar</h3>
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-left text-xs text-muted-foreground border-b border-border">
+                              <th className="pb-2 font-medium">Property</th>
+                              <th className="pb-2 font-medium">Next Reprice</th>
+                              <th className="pb-2 font-medium">Mortgage Maturity</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {results.debt_calendar.map(d => (
+                              <tr key={d.property_id} className="border-b border-border/50 last:border-0">
+                                <td className="py-2">{d.label}</td>
+                                <td className="py-2 text-muted-foreground">{d.next_reprice_date ?? '—'}</td>
+                                <td className="py-2 text-muted-foreground">{d.maturity_date ?? '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
                     {/* Per-property: no data guard */}
                     {viewMode === 'property' && !results.property_series && (
                       <p className="text-sm text-muted-foreground py-4 text-center">Re-run the projection to enable per-property view.</p>

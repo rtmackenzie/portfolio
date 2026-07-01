@@ -50,6 +50,7 @@ type MonthSnapshot = {
   property_count: number
   monthly_cover_ratio: number
   monthly_icr: number
+  total_rent: number
 }
 
 type PropMonth = {
@@ -69,9 +70,17 @@ type PropSeries = {
   months: PropMonth[]
 }
 
+type DebtCalendarEntry = {
+  property_id: number
+  label: string
+  maturity_date: string | null
+  next_reprice_date: string | null
+}
+
 type ProjectionResult = {
   months: MonthSnapshot[]
   property_series: PropSeries[]
+  debt_calendar: DebtCalendarEntry[]
   summary: {
     start_equity: number
     end_equity: number
@@ -90,6 +99,13 @@ type ProjectionResult = {
     months_below_icr: number
     min_cumulative_cashflow: number
     min_cumulative_cashflow_posttax: number
+    total_capital_invested: number
+    equity_multiple: number | null
+    irr_pct: number | null
+    roce_pct: number | null
+    cash_on_cash_pct: number | null
+    net_yield_on_cost_pct: number | null
+    months_to_payback: number | null
   }
 }
 

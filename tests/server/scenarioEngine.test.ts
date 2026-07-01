@@ -1033,3 +1033,95 @@ describe('buildProjection — liquidity (min_cumulative_cashflow)', () => {
     expect(summary.min_cumulative_cashflow).toBeLessThan(0)
   })
 })
+
+// ─── Return metrics (§P2-9) ────────────────────────────────────────────────────
+
+describe('buildProjection — return metrics', () => {
+  it('total_capital_invested accumulates across a buy, a capex hit, and an ERC', () => {
+    const price = 100000, depositPct = 25
+    const { total: txCosts } = calcTransactionCosts(price, 2000, 0, 0, 0)
+    const buy = makeEvent({
+      event_type: 'buy_property', date: '2026-01-01',
+      parameters_json: JSON.stringify({
+        purchase_price: price, monthly_rent: 0, deposit_percent: depositPct, monthly_expenses: 0,
+        mortgage_rate: 5, mortgage_term_years: 25, legal_fees: 2000, arrangement_fee: 0, valuation_fee: 0,
+      }),
+    })
+    const { summary } = buildProjection(new Map(), [buy], {
+      base_date: '2026-01-01', projection_years: 11,
+      assumptions_json: JSON.stringify({ void_months_per_year: 0, expense_inflation_pct: 0, rent_growth_pct: 0, property_growth_pct: 0, arrears_pct: 0, capex_cycle_years: 10, capex_cost_per_property: 3000 }),
+    })
+    const deposit = price * (depositPct / 100)
+    // deposit+costs at month 0, plus one capex cycle (10y from acquisition) before the 11y horizon ends
+    expect(summary.total_capital_invested).toBe(Math.round(deposit + txCosts + 3000))
+  })
+
+  it('returns null return metrics when no capital has been invested', () => {
+    const state = makeState({ id: 1, debt: 0, mortgage_rate: 0, monthly_mortgage: 0, monthly_rent: 1000, monthly_other_expenses: 0 })
+    const { summary } = buildProjection(makeMap(state), [], BASE_CONFIG)
+    expect(summary.total_capital_invested).toBe(0)
+    expect(summary.equity_multiple).toBeNull()
+    expect(summary.irr_pct).toBeNull()
+    expect(summary.roce_pct).toBeNull()
+    expect(summary.cash_on_cash_pct).toBeNull()
+    expect(summary.net_yield_on_cost_pct).toBeNull()
+    expect(summary.months_to_payback).toBeNull()
+  })
+
+  it('a cash purchase produces a sane equity multiple and cash-on-cash yield', () => {
+    const buy = makeEvent({
+      event_type: 'buy_property', date: '2026-01-01',
+      parameters_json: JSON.stringify({ purchase_price: 66000, monthly_rent: 700, deposit_percent: 100, monthly_expenses: 0, legal_fees: 0, arrangement_fee: 0, valuation_fee: 0 }),
+    })
+    const { summary } = buildProjection(new Map(), [buy], {
+      base_date: '2026-01-01', projection_years: 1,
+      assumptions_json: JSON.stringify({ void_months_per_year: 0, expense_inflation_pct: 0, rent_growth_pct: 0, property_growth_pct: 0, arrears_pct: 0 }),
+    })
+    expect(summary.total_capital_invested).toBe(71280)   // £66k deposit + £5,280 ADS (no LBTT below £145k)
+    expect(summary.equity_multiple).not.toBeNull()
+    expect(summary.equity_multiple!).toBeGreaterThan(1)   // rent received on top of the £66k cost basis
+    expect(summary.cash_on_cash_pct).not.toBeNull()
+    expect(summary.cash_on_cash_pct!).toBeCloseTo((700 * 12 / 71280) * 100, 0)
+  })
+
+  it('months_to_payback fires once cumulative cashflow recovers to the starting position', () => {
+    const buy = makeEvent({
+      event_type: 'buy_property', date: '2026-01-01',
+      parameters_json: JSON.stringify({ purchase_price: 12000, monthly_rent: 1200, deposit_percent: 100, monthly_expenses: 0, legal_fees: 0, arrangement_fee: 0, valuation_fee: 0 }),
+    })
+    const { summary } = buildProjection(new Map(), [buy], {
+      base_date: '2026-01-01', projection_years: 2,
+      assumptions_json: JSON.stringify({ void_months_per_year: 0, expense_inflation_pct: 0, rent_growth_pct: 0, property_growth_pct: 0, arrears_pct: 0 }),
+    })
+    // £12k cost, £1,200/mo rent (month 0 already includes one rent payment) → recovers by month 9
+    expect(summary.months_to_payback).toBe(9)
+  })
+
+  it('debt_calendar lists each mortgaged property\'s maturity and next-reprice date', () => {
+    const state = makeState({
+      id: 1, debt: 100000, mortgage_rate: 5, monthly_mortgage: calcMonthlyPayment(100000, 5, 300),
+      is_fixed_rate: true, mortgage_term_months: 300, next_reprice_month: 12,
+    })
+    const proj = buildProjection(makeMap(state), [], {
+      base_date: '2026-01-01', projection_years: 1,
+      assumptions_json: JSON.stringify({ void_months_per_year: 0, expense_inflation_pct: 0, rent_growth_pct: 0, property_growth_pct: 0, arrears_pct: 0, mortgage_reprice_years: 5, mortgage_reprice_uplift_bps: 200 }),
+    })
+    const entry = proj.debt_calendar.find(e => e.property_id === 1)!
+    expect(entry).toBeDefined()
+    expect(entry.next_reprice_date).toBe('2027-01-01')       // month 12 from 2026-01-01
+    expect(entry.maturity_date).toBe('2051-01-01')           // 300 months (25y) from 2026-01-01
+  })
+
+  it('a fully paid-off property is excluded from the debt calendar', () => {
+    const state = makeState({
+      id: 1, debt: 100000, mortgage_rate: 5, monthly_mortgage: calcMonthlyPayment(100000, 5, 300),
+      is_fixed_rate: true, mortgage_term_months: 300, next_reprice_month: 12,
+    })
+    const proj = buildProjection(
+      makeMap(state),
+      [makeEvent({ event_type: 'payoff_mortgage', date: '2026-01-01', property_id: 1, parameters_json: '{}' })],
+      BASE_CONFIG
+    )
+    expect(proj.debt_calendar.find(e => e.property_id === 1)).toBeUndefined()
+  })
+})

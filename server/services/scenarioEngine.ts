@@ -3,6 +3,7 @@ import { calcMonthlyPayment, calcTransactionCosts } from './calculations.ts'
 import { incomeTaxForMonth, disposalTax, icrThresholdPct, type TaxSettings } from './tax.ts'
 import { loadTaxSettings, loadAssumptionSettings } from './settings.ts'
 import type { AssumptionSettings } from './assumptions.ts'
+import { computeReturnMetrics } from './returnMetrics.ts'
 
 interface ScenarioConfig {
   base_date: string
@@ -55,6 +56,7 @@ interface MonthSnapshot {
   property_count: number
   monthly_cover_ratio: number   // rent ÷ actual mortgage payment — a cashflow-cover figure, not a lender test
   monthly_icr: number           // rent ÷ stressed interest-only payment, % — the real lender affordability test (P0 #4)
+  total_rent: number            // gross rent this month, before mortgage/expenses (§P2-9 net-yield-on-cost)
 }
 
 // Pure projection engine — accepts initial state directly, no DB access.
@@ -130,6 +132,10 @@ export function buildProjection(
 
   const snapshots: MonthSnapshot[] = []
   let cumulativeCashflow = config.starting_cash ?? 0
+  // Running total of genuine capital contributed during the projection (deposits+fees,
+  // capex, ERC) — distinct from cumulativeCashflow, which nets capital events together
+  // with operating returns and can't be used as an "invested capital" denominator (§P2-9).
+  let totalCapitalInvested = 0
   let taxCumulative = 0   // running income tax + CGT (post-tax = pre-tax − this)
   let nextId = Math.max(...Array.from(stateMap.keys()), 0) + 1
   const tax = config.tax
@@ -210,6 +216,7 @@ export function buildProjection(
           // accumulated cash pot (retained cashflow + director loans).
           const deposit = price * (depositPct / 100)
           cumulativeCashflow -= deposit + txCosts
+          totalCapitalInvested += deposit + txCosts
           break
         }
         case 'sell_property': {
@@ -249,9 +256,13 @@ export function buildProjection(
             // ERC: refinancing away from a fixed deal before it naturally reprices
             // is an early exit on the balance being replaced.
             if (state.is_fixed_rate && state.next_reprice_month != null && i < state.next_reprice_month) {
-              cumulativeCashflow -= currentDebt * (ercPct / 100)
+              const erc = currentDebt * (ercPct / 100)
+              cumulativeCashflow -= erc
+              totalCapitalInvested += erc
             }
-            cumulativeCashflow -= (params.arrangement_fee ?? 0) + (params.valuation_fee ?? 0)
+            const remortgageFees = (params.arrangement_fee ?? 0) + (params.valuation_fee ?? 0)
+            cumulativeCashflow -= remortgageFees
+            totalCapitalInvested += remortgageFees
 
             state.monthly_mortgage = calcMonthlyPayment(newDebt, newRate, isIO ? 0 : newTermYrs * 12)
             state.mortgage_rate    = newRate
@@ -312,7 +323,9 @@ export function buildProjection(
             // ERC: clearing a fixed deal before it naturally reprices is an early
             // exit and typically costs 1–5% of the balance in reality.
             if (state.is_fixed_rate && state.next_reprice_month != null && i < state.next_reprice_month) {
-              cumulativeCashflow -= clearedBalance * (ercPct / 100)
+              const erc = clearedBalance * (ercPct / 100)
+              cumulativeCashflow -= erc
+              totalCapitalInvested += erc
             }
             cumulativeCashflow -= clearedBalance
             state.monthly_mortgage = 0
@@ -376,6 +389,7 @@ export function buildProjection(
       // the same treatment already given to deposits, fees and ERC (§6b).
       if (state.next_capex_month != null && i === state.next_capex_month) {
         cumulativeCashflow -= capexCostPerProperty
+        totalCapitalInvested += capexCostPerProperty
         state.next_capex_month = i + capexCycleYears * 12
       }
 
@@ -442,6 +456,7 @@ export function buildProjection(
       property_count: stateMap.size,
       monthly_cover_ratio: coverRatio,
       monthly_icr: icr,
+      total_rent: Math.round(totalRent),
     })
   }
 
@@ -457,10 +472,43 @@ export function buildProjection(
   const nonZeroIcr = snapshots.filter(s => s.monthly_icr > 0)
   const icrFloor = icrThresholdPct(tax)
 
+  const returnMetrics = computeReturnMetrics(
+    snapshots.map(s => s.cumulative_cashflow),
+    config.starting_cash ?? 0,
+    totalCapitalInvested,
+    last?.cumulative_cashflow_posttax ?? 0,
+    last?.monthly_cashflow_posttax ?? 0,
+    last?.total_rent ?? 0,
+    last?.total_equity ?? 0,
+    config.projection_years ?? 10
+  )
+
+  // Debt-maturity calendar: derived once from each property's final state — repayment
+  // end date (acquired_month + mortgage_term_months) and next scheduled reprice (§P2-9).
+  const addMonthsToDate = (months: number) => {
+    const d = new Date(baseDate)
+    d.setUTCMonth(d.getUTCMonth() + months)
+    return d.toISOString().slice(0, 10)
+  }
+  const debt_calendar = Array.from(stateMap.entries())
+    .filter(([id]) => (debtMap.get(id) ?? 0) > 0)
+    .map(([id, state]) => ({
+      property_id: id,
+      label: propLabels.get(id) ?? `Property ${id}`,
+      maturity_date: state.mortgage_term_months != null
+        ? addMonthsToDate((state.acquired_month ?? 0) + state.mortgage_term_months)
+        : null,
+      next_reprice_date: state.next_reprice_month != null ? addMonthsToDate(state.next_reprice_month) : null,
+    }))
+    .sort((a, b) => (a.next_reprice_date ?? a.maturity_date ?? '').localeCompare(b.next_reprice_date ?? b.maturity_date ?? ''))
+
   return {
     months: snapshots,
     property_series,
+    debt_calendar,
     summary: {
+      total_capital_invested: Math.round(totalCapitalInvested),
+      ...returnMetrics,
       start_equity: first?.total_equity ?? 0,
       end_equity: last?.total_equity ?? 0,
       equity_growth: last && first ? last.total_equity - first.total_equity : 0,
