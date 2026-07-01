@@ -51,6 +51,15 @@ export function incomeTaxForMonth(t: TaxSettings, { rent, expenses, interest }: 
   return Math.max(0, taxOnProfit - credit)
 }
 
+// Lender ICR stress-test floor (P0 #4). Real BTL lenders require 125% cover for a
+// personal basic-rate landlord, 145% for higher-rate personal or a Ltd company —
+// derived from the same TaxSettings already flowing through the engine so there is
+// one canonical threshold, not a number re-guessed in three different places.
+export function icrThresholdPct(t?: TaxSettings): number {
+  if (!t) return 125
+  return t.ownership === 'ltd' || t.personal_marginal_rate_pct >= 40 ? 145 : 125
+}
+
 export interface DisposalInputs {
   saleValue: number    // gross sale price
   costBasis: number    // original purchase price (+ acquisition costs)

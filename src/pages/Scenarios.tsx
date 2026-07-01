@@ -414,10 +414,10 @@ export default function Scenarios() {
                       )}
                     </div>}
 
-                    {/* DSCR breach warning (portfolio view only) */}
-                    {viewMode === 'portfolio' && stressResults && (stressResults.summary.months_below_dscr ?? 0) > 0 && (
+                    {/* Lender ICR breach warning (portfolio view only) */}
+                    {viewMode === 'portfolio' && stressResults && (stressResults.summary.months_below_icr ?? 0) > 0 && (
                       <div className="flex items-center gap-2 px-4 py-2.5 rounded-md bg-warning/10 border border-warning/30 text-sm text-warning">
-                        ⚠ {stressResults.summary.months_below_dscr} month{stressResults.summary.months_below_dscr !== 1 ? 's' : ''} breach DSCR 1.25× under {stressLabel}. Min DSCR: {(stressResults.summary.min_dscr ?? 0).toFixed(2)}.
+                        ⚠ {stressResults.summary.months_below_icr} month{stressResults.summary.months_below_icr !== 1 ? 's' : ''} breach the lender ICR floor under {stressLabel}. Min ICR: {(stressResults.summary.min_icr ?? 0).toFixed(0)}%.
                       </div>
                     )}
 
@@ -431,8 +431,9 @@ export default function Scenarios() {
                         { label: 'Ending Monthly CF', value: formatCurrency(results.summary.ending_monthly_cashflow ?? 0), tooltip: 'Net monthly cashflow in the final month of the projection — the steady-state income once the full portfolio is built and mortgages have amortised. This is the figure to compare against an income goal. Re-run the projection if this reads £0 on an older scenario.' },
                         { label: 'Ending CF (post-tax)', value: formatCurrency(results.summary.ending_monthly_cashflow_posttax ?? 0), tooltip: 'Final-month net monthly cashflow after income tax (S24 personal or corporation tax for Ltd), using the global Tax settings. The real spendable FI figure. Set your structure in Business Overview → Tax settings.' },
                         { label: 'Tax paid (total)', value: formatCurrency(results.summary.total_tax_paid ?? 0, true), tooltip: 'Total income tax plus CGT paid across the whole projection. £0 means no tax settings were applied (re-run the projection after setting your tax structure).' },
-                        { label: 'Min DSCR',         value: (results.summary.min_dscr ?? 0).toFixed(2), tooltip: 'Lowest Debt Service Coverage Ratio recorded in any month (total rent ÷ total mortgage payments). Below 1.25× indicates cashflow stress relative to the standard lender threshold.' },
-                        { label: 'DSCR Breaches',    value: `${results.summary.months_below_dscr ?? '—'} mo`, tooltip: 'Number of months where the portfolio DSCR fell below 1.25×. A high breach count under stress scenarios suggests vulnerability to rate rises or void periods.' },
+                        { label: 'Cover Ratio',      value: (results.summary.min_cover_ratio ?? 0).toFixed(2), tooltip: 'Lowest ratio of total rent to the actual mortgage payment recorded in any month. An informal cashflow-cover figure — not a lender affordability test (see Lender ICR for that).' },
+                        { label: 'Lender ICR',       value: `${(results.summary.min_icr ?? 0).toFixed(0)}%`, tooltip: 'Lowest lender Interest Coverage Ratio recorded in any month — rent ÷ a stressed interest-only payment (the higher of pay-rate+2% or a 5.5% floor). Real lenders require 125% (personal, basic-rate) or 145% (higher-rate personal / Ltd company).' },
+                        { label: 'ICR Breaches',     value: `${results.summary.months_below_icr ?? '—'} mo`, tooltip: 'Number of months where the lender ICR fell below the required floor. A high count under stress scenarios suggests vulnerability to rate rises.' },
                       ].map(k => (
                         <KpiCard key={k.label} label={k.label} value={k.value} tooltip={k.tooltip} />
                       ))}

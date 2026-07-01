@@ -16,23 +16,23 @@ const TAX_PERSONAL = { ...DEFAULT_TAX_SETTINGS, ownership: 'personal' as const, 
 function makeSummary(over: Partial<{
   start_equity: number; end_equity: number; equity_growth: number; equity_growth_pct: number
   total_cashflow: number; avg_monthly_cashflow: number; ending_monthly_cashflow: number
-  min_dscr: number; months_below_dscr: number; min_cumulative_cashflow: number
+  min_icr: number; months_below_icr: number; min_cumulative_cashflow: number
 }> = {}) {
   return {
     start_equity: 100000, end_equity: 500000, equity_growth: 400000, equity_growth_pct: 400,
     total_cashflow: 50000, avg_monthly_cashflow: 1000, ending_monthly_cashflow: 2000,
-    min_dscr: 2.0, months_below_dscr: 0, min_cumulative_cashflow: 10000,
+    min_icr: 200, months_below_icr: 0, min_cumulative_cashflow: 10000,
     ...over,
   }
 }
 
 function makeMonth(over: Partial<{
   date: string; total_value: number; total_debt: number; total_equity: number
-  monthly_cashflow: number; cumulative_cashflow: number; property_count: number; monthly_dscr: number
+  monthly_cashflow: number; cumulative_cashflow: number; property_count: number; monthly_icr: number
 }> = {}) {
   return {
     date: '2030-01', total_value: 400000, total_debt: 200000, total_equity: 200000,
-    monthly_cashflow: 1500, cumulative_cashflow: 20000, property_count: 4, monthly_dscr: 1.8,
+    monthly_cashflow: 1500, cumulative_cashflow: 20000, property_count: 4, monthly_icr: 180,
     ...over,
   }
 }
@@ -216,35 +216,35 @@ describe('computeRiskScore', () => {
     expect(breach).toBeGreaterThan(clean + 50)
   })
 
-  it('more months below the DSCR floor increases risk', () => {
-    const few = computeRiskScore(makeSummary({ months_below_dscr: 1 }))
-    const many = computeRiskScore(makeSummary({ months_below_dscr: 10 }))
+  it('more months below the ICR floor increases risk', () => {
+    const few = computeRiskScore(makeSummary({ months_below_icr: 1 }))
+    const many = computeRiskScore(makeSummary({ months_below_icr: 10 }))
     expect(many).toBeGreaterThan(few)
   })
 
-  it('a thin DSCR cushion adds risk; a comfortable one does not', () => {
-    const thin = computeRiskScore(makeSummary({ min_dscr: 1.1 }))   // below 1.5 ⇒ penalty
-    const comfy = computeRiskScore(makeSummary({ min_dscr: 2.0 }))  // above 1.5 ⇒ none
+  it('a thin ICR cushion adds risk; a comfortable one does not', () => {
+    const thin = computeRiskScore(makeSummary({ min_icr: 110 }))   // below 145 ⇒ penalty
+    const comfy = computeRiskScore(makeSummary({ min_icr: 200 }))  // above 145 ⇒ none
     expect(thin).toBeGreaterThan(comfy)
     expect(comfy).toBe(0)
   })
 })
 
 describe('analyzeBinding', () => {
-  it('flags a DSCR breach as the binding constraint (infeasible)', () => {
-    const goal = { goal_type: 'count' as const, min_dscr: 1.25 }
-    const months = [makeMonth({ monthly_dscr: 1.08 })]
-    const summary = makeSummary({ min_dscr: 1.08 })
+  it('flags an ICR breach as the binding constraint (infeasible)', () => {
+    const goal = { goal_type: 'count' as const, min_icr: 125 }
+    const months = [makeMonth({ monthly_icr: 110 })]
+    const summary = makeSummary({ min_icr: 110 })
     const b = analyzeBinding(goal, months, summary, false, 30000)
-    expect(b.key).toBe('dscr')
+    expect(b.key).toBe('icr')
     expect(b.detail).toMatch(/Infeasible/i)
   })
 
   it('reports deposit capital as the limiter when constraints have ample slack', () => {
-    // Generous constraints, healthy LTV/DSCR/liquidity, but goal not reached → capital-limited
-    const goal = { goal_type: 'count' as const, max_ltv_pct: 95, min_dscr: 1.0 }
-    const months = [makeMonth({ total_value: 500000, total_debt: 200000, monthly_dscr: 2.5 })]
-    const summary = makeSummary({ min_dscr: 2.5, min_cumulative_cashflow: 80000 })
+    // Generous constraints, healthy LTV/ICR/liquidity, but goal not reached → capital-limited
+    const goal = { goal_type: 'count' as const, max_ltv_pct: 95, min_icr: 100 }
+    const months = [makeMonth({ total_value: 500000, total_debt: 200000, monthly_icr: 250 })]
+    const summary = makeSummary({ min_icr: 250, min_cumulative_cashflow: 80000 })
     const b = analyzeBinding(goal, months, summary, false, 30000)
     expect(b.key).toBe('capital')
   })
@@ -382,6 +382,34 @@ describe('generatePathways — configurable starting cash & rate repricing (UI/D
       const a = JSON.parse(p.assumptions_json)
       expect(a.mortgage_reprice_years).toBe(3)
       expect(a.mortgage_reprice_uplift_bps).toBe(300)
+    }
+  })
+})
+
+describe('generatePathways — lender ICR buy gate (P0 #4)', () => {
+  const goal = { goal_type: 'count' as const, target_property_count: 6, director_loan_annual: 200000 }
+
+  it('a deal that fails lender ICR is never bought, regardless of available cash', () => {
+    // price 200k / rent 500 -> stressed ICR ~53%, far below the 125% default floor.
+    const unfinanceable = { purchase_price: 200000, monthly_rent: 500, monthly_expenses: 200, deposit_percent: 25, mortgage_rate: 5.5, mortgage_term_years: 25 }
+    const ps = generatePathways(goal, startingPortfolio(), unfinanceable, PROJECTION_YEARS, 1)
+    for (const p of ps) {
+      expect(buyCount(p.events)).toBe(0)
+    }
+  })
+
+  it('an otherwise-identical, healthy deal is bought', () => {
+    const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const hold = ps.find(p => p.template_name === 'target_hold')!
+    expect(buyCount(hold.events)).toBeGreaterThan(0)
+  })
+
+  it('a stricter goal.min_icr can reject a deal that would otherwise pass', () => {
+    // ASSUMPTIONS clears the 125% default (~171%) but not a strict 200% override.
+    const strict = { ...goal, min_icr: 200 }
+    const ps = generatePathways(strict, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    for (const p of ps) {
+      expect(buyCount(p.events)).toBe(0)
     }
   })
 })

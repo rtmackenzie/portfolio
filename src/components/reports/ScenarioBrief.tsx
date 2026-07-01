@@ -49,8 +49,8 @@ function RisksBlock({ results, topRisks }: { results: ScenarioResults; topRisks:
       <div>
         <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Scenario risks</h3>
         <div className="grid grid-cols-2 gap-2">
-          <Kpi label="Min DSCR" value={r.minDscr > 0 ? `${r.minDscr.toFixed(2)}×` : '—'} />
-          <Kpi label="DSCR Breaches" value={`${r.breaches} mo`} />
+          <Kpi label="Min Lender ICR" value={r.minIcr > 0 ? `${r.minIcr.toFixed(0)}%` : '—'} />
+          <Kpi label="ICR Breaches" value={`${r.breaches} mo`} />
           <Kpi label="Liquidity Trough" value={formatCurrency(r.liquidityTrough, true)} />
           <Kpi label="Peak LTV" value={`${r.peakLtv.toFixed(1)}%`} />
         </div>
@@ -129,7 +129,7 @@ const COMPARE_ROWS: { label: string; key: string; fmt: (v: number) => string }[]
   { label: 'Total Cashflow', key: 'total_cashflow', fmt: v => formatCurrency(v) },
   { label: 'Avg Monthly CF', key: 'avg_monthly_cf', fmt: v => formatCurrency(v) },
   { label: 'Peak LTV', key: 'peak_ltv', fmt: v => `${v.toFixed(1)}%` },
-  { label: 'Min DSCR', key: 'min_dscr', fmt: v => `${v.toFixed(2)}×` },
+  { label: 'Cover Ratio', key: 'min_cover_ratio', fmt: v => `${v.toFixed(2)}×` },
   { label: 'Liquidity (min cash)', key: 'liquidity', fmt: v => formatCurrency(v) },
   { label: 'Final Properties', key: 'final_properties', fmt: v => String(v) },
 ]

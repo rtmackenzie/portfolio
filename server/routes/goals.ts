@@ -37,14 +37,14 @@ router.post('/', (req, res) => {
     const d = req.body
     const result = execute(
       `INSERT INTO goals (name, goal_type, target_monthly_income, target_property_count, target_equity,
-        target_date, max_ltv_pct, min_dscr, min_annual_cashflow, scenario_id,
+        target_date, max_ltv_pct, min_icr, min_annual_cashflow, scenario_id,
         director_loan_annual, director_loan_start_date,
         starting_cash, mortgage_reprice_years, mortgage_reprice_uplift_bps, notes)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [d.name, d.goal_type,
        d.target_monthly_income ?? null, d.target_property_count ?? null,
        d.target_equity ?? null, d.target_date ?? null,
-       d.max_ltv_pct ?? null, d.min_dscr ?? null, d.min_annual_cashflow ?? null,
+       d.max_ltv_pct ?? null, d.min_icr ?? null, d.min_annual_cashflow ?? null,
        d.scenario_id ?? null,
        d.director_loan_annual ?? null, d.director_loan_start_date ?? null,
        d.starting_cash ?? null, d.mortgage_reprice_years ?? null, d.mortgage_reprice_uplift_bps ?? null,
@@ -64,14 +64,14 @@ router.put('/:id', (req, res) => {
     const d = req.body
     execute(
       `UPDATE goals SET name=?, goal_type=?, target_monthly_income=?, target_property_count=?,
-        target_equity=?, target_date=?, max_ltv_pct=?, min_dscr=?, min_annual_cashflow=?,
+        target_equity=?, target_date=?, max_ltv_pct=?, min_icr=?, min_annual_cashflow=?,
         scenario_id=?, director_loan_annual=?, director_loan_start_date=?,
         starting_cash=?, mortgage_reprice_years=?, mortgage_reprice_uplift_bps=?,
         notes=?, updated_at=datetime('now') WHERE id=?`,
       [d.name, d.goal_type,
        d.target_monthly_income ?? null, d.target_property_count ?? null,
        d.target_equity ?? null, d.target_date ?? null,
-       d.max_ltv_pct ?? null, d.min_dscr ?? null, d.min_annual_cashflow ?? null,
+       d.max_ltv_pct ?? null, d.min_icr ?? null, d.min_annual_cashflow ?? null,
        d.scenario_id ?? null,
        d.director_loan_annual ?? null, d.director_loan_start_date ?? null,
        d.starting_cash ?? null, d.mortgage_reprice_years ?? null, d.mortgage_reprice_uplift_bps ?? null,
@@ -133,7 +133,7 @@ router.post('/:id/pathways/generate', (req, res) => {
       id: number; name: string; goal_type: string;
       target_monthly_income: number | null; target_property_count: number | null;
       target_equity: number | null; target_date: string | null;
-      max_ltv_pct: number | null; min_dscr: number | null; min_annual_cashflow: number | null;
+      max_ltv_pct: number | null; min_icr: number | null; min_annual_cashflow: number | null;
       director_loan_annual: number | null; director_loan_start_date: string | null;
       starting_cash: number | null; mortgage_reprice_years: number | null; mortgage_reprice_uplift_bps: number | null;
     }>('SELECT * FROM goals WHERE id=?', [id])

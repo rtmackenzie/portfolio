@@ -1,7 +1,7 @@
 import type { ScenarioResults } from '@/types'
 
 export interface BriefRisk {
-  minDscr: number
+  minIcr: number
   breaches: number
   liquidityTrough: number
   peakLtv: number
@@ -15,8 +15,8 @@ export function briefRiskMetrics(results: ScenarioResults): BriefRisk {
     return Math.max(mx, ltv)
   }, 0)
   return {
-    minDscr: summary.min_dscr ?? 0,
-    breaches: summary.months_below_dscr ?? 0,
+    minIcr: summary.min_icr ?? 0,
+    breaches: summary.months_below_icr ?? 0,
     liquidityTrough: summary.min_cumulative_cashflow ?? 0,
     peakLtv: Math.round(peakLtv * 10) / 10,
   }

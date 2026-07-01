@@ -1,6 +1,6 @@
 import { queryAll } from '../db/database.ts'
 import { calcMonthlyPayment, calcTransactionCosts } from './calculations.ts'
-import { incomeTaxForMonth, disposalTax, type TaxSettings } from './tax.ts'
+import { incomeTaxForMonth, disposalTax, icrThresholdPct, type TaxSettings } from './tax.ts'
 import { loadTaxSettings } from './settings.ts'
 
 interface ScenarioConfig {
@@ -50,7 +50,8 @@ interface MonthSnapshot {
   cumulative_cashflow_posttax: number
   monthly_tax: number
   property_count: number
-  monthly_dscr: number
+  monthly_cover_ratio: number   // rent ÷ actual mortgage payment — a cashflow-cover figure, not a lender test
+  monthly_icr: number           // rent ÷ stressed interest-only payment, % — the real lender affordability test (P0 #4)
 }
 
 // Pure projection engine — accepts initial state directly, no DB access.
@@ -306,6 +307,7 @@ export function buildProjection(
     let totalMortgage = 0
     let totalExpenses = 0
     let totalInterest = 0
+    let totalStressedInterest = 0
 
     for (const [propId, state] of stateMap) {
       // Grow each property from its own acquisition month — not the projection
@@ -336,6 +338,11 @@ export function buildProjection(
       const monthlyInterest = (currentDebt > 0 && state.mortgage_rate > 0)
         ? currentDebt * (state.mortgage_rate / 100 / 12)
         : 0
+      // Lender ICR stress test (P0 #4): rent vs. an interest-only payment at the
+      // higher of pay-rate+2% or a 5.5% floor — the standard UK BTL affordability test,
+      // independent of whether this property is actually financed on repayment/IO terms.
+      const stressRate = Math.max(state.mortgage_rate + 2, 5.5)
+      const stressedInterest = currentDebt > 0 ? currentDebt * (stressRate / 100 / 12) : 0
       if (currentDebt > 0 && !state.is_interest_only && state.mortgage_rate > 0) {
         const principal = Math.max(0, state.monthly_mortgage - monthlyInterest)
         currentDebt = Math.max(0, currentDebt - principal)
@@ -355,6 +362,7 @@ export function buildProjection(
       totalMortgage += state.monthly_mortgage
       totalExpenses += expenses
       totalInterest += monthlyInterest
+      totalStressedInterest += stressedInterest
 
       const prevCum = propCumCashflow.get(propId) ?? 0
       const newCum = prevCum + propCashflow
@@ -374,7 +382,8 @@ export function buildProjection(
     const monthlyTax = tax ? incomeTaxForMonth(tax, { rent: totalRent, expenses: totalExpenses, interest: totalInterest }) : 0
     taxCumulative += monthlyTax
     const equity = totalValue - totalDebt
-    const dscr = totalMortgage > 0 ? Math.round((totalRent / totalMortgage) * 100) / 100 : 0
+    const coverRatio = totalMortgage > 0 ? Math.round((totalRent / totalMortgage) * 100) / 100 : 0
+    const icr = totalStressedInterest > 0 ? Math.round((totalRent / totalStressedInterest) * 10000) / 100 : 0
 
     snapshots.push({
       date: yearMonth,
@@ -387,7 +396,8 @@ export function buildProjection(
       cumulative_cashflow_posttax: Math.round(cumulativeCashflow - taxCumulative),
       monthly_tax: Math.round(monthlyTax),
       property_count: stateMap.size,
-      monthly_dscr: dscr,
+      monthly_cover_ratio: coverRatio,
+      monthly_icr: icr,
     })
   }
 
@@ -399,7 +409,9 @@ export function buildProjection(
 
   const first = snapshots[0]
   const last = snapshots[snapshots.length - 1]
-  const nonZeroDscr = snapshots.filter(s => s.monthly_dscr > 0)
+  const nonZeroCover = snapshots.filter(s => s.monthly_cover_ratio > 0)
+  const nonZeroIcr = snapshots.filter(s => s.monthly_icr > 0)
+  const icrFloor = icrThresholdPct(tax)
 
   return {
     months: snapshots,
@@ -422,10 +434,14 @@ export function buildProjection(
         : 0,
       ending_monthly_cashflow_posttax: last?.monthly_cashflow_posttax ?? 0,
       total_tax_paid: Math.round(taxCumulative),
-      min_dscr: nonZeroDscr.length > 0
-        ? Math.round(Math.min(...nonZeroDscr.map(s => s.monthly_dscr)) * 100) / 100
+      min_cover_ratio: nonZeroCover.length > 0
+        ? Math.round(Math.min(...nonZeroCover.map(s => s.monthly_cover_ratio)) * 100) / 100
         : 0,
-      months_below_dscr: snapshots.filter(s => s.monthly_dscr > 0 && s.monthly_dscr < 1.25).length,
+      months_below_cover: snapshots.filter(s => s.monthly_cover_ratio > 0 && s.monthly_cover_ratio < 1.25).length,
+      min_icr: nonZeroIcr.length > 0
+        ? Math.round(Math.min(...nonZeroIcr.map(s => s.monthly_icr)) * 100) / 100
+        : 0,
+      months_below_icr: snapshots.filter(s => s.monthly_icr > 0 && s.monthly_icr < icrFloor).length,
       min_cumulative_cashflow: snapshots.length > 0
         ? Math.min(...snapshots.map(s => s.cumulative_cashflow))
         : 0,

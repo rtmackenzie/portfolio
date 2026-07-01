@@ -1,6 +1,6 @@
 import { buildProjection, type PropertyState, type ScenarioEvent } from './scenarioEngine.ts'
 import { calcTransactionCosts } from './calculations.ts'
-import { type TaxSettings } from './tax.ts'
+import { icrThresholdPct, type TaxSettings } from './tax.ts'
 
 type GoalType = 'income' | 'count' | 'net_worth' | 'mortgage_free' | 'retirement_date'
 
@@ -11,7 +11,7 @@ interface Goal {
   target_equity?: number | null
   target_date?: string | null
   max_ltv_pct?: number | null
-  min_dscr?: number | null
+  min_icr?: number | null   // lender ICR floor, %; defaults to the tax-derived 125/145 threshold (§P0-4)
   min_annual_cashflow?: number | null
   director_loan_annual?: number | null
   director_loan_start_date?: string | null
@@ -43,7 +43,8 @@ type MonthSnapshot = {
   cumulative_cashflow_posttax: number
   monthly_tax: number
   property_count: number
-  monthly_dscr: number
+  monthly_cover_ratio: number
+  monthly_icr: number
 }
 
 type PropMonth = {
@@ -76,8 +77,10 @@ type ProjectionResult = {
     avg_monthly_cashflow_posttax: number
     ending_monthly_cashflow_posttax: number
     total_tax_paid: number
-    min_dscr: number
-    months_below_dscr: number
+    min_cover_ratio: number
+    months_below_cover: number
+    min_icr: number
+    months_below_icr: number
     min_cumulative_cashflow: number
     min_cumulative_cashflow_posttax: number
   }
@@ -210,6 +213,15 @@ function buildCashGatedEvents(
   const cap = projYears * 4                                   // hard ceiling on decisions
   const marginGoal = withMargin(goal)
 
+  // Lender ICR buy gate (P0 #4): this deal's own rent vs. a stressed interest-only
+  // payment on the loan — the same test a real lender applies to one loan at a time,
+  // so a single unfinanceable purchase can't be masked by other properties' cashflow.
+  const stressRate = Math.max((a.mortgage_rate ?? 5.5) + 2, 5.5)
+  const loanAmount = a.purchase_price * (1 - (a.deposit_percent ?? 25) / 100)
+  const candidateIcrPct = loanAmount > 0 ? (a.monthly_rent / (loanAmount * stressRate / 100 / 12)) * 100 : Infinity
+  const icrFloor = goal.min_icr ?? icrThresholdPct(tax)
+  const icrOk = candidateIcrPct >= icrFloor
+
   const decisions: ScenarioEvent[] = []
   let lastMonth = 0
 
@@ -236,13 +248,13 @@ function buildCashGatedEvents(
       if (strategy === 'recycler') {
         const balances = activeBalancesAt(proj, i)
         if (balances.length < 2) {
-          if (cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, a, interestOnly); decidedMonth = i; break }
+          if (icrOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, a, interestOnly); decidedMonth = i; break }
         } else {
           const smallest = Math.min(...balances)
           if (cash - smallest >= reserveFloor(goal, monthlyExp, propCount)) { decided = payoffEvent(proj.months[i].date); decidedMonth = i; break }
         }
       } else {
-        if (cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, a, interestOnly); decidedMonth = i; break }
+        if (icrOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, a, interestOnly); decidedMonth = i; break }
       }
     }
 
@@ -279,15 +291,16 @@ function buildDirectorLoanEvents(
 
 // ─── Constraint checker ───────────────────────────────────────────────────────
 
-function checkConstraints(months: MonthSnapshot[], goal: Goal, monthlyExp: number = 200): boolean {
+function checkConstraints(months: MonthSnapshot[], goal: Goal, monthlyExp: number = 200, tax?: TaxSettings): boolean {
+  // Lender ICR (P0 #4): a hard, always-on real-world constraint — not optional like
+  // LTV/cashflow, since it reflects whether a lender would actually approve the deal.
+  const icrFloor = goal.min_icr ?? icrThresholdPct(tax)
   for (const m of months) {
     if (goal.max_ltv_pct != null && m.total_value > 0) {
       const ltv = (m.total_debt / m.total_value) * 100
       if (ltv > goal.max_ltv_pct) return false
     }
-    if (goal.min_dscr != null && m.monthly_dscr > 0) {
-      if (m.monthly_dscr < goal.min_dscr) return false
-    }
+    if (m.monthly_icr > 0 && m.monthly_icr < icrFloor) return false
     if (goal.min_annual_cashflow != null) {
       // Post-tax: the cash actually available to the investor.
       const postTaxMonthly = m.monthly_cashflow_posttax ?? m.monthly_cashflow
@@ -336,11 +349,13 @@ function checkGoalReached(months: MonthSnapshot[], goal: Goal): { reached: boole
 
 type Summary = ProjectionResult['summary']
 
-// Lower = safer. Transparent, documented in the plan.
+// Lower = safer. Transparent, documented in the plan. Scored against the stricter
+// universal ICR floor (145%) so it stays goal/tax-agnostic (matches its own tested,
+// backward-compatible 1-arg signature) — a rough, always-conservative comfort margin.
 export function computeRiskScore(summary: Summary): number {
-  return summary.months_below_dscr * 2
+  return summary.months_below_icr * 2
     + (summary.min_cumulative_cashflow < 0 ? 100 : 0)
-    + (summary.min_dscr > 0 ? Math.max(0, 1.5 - summary.min_dscr) * 20 : 0)
+    + (summary.min_icr > 0 ? Math.max(0, 145 - summary.min_icr) / 10 : 0)
 }
 
 type Binding = { key: string; detail: string }
@@ -353,7 +368,8 @@ export function analyzeBinding(
   summary: Summary,
   reachesGoal: boolean,
   buyCost: number,
-  monthlyExp: number = 200
+  monthlyExp: number = 200,
+  tax?: TaxSettings
 ): Binding {
   let maxLtv = 0
   let minAnnualCF = Infinity
@@ -369,9 +385,10 @@ export function analyzeBinding(
     cons.push({ key: 'ltv', headroom: (goal.max_ltv_pct - maxLtv) / goal.max_ltv_pct,
       label: `LTV peaked at ${maxLtv.toFixed(0)}% vs ${goal.max_ltv_pct}% ceiling` })
   }
-  if (goal.min_dscr != null && summary.min_dscr > 0) {
-    cons.push({ key: 'dscr', headroom: (summary.min_dscr - goal.min_dscr) / goal.min_dscr,
-      label: `DSCR fell to ${summary.min_dscr.toFixed(2)}× vs ${goal.min_dscr.toFixed(2)}× floor` })
+  if (summary.min_icr > 0) {
+    const icrFloor = goal.min_icr ?? icrThresholdPct(tax)
+    cons.push({ key: 'icr', headroom: (summary.min_icr - icrFloor) / icrFloor,
+      label: `ICR fell to ${summary.min_icr.toFixed(0)}% vs ${icrFloor.toFixed(0)}% lender floor` })
   }
   if (goal.min_annual_cashflow != null) {
     cons.push({ key: 'cashflow', headroom: (minAnnualCF - goal.min_annual_cashflow) / Math.max(Math.abs(goal.min_annual_cashflow), 1),
@@ -498,7 +515,7 @@ export function generatePathways(
     const allEvents = [...decisions, ...loanEvents].sort((a, b) => a.date.localeCompare(b.date))
 
     const results = buildProjection(cloneState(initialState), allEvents, config) as ProjectionResult
-    const feasible = checkConstraints(results.months, goal, monthlyExp) && results.summary.min_cumulative_cashflow >= 0
+    const feasible = checkConstraints(results.months, goal, monthlyExp, tax) && results.summary.min_cumulative_cashflow >= 0
     const { reached, monthIndex } = checkGoalReached(results.months, goal)
 
     // Interim risk penalty: interest-only carries rate + no-amortisation risk the model
@@ -508,7 +525,7 @@ export function generatePathways(
     const terminalLtv = last && last.total_value > 0 ? (last.total_debt / last.total_value) * 100 : 0
     const risk_score = computeRiskScore(results.summary) + (t.interestOnly ? Math.round(terminalLtv) : 0)
 
-    const binding = analyzeBinding(goal, results.months, results.summary, reached, depositPlusCosts(assumptions), monthlyExp)
+    const binding = analyzeBinding(goal, results.months, results.summary, reached, depositPlusCosts(assumptions), monthlyExp, tax)
     const binding_constraint = binding.key
     const binding_detail = t.interestOnly
       ? `Interest-only — rate-exposed, debt not amortised. ${binding.detail}`

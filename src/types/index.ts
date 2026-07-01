@@ -257,7 +257,7 @@ export interface Goal {
   target_equity?: number | null
   target_date?: string | null
   max_ltv_pct?: number | null
-  min_dscr?: number | null
+  min_icr?: number | null
   min_annual_cashflow?: number | null
   scenario_id?: number | null
   scenario_name?: string | null
@@ -283,8 +283,10 @@ export interface ScenarioSummary {
   avg_monthly_cashflow_posttax?: number
   ending_monthly_cashflow_posttax?: number
   total_tax_paid?: number
-  min_dscr: number
-  months_below_dscr: number
+  min_cover_ratio: number
+  months_below_cover: number
+  min_icr: number
+  months_below_icr: number
   min_cumulative_cashflow: number
   min_cumulative_cashflow_posttax?: number
 }
@@ -432,7 +434,8 @@ export interface MonthSnapshot {
   cumulative_cashflow_posttax: number
   monthly_tax: number
   property_count: number
-  monthly_dscr: number
+  monthly_cover_ratio: number
+  monthly_icr: number
 }
 
 export interface DashboardKPIs {

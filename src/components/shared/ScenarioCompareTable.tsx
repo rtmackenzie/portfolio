@@ -37,7 +37,7 @@ export function deriveMetrics(results: ScenarioResults | null, targetEquity: num
     total_cashflow:    summary.total_cashflow,
     avg_monthly_cf:    summary.avg_monthly_cashflow,
     peak_ltv:          Math.round(peakLtv * 10) / 10,
-    min_dscr:          summary.min_dscr ?? 0,
+    min_cover_ratio:   summary.min_cover_ratio ?? 0,
     liquidity:         summary.min_cumulative_cashflow ?? 0,
     months_to_target:  monthsToTarget,
     final_properties:  months[months.length - 1]?.property_count ?? 0,
@@ -67,7 +67,7 @@ const ROWS: {
   { label: 'Total Cashflow',     key: 'total_cashflow',    format: v => formatCurrency(v),          bestHighest: true  },
   { label: 'Avg Monthly CF',     key: 'avg_monthly_cf',    format: v => formatCurrency(v),          bestHighest: true  },
   { label: 'Peak LTV',           key: 'peak_ltv',          format: v => `${v.toFixed(1)}%`,         bestHighest: false },
-  { label: 'Min DSCR (risk)',    key: 'min_dscr',          format: v => `${v.toFixed(2)}×`,         bestHighest: true  },
+  { label: 'Cover Ratio (risk)', key: 'min_cover_ratio',   format: v => `${v.toFixed(2)}×`,         bestHighest: true  },
   { label: 'Liquidity (min cash)', key: 'liquidity',       format: v => formatCurrency(v),          bestHighest: true  },
   { label: 'Time to Target',     key: 'months_to_target',  format: formatMonths,                    bestHighest: false },
   { label: 'Final Properties',   key: 'final_properties',  format: v => formatNumber(v),            bestHighest: null  },
@@ -116,9 +116,9 @@ export function buildDiff(a: Metrics, b: Metrics): string[] {
   if (Math.abs(ltv) > 0.5)
     parts.push(`${ltv >= 0 ? '+' : ''}${ltv.toFixed(1)}pp LTV`)
 
-  const dscr = b.min_dscr - a.min_dscr
-  if (Math.abs(dscr) >= 0.1)
-    parts.push(`${dscr >= 0 ? '+' : '−'}${Math.abs(dscr).toFixed(2)}× min DSCR`)
+  const cover = b.min_cover_ratio - a.min_cover_ratio
+  if (Math.abs(cover) >= 0.1)
+    parts.push(`${cover >= 0 ? '+' : '−'}${Math.abs(cover).toFixed(2)}× cover ratio`)
 
   const liq = b.liquidity - a.liquidity
   if (Math.abs(liq) > 1000)

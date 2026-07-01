@@ -795,32 +795,63 @@ describe('buildProjection — rent_shock_pct', () => {
   })
 })
 
-// ─── DSCR & liquidity ────────────────────────────────────────────────────────
+// ─── Cover ratio & liquidity ──────────────────────────────────────────────────
 
-describe('buildProjection — DSCR', () => {
+describe('buildProjection — cover ratio', () => {
   it('flags every month below the 1.25× threshold', () => {
-    // rent 600 / mortgage 500 = 1.2 DSCR < 1.25 for all 12 months
+    // rent 600 / mortgage 500 = 1.2 cover < 1.25 for all 12 months
     const state = makeState({ monthly_rent: 600, monthly_mortgage: 500, monthly_other_expenses: 0 })
     const { summary } = buildProjection(makeMap(state), [], BASE_CONFIG)
-    expect(summary.min_dscr).toBe(1.2)
-    expect(summary.months_below_dscr).toBe(12)
+    expect(summary.min_cover_ratio).toBe(1.2)
+    expect(summary.months_below_cover).toBe(12)
   })
 
   it('reports no breaches for a well-covered portfolio', () => {
-    // rent 1000 / mortgage 500 = 2.0 DSCR ≥ 1.25
+    // rent 1000 / mortgage 500 = 2.0 cover ≥ 1.25
     const state = makeState({ monthly_rent: 1000, monthly_mortgage: 500, monthly_other_expenses: 0 })
     const { summary } = buildProjection(makeMap(state), [], BASE_CONFIG)
-    expect(summary.min_dscr).toBe(2)
-    expect(summary.months_below_dscr).toBe(0)
+    expect(summary.min_cover_ratio).toBe(2)
+    expect(summary.months_below_cover).toBe(0)
   })
 
-  it('rent shock can push a healthy portfolio into DSCR breach', () => {
+  it('rent shock can push a healthy portfolio into cover-ratio breach', () => {
     // rent 650 / mortgage 500 = 1.3 (healthy); −20% rent → 520/500 = 1.04 (breach)
     const state = makeState({ monthly_rent: 650, monthly_mortgage: 500, monthly_other_expenses: 0 })
     const healthy = buildProjection(makeMap(state), [], BASE_CONFIG)
     const shocked = buildProjection(makeMap(state), [], { ...BASE_CONFIG, rent_shock_pct: -20 })
-    expect(healthy.summary.months_below_dscr).toBe(0)
-    expect(shocked.summary.months_below_dscr).toBe(12)
+    expect(healthy.summary.months_below_cover).toBe(0)
+    expect(shocked.summary.months_below_cover).toBe(12)
+  })
+})
+
+// ─── Lender ICR stress test (P0 #4) ───────────────────────────────────────────
+
+describe('buildProjection — lender ICR', () => {
+  it('a low-rate mortgage is stressed to the 5.5% floor, not pay-rate+2%', () => {
+    // rate 3% -> pay-rate+2% = 5%, below the 5.5% floor, so 5.5% is used.
+    const state = makeState({ debt: 120000, mortgage_rate: 3, monthly_rent: 1000, monthly_mortgage: 500, monthly_other_expenses: 0 })
+    const { months } = buildProjection(makeMap(state), [], BASE_CONFIG)
+    const expectedIcr = Math.round((1000 / (120000 * 5.5 / 100 / 12)) * 10000) / 100
+    expect(months[0].monthly_icr).toBeCloseTo(expectedIcr, 1)
+  })
+
+  it('a higher-rate mortgage stresses at pay-rate+2%, above the floor', () => {
+    // rate 6% -> pay-rate+2% = 8%, above the 5.5% floor, so 8% is used.
+    const state = makeState({ debt: 120000, mortgage_rate: 6, monthly_rent: 1000, monthly_mortgage: 500, monthly_other_expenses: 0 })
+    const { months } = buildProjection(makeMap(state), [], BASE_CONFIG)
+    const expectedIcr = Math.round((1000 / (120000 * 8 / 100 / 12)) * 10000) / 100
+    expect(months[0].monthly_icr).toBeCloseTo(expectedIcr, 1)
+  })
+
+  it('months_below_icr uses 145% for a Ltd-owned scenario vs 125% for personal', () => {
+    // debt 100k stressed at the 5.5% floor -> ICR ~135% with £620 rent: clears 125%, fails 145%.
+    const state = makeState({ debt: 100000, mortgage_rate: 3.5, monthly_rent: 620, monthly_mortgage: 500, monthly_other_expenses: 0 })
+    const personalTax = { ...DEFAULT_TAX_SETTINGS, ownership: 'personal' as const, personal_marginal_rate_pct: 20 }
+    const ltdTax = { ...DEFAULT_TAX_SETTINGS, ownership: 'ltd' as const }
+    const personal = buildProjection(makeMap(state), [], { ...BASE_CONFIG, tax: personalTax })
+    const ltd = buildProjection(makeMap(state), [], { ...BASE_CONFIG, tax: ltdTax })
+    expect(personal.summary.months_below_icr).toBe(0)     // clears the 125% floor
+    expect(ltd.summary.months_below_icr).toBe(12)          // fails the stricter 145% floor
   })
 })
 

@@ -18,7 +18,7 @@ const goalSchema = z.object({
   target_equity:          z.coerce.number().optional(),
   target_date:            z.string().optional(),
   max_ltv_pct:            z.coerce.number().min(0).max(100).optional(),
-  min_dscr:               z.coerce.number().min(0).optional(),
+  min_icr:                z.coerce.number().min(0).optional(),
   min_annual_cashflow:    z.coerce.number().optional(),
   director_loan_annual:       z.coerce.number().min(0).optional(),
   director_loan_start_date:   z.string().optional(),
@@ -119,7 +119,7 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
       target_equity:         goal.target_equity ?? undefined,
       target_date:           goal.target_date ?? undefined,
       max_ltv_pct:           goal.max_ltv_pct ?? undefined,
-      min_dscr:              goal.min_dscr ?? undefined,
+      min_icr:               goal.min_icr ?? undefined,
       min_annual_cashflow:   goal.min_annual_cashflow ?? undefined,
       director_loan_annual:      goal.director_loan_annual ?? undefined,
       director_loan_start_date:  goal.director_loan_start_date ?? undefined,
@@ -140,7 +140,7 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
       target_equity:         goal.target_equity ?? undefined,
       target_date:           goal.target_date ?? undefined,
       max_ltv_pct:           goal.max_ltv_pct ?? undefined,
-      min_dscr:              goal.min_dscr ?? undefined,
+      min_icr:               goal.min_icr ?? undefined,
       min_annual_cashflow:   goal.min_annual_cashflow ?? undefined,
       director_loan_annual:      goal.director_loan_annual ?? undefined,
       director_loan_start_date:  goal.director_loan_start_date ?? undefined,
@@ -165,7 +165,7 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
       target_date:            (d.goal_type === 'mortgage_free' || d.goal_type === 'retirement_date')
                                 ? (d.target_date ?? null) : null,
       max_ltv_pct:          d.max_ltv_pct ?? null,
-      min_dscr:             d.min_dscr ?? null,
+      min_icr:              d.min_icr ?? null,
       min_annual_cashflow:  d.min_annual_cashflow ?? null,
       director_loan_annual:      d.director_loan_annual ?? null,
       director_loan_start_date:  d.director_loan_start_date || null,
@@ -234,8 +234,8 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
             <input type="number" {...register('max_ltv_pct')} className={inputCls} placeholder="e.g. 75" />
           </div>
           <div>
-            <label className={labelCls}><Tip text="Floor on Debt Service Coverage Ratio (rent ÷ mortgage). Below ~1.25× signals lender and cashflow stress.">Min DSCR (×)</Tip></label>
-            <input type="number" step="0.01" {...register('min_dscr')} className={inputCls} placeholder="e.g. 1.25" />
+            <label className={labelCls}><Tip text="Floor on lender Interest Coverage Ratio — rent ÷ a stressed interest-only payment. Real lenders require 125% (personal, basic-rate) or 145% (higher-rate personal / Ltd). Leave blank to use the threshold derived from your Tax settings.">Min Lender ICR (%)</Tip></label>
+            <input type="number" {...register('min_icr')} className={inputCls} placeholder="e.g. 125" />
           </div>
           <div>
             <label className={labelCls}><Tip text="Minimum net cashflow per year the portfolio must sustain. Pathways dipping below this are infeasible.">Min cash/yr (£)</Tip></label>
@@ -435,7 +435,7 @@ function PathwaysPanel({ goal }: { goal: Goal }) {
 
       {noneFeasible && (
         <div className="text-xs px-3 py-2 rounded-md bg-red-500/10 border border-red-500/30 text-red-400">
-          No feasible pathway — relax a constraint (max LTV, min DSCR, min cash/yr) or add director-loan capital, then regenerate.
+          No feasible pathway — relax a constraint (max LTV, min lender ICR, min cash/yr) or add director-loan capital, then regenerate.
         </div>
       )}
 
@@ -483,8 +483,8 @@ function PathwaysPanel({ goal }: { goal: Goal }) {
                     </div>
                   </div>
                   <div>
-                    <Tip className="text-muted-foreground" text="Lowest Debt Service Coverage Ratio (rent ÷ mortgage) reached in any month.">Min DSCR</Tip>
-                    <div className="font-medium">{pw.summary.min_dscr > 0 ? `${pw.summary.min_dscr.toFixed(2)}×` : '—'}</div>
+                    <Tip className="text-muted-foreground" text="Lowest lender Interest Coverage Ratio (rent ÷ stressed interest-only payment) reached in any month. Real lenders require 125–145%.">Min ICR</Tip>
+                    <div className="font-medium">{pw.summary.min_icr > 0 ? `${pw.summary.min_icr.toFixed(0)}%` : '—'}</div>
                   </div>
                   <div>
                     <Tip className="text-muted-foreground" text="How long until this pathway first meets the goal, or 'Not reached' within the projection horizon.">Time to goal</Tip>
