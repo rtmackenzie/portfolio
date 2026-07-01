@@ -263,6 +263,9 @@ export interface Goal {
   scenario_name?: string | null
   director_loan_annual?: number | null
   director_loan_start_date?: string | null
+  starting_cash?: number | null
+  mortgage_reprice_years?: number | null
+  mortgage_reprice_uplift_bps?: number | null
   notes?: string | null
   created_at: string
   updated_at: string

@@ -256,6 +256,25 @@ describe('analyzeBinding', () => {
     const b = analyzeBinding(goal, months, summary, true, 30000)
     expect(b.detail).not.toMatch(/Infeasible/i)
   })
+
+  it('flags a cash-reserve breach as infeasible (P0 #3)', () => {
+    // property_count=4, default reserve = 3*200*4 + 1000*4 = £6,400; cash sits at £2,000 — below floor.
+    const goal = { goal_type: 'count' as const }
+    const months = [makeMonth({ cumulative_cashflow: 2000, property_count: 4 })]
+    const summary = makeSummary({ min_cumulative_cashflow: 2000 })
+    const b = analyzeBinding(goal, months, summary, false, 30000, 200)
+    expect(b.key).toBe('reserve')
+    expect(b.detail).toMatch(/Infeasible/i)
+  })
+
+  it('a larger configured reserve requirement narrows headroom (still backward-compatible signature)', () => {
+    const monthsAt = (cash: number) => [makeMonth({ cumulative_cashflow: cash, property_count: 4 })]
+    const summary = makeSummary({ min_cumulative_cashflow: 6500 })
+    const small = analyzeBinding({ goal_type: 'count' as const, min_cash_reserve_months: 1 }, monthsAt(6500), summary, true, 30000, 200)
+    const large = analyzeBinding({ goal_type: 'count' as const, min_cash_reserve_months: 12 }, monthsAt(6500), summary, true, 30000, 200)
+    expect(small.detail).not.toMatch(/Infeasible/i)
+    expect(large.detail).toMatch(/Infeasible/i)
+  })
 })
 
 describe('rankPathways', () => {
@@ -286,5 +305,83 @@ describe('rankPathways', () => {
     expect(ranked[0].id).toBe(1)            // still ranked first by time-to-goal
     expect(ranked[0].recommended).toBe(false)
     expect(ranked.find(r => r.id === 2)!.recommended).toBe(true)
+  })
+})
+
+describe('generatePathways — configurable cash reserve (P0 #3)', () => {
+  const goal = { goal_type: 'count' as const, target_property_count: 6, director_loan_annual: 200000 }
+
+  it('no strategy ever lets post-tax cash dip below its portfolio-sized reserve floor', () => {
+    const reserveFloorOf = (months: number, capex: number, propertyCount: number) =>
+      months * ASSUMPTIONS.monthly_expenses * Math.max(1, propertyCount) + capex * propertyCount
+
+    for (const p of generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)) {
+      for (const m of p.results.months) {
+        const floor = reserveFloorOf(3, 1000, m.property_count)   // defaults: 3mo, £1,000/property
+        expect(m.cumulative_cashflow_posttax).toBeGreaterThanOrEqual(floor - 1)  // -1 to tolerate rounding
+      }
+    }
+  })
+
+  it('a larger configured reserve requirement delays the first purchase', () => {
+    const lean = generatePathways({ ...goal, min_cash_reserve_months: 1 }, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const cautious = generatePathways({ ...goal, min_cash_reserve_months: 12 }, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const firstBuyOf = (ps: ReturnType<typeof generatePathways>) =>
+      firstBuyDate(ps.find(p => p.template_name === 'target_hold')!.events)
+    const leanFirst = firstBuyOf(lean)
+    const cautiousFirst = firstBuyOf(cautious)
+    expect(leanFirst).toBeDefined()
+    if (cautiousFirst) {
+      expect(cautiousFirst >= leanFirst!).toBe(true)
+    }
+  })
+
+  it('the Mortgage Recycler now respects the reserve too (previously zero-buffer)', () => {
+    const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const recycler = ps.find(p => p.template_name === 'mortgage_recycler')!
+    for (const m of recycler.results.months) {
+      const cashAvail = m.cumulative_cashflow_posttax
+      const floor = 3 * ASSUMPTIONS.monthly_expenses * Math.max(1, m.property_count) + 1000 * m.property_count
+      expect(cashAvail).toBeGreaterThanOrEqual(floor - 1)
+    }
+  })
+})
+
+describe('generatePathways — configurable starting cash & rate repricing (UI/DB exposure)', () => {
+  const goal = { goal_type: 'count' as const, target_property_count: 6, director_loan_annual: 200000 }
+
+  it('an explicit starting_cash overrides the smart reserve-based default', () => {
+    const low = generatePathways({ ...goal, starting_cash: 500 }, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const high = generatePathways({ ...goal, starting_cash: 500000 }, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const month0Of = (ps: ReturnType<typeof generatePathways>) =>
+      ps.find(p => p.template_name === 'target_hold')!.results.months[0].cumulative_cashflow_posttax
+    expect(month0Of(high)).toBeGreaterThan(month0Of(low))
+  })
+
+  it('a custom mortgage_reprice_years/uplift reaches the engine via assumptions_json', () => {
+    // Fast, aggressive repricing (every 1 year, +5%) should erode cashflow much faster
+    // than the engine defaults (5 years, +2%) once financed properties are in the book.
+    const fastReprice = generatePathways(
+      { ...goal, mortgage_reprice_years: 1, mortgage_reprice_uplift_bps: 500 },
+      startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1
+    )
+    const defaultReprice = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const endCfOf = (ps: ReturnType<typeof generatePathways>) => {
+      const m = ps.find(p => p.template_name === 'target_hold')!.results.months
+      return m[m.length - 1].monthly_cashflow_posttax
+    }
+    expect(endCfOf(fastReprice)).toBeLessThan(endCfOf(defaultReprice))
+  })
+
+  it('every generated pathway carries the assumptions_json it was actually run with', () => {
+    const ps = generatePathways(
+      { ...goal, mortgage_reprice_years: 3, mortgage_reprice_uplift_bps: 300 },
+      startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1
+    )
+    for (const p of ps) {
+      const a = JSON.parse(p.assumptions_json)
+      expect(a.mortgage_reprice_years).toBe(3)
+      expect(a.mortgage_reprice_uplift_bps).toBe(300)
+    }
   })
 })

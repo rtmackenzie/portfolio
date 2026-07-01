@@ -15,6 +15,12 @@ interface Goal {
   min_annual_cashflow?: number | null
   director_loan_annual?: number | null
   director_loan_start_date?: string | null
+  min_cash_reserve_months?: number | null
+  capex_reserve_per_property?: number | null
+  starting_cash?: number | null   // real cash on hand today; defaults to the starting
+                                   // portfolio's own reserve requirement when unset (§P0-3)
+  mortgage_reprice_years?: number | null       // fixed-rate term before reverting; default 5 (§P1-5)
+  mortgage_reprice_uplift_bps?: number | null  // rate rise at each reprice; default 200 (§P1-5)
 }
 
 export interface PropertyAssumptions {
@@ -88,6 +94,7 @@ export interface GeneratedPathway {
   risk_score: number
   binding_constraint: string
   binding_detail: string
+  assumptions_json: string
 }
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
@@ -173,6 +180,15 @@ function withMargin(goal: Goal): Goal {
   }
 }
 
+// Minimum cash the portfolio must retain at a given size — scales with outgoings and a
+// per-property capex float (P0 #3 fix). Configurable per goal; shared by generation,
+// constraint-checking and binding-constraint analysis so all three stay in lockstep.
+function reserveFloor(goal: Goal, monthlyExp: number, propertyCount: number): number {
+  const months = goal.min_cash_reserve_months ?? 3
+  const capex = goal.capex_reserve_per_property ?? 1000
+  return months * monthlyExp * Math.max(1, propertyCount) + capex * propertyCount
+}
+
 function buildCashGatedEvents(
   strategy: Strategy,
   baseDate: string,
@@ -183,13 +199,14 @@ function buildCashGatedEvents(
   tax: TaxSettings | undefined,
   goal: Goal,
   stopAtGoal: boolean,
-  interestOnly: boolean
+  interestOnly: boolean,
+  startingCash: number,
+  assumptionsJson: string
 ): ScenarioEvent[] {
   const totalMonths = projYears * 12
-  const config = { base_date: baseDate, projection_years: projYears, tax }
+  const config = { base_date: baseDate, projection_years: projYears, tax, starting_cash: startingCash, assumptions_json: assumptionsJson }
   const buyCost = depositPlusCosts(a)
   const monthlyExp = a.monthly_expenses ?? 200
-  const buffer = strategy === 'steady' ? monthlyExp * 6 : 0  // steady keeps a reserve
   const cap = projYears * 4                                   // hard ceiling on decisions
   const marginGoal = withMargin(goal)
 
@@ -214,16 +231,18 @@ function buildCashGatedEvents(
       // Gate on post-tax cash — taxes genuinely reduce deposit capital.
       const cash = proj.months[i].cumulative_cashflow_posttax ?? proj.months[i].cumulative_cashflow
 
+      const propCount = proj.months[i].property_count
+
       if (strategy === 'recycler') {
         const balances = activeBalancesAt(proj, i)
         if (balances.length < 2) {
-          if (cash >= buyCost) { decided = buyEvent(proj.months[i].date, a, interestOnly); decidedMonth = i; break }
+          if (cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, a, interestOnly); decidedMonth = i; break }
         } else {
           const smallest = Math.min(...balances)
-          if (cash >= smallest) { decided = payoffEvent(proj.months[i].date); decidedMonth = i; break }
+          if (cash - smallest >= reserveFloor(goal, monthlyExp, propCount)) { decided = payoffEvent(proj.months[i].date); decidedMonth = i; break }
         }
       } else {
-        if (cash >= buyCost + buffer) { decided = buyEvent(proj.months[i].date, a, interestOnly); decidedMonth = i; break }
+        if (cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, a, interestOnly); decidedMonth = i; break }
       }
     }
 
@@ -260,7 +279,7 @@ function buildDirectorLoanEvents(
 
 // ─── Constraint checker ───────────────────────────────────────────────────────
 
-function checkConstraints(months: MonthSnapshot[], goal: Goal): boolean {
+function checkConstraints(months: MonthSnapshot[], goal: Goal, monthlyExp: number = 200): boolean {
   for (const m of months) {
     if (goal.max_ltv_pct != null && m.total_value > 0) {
       const ltv = (m.total_debt / m.total_value) * 100
@@ -274,6 +293,9 @@ function checkConstraints(months: MonthSnapshot[], goal: Goal): boolean {
       const postTaxMonthly = m.monthly_cashflow_posttax ?? m.monthly_cashflow
       if (postTaxMonthly * 12 < goal.min_annual_cashflow) return false
     }
+    // Cash reserve (P0 #3): a real emergency/capex float, not just "stays above £0".
+    const cashAvail = m.cumulative_cashflow_posttax ?? m.cumulative_cashflow
+    if (cashAvail < reserveFloor(goal, monthlyExp, m.property_count)) return false
   }
   return true
 }
@@ -330,7 +352,8 @@ export function analyzeBinding(
   months: MonthSnapshot[],
   summary: Summary,
   reachesGoal: boolean,
-  buyCost: number
+  buyCost: number,
+  monthlyExp: number = 200
 ): Binding {
   let maxLtv = 0
   let minAnnualCF = Infinity
@@ -354,9 +377,21 @@ export function analyzeBinding(
     cons.push({ key: 'cashflow', headroom: (minAnnualCF - goal.min_annual_cashflow) / Math.max(Math.abs(goal.min_annual_cashflow), 1),
       label: `annual cashflow dipped to £${Math.round(minAnnualCF).toLocaleString()} vs £${goal.min_annual_cashflow.toLocaleString()} floor` })
   }
-  // Liquidity is always meaningful under the true-cash model
-  cons.push({ key: 'liquidity', headroom: summary.min_cumulative_cashflow / Math.max(buyCost, 1),
-    label: `cash dipped to £${Math.round(summary.min_cumulative_cashflow).toLocaleString()}` })
+  // Cash reserve (P0 #3): headroom vs a real, portfolio-size-scaled reserve floor —
+  // not just "stays above £0". Always meaningful under the true-cash model.
+  let minReserveHeadroom = Infinity
+  let reserveLabel = ''
+  for (const m of months) {
+    const cashAvail = m.cumulative_cashflow_posttax ?? m.cumulative_cashflow
+    const floor = reserveFloor(goal, monthlyExp, m.property_count)
+    const headroom = floor > 0 ? (cashAvail - floor) / floor : 0
+    if (headroom < minReserveHeadroom) {
+      minReserveHeadroom = headroom
+      reserveLabel = `cash reserve dipped to £${Math.round(cashAvail).toLocaleString()} vs a £${Math.round(floor).toLocaleString()} (${goal.min_cash_reserve_months ?? 3}-month) floor`
+    }
+  }
+  if (!isFinite(minReserveHeadroom)) minReserveHeadroom = 0
+  cons.push({ key: 'reserve', headroom: minReserveHeadroom, label: reserveLabel })
 
   const violated = cons.filter(c => c.headroom < 0).sort((a, b) => a.headroom - b.headroom)
   if (violated.length > 0) {
@@ -416,11 +451,31 @@ export function generatePathways(
   tax?: TaxSettings              // global tax settings → post-tax goal solving
 ): GeneratedPathway[] {
   const baseDate = new Date().toISOString().slice(0, 10)
+  const monthlyExp = assumptions.monthly_expenses ?? 200
+
+  // Real cash on hand today. Defaults to the starting portfolio's own reserve
+  // requirement — i.e. assume an established portfolio already holds an adequate
+  // reserve unless told otherwise — so existing goals aren't retroactively marked
+  // infeasible purely because the projection has no day-zero bank balance (§P0-3).
+  const startingCash = goal.starting_cash ?? reserveFloor(goal, monthlyExp, initialState.size)
+
+  // Snapshot every assumption the projection actually uses onto the generated
+  // scenario, so it's fully self-describing/editable afterward in What-If (§P1-5 fix).
+  const assumptionsJson = JSON.stringify({
+    property_growth_pct: 3.0,
+    rent_growth_pct: 2.5,
+    expense_inflation_pct: 2.5,
+    void_months_per_year: 0.5,
+    mortgage_reprice_years: goal.mortgage_reprice_years ?? 5,
+    mortgage_reprice_uplift_bps: goal.mortgage_reprice_uplift_bps ?? 200,
+  })
 
   const config = {
     base_date: baseDate,
     projection_years: projectionYears,
     tax,
+    starting_cash: startingCash,
+    assumptions_json: assumptionsJson,
   }
 
   const loanEvents = goal.director_loan_annual
@@ -439,11 +494,11 @@ export function generatePathways(
 
   return templates.map(t => {
     // Cash-gated decisions (buys/payoffs), then merge loan events for the final run
-    const decisions = buildCashGatedEvents(t.strategy, baseDate, projectionYears, assumptions, initialState, loanEvents, tax, goal, t.stopAtGoal, t.interestOnly)
+    const decisions = buildCashGatedEvents(t.strategy, baseDate, projectionYears, assumptions, initialState, loanEvents, tax, goal, t.stopAtGoal, t.interestOnly, startingCash, assumptionsJson)
     const allEvents = [...decisions, ...loanEvents].sort((a, b) => a.date.localeCompare(b.date))
 
     const results = buildProjection(cloneState(initialState), allEvents, config) as ProjectionResult
-    const feasible = checkConstraints(results.months, goal) && results.summary.min_cumulative_cashflow >= 0
+    const feasible = checkConstraints(results.months, goal, monthlyExp) && results.summary.min_cumulative_cashflow >= 0
     const { reached, monthIndex } = checkGoalReached(results.months, goal)
 
     // Interim risk penalty: interest-only carries rate + no-amortisation risk the model
@@ -453,7 +508,7 @@ export function generatePathways(
     const terminalLtv = last && last.total_value > 0 ? (last.total_debt / last.total_value) * 100 : 0
     const risk_score = computeRiskScore(results.summary) + (t.interestOnly ? Math.round(terminalLtv) : 0)
 
-    const binding = analyzeBinding(goal, results.months, results.summary, reached, depositPlusCosts(assumptions))
+    const binding = analyzeBinding(goal, results.months, results.summary, reached, depositPlusCosts(assumptions), monthlyExp)
     const binding_constraint = binding.key
     const binding_detail = t.interestOnly
       ? `Interest-only — rate-exposed, debt not amortised. ${binding.detail}`
@@ -470,6 +525,7 @@ export function generatePathways(
       risk_score,
       binding_constraint,
       binding_detail,
+      assumptions_json: assumptionsJson,
     }
   })
 }

@@ -22,6 +22,9 @@ const goalSchema = z.object({
   min_annual_cashflow:    z.coerce.number().optional(),
   director_loan_annual:       z.coerce.number().min(0).optional(),
   director_loan_start_date:   z.string().optional(),
+  starting_cash:              z.coerce.number().min(0).optional(),
+  mortgage_reprice_years:     z.coerce.number().min(1).optional(),
+  mortgage_reprice_uplift_bps: z.coerce.number().min(0).optional(),
   scenario_id:            z.coerce.number().optional(),
   notes: z.string().optional(),
 })
@@ -120,6 +123,9 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
       min_annual_cashflow:   goal.min_annual_cashflow ?? undefined,
       director_loan_annual:      goal.director_loan_annual ?? undefined,
       director_loan_start_date:  goal.director_loan_start_date ?? undefined,
+      starting_cash:              goal.starting_cash ?? undefined,
+      mortgage_reprice_years:     goal.mortgage_reprice_years ?? undefined,
+      mortgage_reprice_uplift_bps: goal.mortgage_reprice_uplift_bps ?? undefined,
       scenario_id:           goal.scenario_id ?? undefined,
       notes:                 goal.notes ?? '',
     } : { goal_type: 'net_worth' },
@@ -138,6 +144,9 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
       min_annual_cashflow:   goal.min_annual_cashflow ?? undefined,
       director_loan_annual:      goal.director_loan_annual ?? undefined,
       director_loan_start_date:  goal.director_loan_start_date ?? undefined,
+      starting_cash:              goal.starting_cash ?? undefined,
+      mortgage_reprice_years:     goal.mortgage_reprice_years ?? undefined,
+      mortgage_reprice_uplift_bps: goal.mortgage_reprice_uplift_bps ?? undefined,
       scenario_id:           goal.scenario_id ?? undefined,
       notes:                 goal.notes ?? '',
     } : { goal_type: 'net_worth' })
@@ -160,6 +169,9 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
       min_annual_cashflow:  d.min_annual_cashflow ?? null,
       director_loan_annual:      d.director_loan_annual ?? null,
       director_loan_start_date:  d.director_loan_start_date || null,
+      starting_cash:              d.starting_cash ?? null,
+      mortgage_reprice_years:     d.mortgage_reprice_years ?? null,
+      mortgage_reprice_uplift_bps: d.mortgage_reprice_uplift_bps ?? null,
       scenario_id:          d.scenario_id || null,
       notes:                d.notes || null,
     }
@@ -244,6 +256,25 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
           <div>
             <label className={labelCls}><Tip text="When the first director-loan injection occurs. Defaults to the projection start date if left blank.">First loan date</Tip></label>
             <input type="date" {...register('director_loan_start_date')} className={inputCls} />
+          </div>
+        </div>
+      </div>
+
+      {/* Advanced assumptions */}
+      <div className="border border-border rounded-lg p-4 space-y-3">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Advanced assumptions <span className="font-normal normal-case text-muted-foreground/70">(optional)</span></p>
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label className={labelCls}><Tip text="Cash already on hand today. Defaults to an assumed adequate reserve for your existing portfolio if left blank.">Starting cash (£)</Tip></label>
+            <input type="number" {...register('starting_cash')} className={inputCls} placeholder="e.g. 10000" />
+          </div>
+          <div>
+            <label className={labelCls}><Tip text="How often a fixed-rate mortgage deal expires and reverts to a new rate. Defaults to 5 years.">Mortgage reprice term (years)</Tip></label>
+            <input type="number" {...register('mortgage_reprice_years')} className={inputCls} placeholder="e.g. 5" />
+          </div>
+          <div>
+            <label className={labelCls}><Tip text="Rate increase applied each time a mortgage reprices (200 = +2%). Defaults to 200.">Reprice uplift (bps)</Tip></label>
+            <input type="number" {...register('mortgage_reprice_uplift_bps')} className={inputCls} placeholder="e.g. 200" />
           </div>
         </div>
       </div>

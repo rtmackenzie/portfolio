@@ -11,6 +11,7 @@ interface ScenarioConfig {
   rent_shock_pct?: number
   propertyLabels?: Record<number, string>
   tax?: TaxSettings   // global tax settings; when absent, post-tax == pre-tax
+  starting_cash?: number   // real cash on hand at month 0; default 0 (today's behaviour)
 }
 
 export interface ScenarioEvent {
@@ -110,7 +111,7 @@ export function buildProjection(
   const repriceUpliftBps = assumptions.mortgage_reprice_uplift_bps ?? 200
 
   const snapshots: MonthSnapshot[] = []
-  let cumulativeCashflow = 0
+  let cumulativeCashflow = config.starting_cash ?? 0
   let taxCumulative = 0   // running income tax + CGT (post-tax = pre-tax − this)
   let nextId = Math.max(...Array.from(stateMap.keys()), 0) + 1
   const tax = config.tax
