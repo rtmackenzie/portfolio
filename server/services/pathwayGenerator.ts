@@ -168,13 +168,43 @@ function payoffEvent(date: string): ScenarioEvent {
   }
 }
 
+// Cash-out remortgage targeting a specific property (§P2-11 BRRR) — the engine's
+// remortgage handler already charges ERC on an early exit and deducts fees; this just
+// builds the event with the new (higher) balance at the target LTV.
+//
+// property_id is left null: the target may be a property bought earlier in the same
+// simulation (no real DB row yet), so it can't go through the FK'd property_id column —
+// it rides in parameters_json as sim_property_id instead, which the engine reads as a
+// fallback when property_id is null.
+function remortgageEvent(
+  date: string,
+  propertyId: number,
+  newBalance: number,
+  a: PropertyAssumptions,
+  settings?: AssumptionSettings
+): ScenarioEvent {
+  return {
+    event_type: 'remortgage',
+    property_id: null,
+    date,
+    parameters_json: JSON.stringify({
+      sim_property_id:     propertyId,
+      new_rate:            a.mortgage_rate ?? settings?.default_mortgage_rate_pct ?? 5.5,
+      new_term_years:      a.mortgage_term_years ?? 25,
+      new_balance:         Math.round(newBalance),
+      arrangement_fee:     a.arrangement_fee ?? settings?.default_arrangement_fee ?? 999,
+      valuation_fee:       a.valuation_fee ?? settings?.default_valuation_fee ?? 300,
+    }),
+  }
+}
+
 // ─── Cash-gated event generation ──────────────────────────────────────────────
 // Decisions (buy / payoff) are driven by the accumulated cash pot — read straight
 // from the engine's true-cash `cumulative_cashflow` line — not by fixed timers.
 // Greedy forward insertion: re-project after every decision so each subsequent
 // choice sees the updated cash balance (deposits/payoffs drawn, loans added).
 
-type Strategy = 'steady' | 'accelerated' | 'recycler'
+type Strategy = 'steady' | 'accelerated' | 'de_gear' | 'brrr'
 
 function depositPlusCosts(a: PropertyAssumptions): number {
   const price = a.purchase_price
@@ -200,6 +230,35 @@ function activeBalancesAt(proj: ProjectionResult, i: number): { debt: number; is
   }
   return out
 }
+
+// Mortgaged properties whose LTV has fallen below the refinance trigger (appreciation +
+// amortisation) at absolute month i — candidates for a cash-out remortgage (§P2-11 BRRR).
+function refinanceCandidatesAt(
+  proj: ProjectionResult, i: number, triggerLtvPct: number
+): { property_id: number; debt: number; value: number; ltv: number; isEarlyExit: boolean }[] {
+  const ym = proj.months[i].date
+  const out: { property_id: number; debt: number; value: number; ltv: number; isEarlyExit: boolean }[] = []
+  for (const ps of proj.property_series) {
+    const pm = ps.months.find(m => m.date === ym)
+    if (pm && pm.debt > 0 && pm.value > 0) {
+      const ltv = (pm.debt / pm.value) * 100
+      if (ltv < triggerLtvPct) {
+        out.push({
+          property_id: ps.property_id, debt: pm.debt, value: pm.value, ltv,
+          isEarlyExit: pm.is_fixed_rate && pm.next_reprice_month != null && i < pm.next_reprice_month,
+        })
+      }
+    }
+  }
+  return out
+}
+
+// BRRR refinance thresholds (§P2-11): trigger once a property's LTV falls below this via
+// appreciation/amortisation, refinance back up to the target LTV — standard UK BTL
+// refinance headroom. Strategy-defining constants, not user-configurable (same status as
+// the de-gear strategy's ≤2-mortgages cap).
+const BRRR_TRIGGER_LTV_PCT = 65
+const BRRR_TARGET_LTV_PCT = 75
 
 // Reach 105% of a numeric target so the plan stops with a small buffer, not on a
 // knife-edge. Count / date targets are left exact.
@@ -278,7 +337,7 @@ function buildCashGatedEvents(
 
       const propCount = proj.months[i].property_count
 
-      if (strategy === 'recycler') {
+      if (strategy === 'de_gear') {
         const balances = activeBalancesAt(proj, i)
         if (balances.length < 2) {
           if (icrOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, a, interestOnly); decidedMonth = i; break }
@@ -287,6 +346,25 @@ function buildCashGatedEvents(
           const ercCost = target.isEarlyExit ? target.debt * ercPct / 100 : 0
           if (cash - target.debt - ercCost >= reserveFloor(goal, monthlyExp, propCount)) { decided = payoffEvent(proj.months[i].date); decidedMonth = i; break }
         }
+      } else if (strategy === 'brrr') {
+        // Refinance first — releasing equity only ever helps the cash position, so no
+        // reserve-floor gate is needed here (unlike a buy). Pick the property with the
+        // most equity to unlock (lowest LTV), same "pick the extreme" pattern as de-gear.
+        const candidates = refinanceCandidatesAt(proj, i, BRRR_TRIGGER_LTV_PCT)
+        if (candidates.length > 0) {
+          const target = candidates.reduce((min, c) => c.ltv < min.ltv ? c : min)
+          const newBalance = target.value * (BRRR_TARGET_LTV_PCT / 100)
+          const ercCost = target.isEarlyExit ? target.debt * ercPct / 100 : 0
+          const arrangementFee = a.arrangement_fee ?? settings?.default_arrangement_fee ?? 999
+          const valuationFee = a.valuation_fee ?? settings?.default_valuation_fee ?? 300
+          const netRelease = (newBalance - target.debt) - ercCost - arrangementFee - valuationFee
+          if (netRelease > 0) {
+            decided = remortgageEvent(proj.months[i].date, target.property_id, newBalance, a, settings)
+            decidedMonth = i
+            break
+          }
+        }
+        if (icrOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, a, interestOnly); decidedMonth = i; break }
       } else {
         if (icrOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, a, interestOnly); decidedMonth = i; break }
       }
@@ -538,14 +616,18 @@ export function generatePathways(
     ? buildDirectorLoanEvents(baseDate, projectionYears, goal.director_loan_annual, goal.director_loan_start_date)
     : []
 
-  // Efficient frontier: three genuinely distinct strategies.
+  // Efficient frontier: four genuinely distinct strategies.
   //  • Target & Hold  — repayment, stop at goal (fewest units, debt amortises, then holds)
   //  • Maximise Cashflow — interest-only, grow (most income / fastest, highest rate risk)
-  //  • Mortgage Recycler — repayment + payoffs, grow (lowest debt, most resilient)
+  //  • Low-Risk Hold — repayment + payoffs, grow (lowest debt, most resilient; de-gears —
+  //    previously mislabelled "Mortgage Recycler" §P2-11)
+  //  • BRRR — repayment + cash-out remortgages once a property's LTV falls below 65%,
+  //    grow (never de-levers; the genuine equity-recycling strategy §P2-11)
   const templates: Array<{ template_name: string; label: string; strategy: Strategy; stopAtGoal: boolean; interestOnly: boolean }> = [
-    { template_name: 'target_hold',       label: 'Target & Hold',     strategy: 'steady',   stopAtGoal: true,  interestOnly: false },
-    { template_name: 'max_cashflow',      label: 'Maximise Cashflow', strategy: 'steady',   stopAtGoal: false, interestOnly: true  },
-    { template_name: 'mortgage_recycler', label: 'Mortgage Recycler', strategy: 'recycler', stopAtGoal: false, interestOnly: false },
+    { template_name: 'target_hold',    label: 'Target & Hold',     strategy: 'steady',   stopAtGoal: true,  interestOnly: false },
+    { template_name: 'max_cashflow',   label: 'Maximise Cashflow', strategy: 'steady',   stopAtGoal: false, interestOnly: true  },
+    { template_name: 'low_risk_hold',  label: 'Low-Risk Hold',     strategy: 'de_gear',  stopAtGoal: false, interestOnly: false },
+    { template_name: 'brrr_recycler',  label: 'BRRR',              strategy: 'brrr',     stopAtGoal: false, interestOnly: false },
   ]
 
   return templates.map(t => {

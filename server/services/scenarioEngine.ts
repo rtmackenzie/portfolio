@@ -241,7 +241,11 @@ export function buildProjection(
           break
         }
         case 'remortgage': {
-          const propId = ev.property_id
+          // property_id may be null with the target riding in parameters_json instead —
+          // pathway-generated BRRR remortgages can target a property created earlier in
+          // the same simulation (no real DB row yet), which the FK'd property_id column
+          // can't reference (§P2-11).
+          const propId = ev.property_id ?? params.sim_property_id ?? null
           const state = propId ? stateMap.get(propId) : null
           if (state && propId != null) {
             const currentDebt = debtMap.get(propId) ?? 0

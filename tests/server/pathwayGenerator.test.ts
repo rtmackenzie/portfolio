@@ -139,20 +139,69 @@ describe('generatePathways — interest-only frontier (P1 #7)', () => {
     const goal = { goal_type: 'count' as const, target_property_count: 6, director_loan_annual: 200000 }
     const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
     const io = ps.find(p => p.template_name === 'max_cashflow')!
-    const recycler = ps.find(p => p.template_name === 'mortgage_recycler')!
-    expect(io.risk_score).toBeGreaterThan(recycler.risk_score)
+    const lowRiskHold = ps.find(p => p.template_name === 'low_risk_hold')!
+    expect(io.risk_score).toBeGreaterThan(lowRiskHold.risk_score)
     expect(io.binding_detail).toMatch(/interest-only/i)
   })
 
-  it('the three strategies produce genuinely different portfolios', () => {
+  it('the four strategies produce genuinely different portfolios', () => {
     const goal = { goal_type: 'count' as const, target_property_count: 6, director_loan_annual: 200000 }
     const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
     const endDebt = (name: string) => {
       const m = ps.find(p => p.template_name === name)!.results.months
       return m[m.length - 1].total_debt
     }
-    const debts = [endDebt('target_hold'), endDebt('max_cashflow'), endDebt('mortgage_recycler')]
-    expect(new Set(debts).size).toBe(3) // all distinct ending debt levels
+    const debts = [endDebt('target_hold'), endDebt('max_cashflow'), endDebt('low_risk_hold'), endDebt('brrr_recycler')]
+    expect(new Set(debts).size).toBe(4) // all distinct ending debt levels
+  })
+})
+
+describe('generatePathways — BRRR equity-release strategy (§P2-11)', () => {
+  const goal = { goal_type: 'count' as const, target_property_count: 6, director_loan_annual: 200000 }
+
+  it('cash-out remortgages a property once its LTV falls below the 65% trigger', () => {
+    const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const brrr = ps.find(p => p.template_name === 'brrr_recycler')!
+    const remortgages = brrr.events.filter(e => e.event_type === 'remortgage')
+    expect(remortgages.length).toBeGreaterThan(0)
+    for (const ev of remortgages) {
+      const params = JSON.parse(ev.parameters_json)
+      expect(params.new_balance).toBeGreaterThan(0)
+      // property_id is deliberately null — the target rides in parameters_json as
+      // sim_property_id since it may be a property with no real DB row yet (§P2-11).
+      expect(ev.property_id).toBeNull()
+      expect(params.sim_property_id).toBeGreaterThan(0)
+    }
+  })
+
+  it('grows property count over the projection, unlike Low-Risk Hold', () => {
+    const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const brrr = ps.find(p => p.template_name === 'brrr_recycler')!
+    const lowRiskHold = ps.find(p => p.template_name === 'low_risk_hold')!
+    const brrrCount = brrr.results.months[brrr.results.months.length - 1].property_count
+    const lowRiskHoldCount = lowRiskHold.results.months[lowRiskHold.results.months.length - 1].property_count
+    expect(brrrCount).toBeGreaterThan(lowRiskHoldCount)
+  })
+
+  it('ends up with more debt than Low-Risk Hold — the opposite risk profile', () => {
+    const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const brrr = ps.find(p => p.template_name === 'brrr_recycler')!
+    const lowRiskHold = ps.find(p => p.template_name === 'low_risk_hold')!
+    const endDebt = (p: typeof brrr) => p.results.months[p.results.months.length - 1].total_debt
+    expect(endDebt(brrr)).toBeGreaterThan(endDebt(lowRiskHold))
+  })
+
+  it('never refinances early in the projection, before any property has grown enough equity', () => {
+    // Starting portfolio is right at the 75% target LTV (not yet below the 65% trigger); a
+    // short 1-year window gives no time for appreciation/amortisation to cross the trigger.
+    const highLtvPortfolio: Map<number, PropertyState> = new Map([[1, {
+      id: 1, value: 200000, monthly_rent: 1200, monthly_mortgage: 600, monthly_other_expenses: 100,
+      debt: 150000, is_vacant: false, mortgage_rate: 5.5, is_interest_only: false, purchase_price: 150000,
+    }]])
+    const ps = generatePathways(goal, highLtvPortfolio, ASSUMPTIONS, 1, 1)
+    const brrr = ps.find(p => p.template_name === 'brrr_recycler')!
+    const remortgages = brrr.events.filter(e => e.event_type === 'remortgage')
+    expect(remortgages.length).toBe(0)
   })
 })
 
@@ -336,22 +385,22 @@ describe('generatePathways — configurable cash reserve (P0 #3)', () => {
     }
   })
 
-  it('the Mortgage Recycler now respects the reserve too (previously zero-buffer)', () => {
+  it('Low-Risk Hold now respects the reserve too (previously zero-buffer)', () => {
     const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
-    const recycler = ps.find(p => p.template_name === 'mortgage_recycler')!
-    for (const m of recycler.results.months) {
+    const lowRiskHold = ps.find(p => p.template_name === 'low_risk_hold')!
+    for (const m of lowRiskHold.results.months) {
       const cashAvail = m.cumulative_cashflow_posttax
       const floor = 3 * ASSUMPTIONS.monthly_expenses * Math.max(1, m.property_count) + 1000 * m.property_count
       expect(cashAvail).toBeGreaterThanOrEqual(floor - 1)
     }
   })
 
-  it('the Mortgage Recycler ends up worse off once ERC is charged on its opportunistic payoffs (§P1-6)', () => {
+  it('Low-Risk Hold ends up worse off once ERC is charged on its opportunistic payoffs (§P1-6)', () => {
     const withErc = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
     const noErc = generatePathways({ ...goal, erc_pct: 0 }, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
-    const recyclerWithErc = withErc.find(p => p.template_name === 'mortgage_recycler')!
-    const recyclerNoErc = noErc.find(p => p.template_name === 'mortgage_recycler')!
-    expect(recyclerWithErc.results.summary.end_equity).toBeLessThan(recyclerNoErc.results.summary.end_equity)
+    const lowRiskHoldWithErc = withErc.find(p => p.template_name === 'low_risk_hold')!
+    const lowRiskHoldNoErc = noErc.find(p => p.template_name === 'low_risk_hold')!
+    expect(lowRiskHoldWithErc.results.summary.end_equity).toBeLessThan(lowRiskHoldNoErc.results.summary.end_equity)
   })
 })
 
