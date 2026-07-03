@@ -328,7 +328,12 @@ function buildCashGatedEvents(
   // unfinanceable purchase can't be masked by other properties' cashflow. Recomputed per month
   // against the indexed deal (§P0-1) rather than hoisted once, so a later, pricier deal is
   // gated on its own affordability, not month-0's.
-  function buyGateAt(monthIndex: number): { buyCost: number; icrOk: boolean } {
+  //
+  // LTV buy gate (§P0-2): generation must never propose a purchase that would push the
+  // portfolio's own aggregate LTV past the goal's mandate — previously only checkConstraints
+  // caught this, after the fact, rejecting the whole 15-year pathway instead of the engine
+  // simply not proposing the breaching buy in the first place.
+  function buyGateAt(monthIndex: number, currentValue: number, currentDebt: number): { buyCost: number; icrOk: boolean; ltvOk: boolean } {
     const indexed = indexedAssumptions(a, propertyGrowthPct, rentGrowthPct, monthIndex)
     const buyCost = depositPlusCosts(indexed)
     const stressUplift = (settings?.icr_stress_uplift_bps ?? 200) / 100
@@ -336,7 +341,13 @@ function buildCashGatedEvents(
     const stressRate = Math.max((indexed.mortgage_rate ?? settings?.default_mortgage_rate_pct ?? 5.5) + stressUplift, stressFloor)
     const loanAmount = indexed.purchase_price * (1 - (indexed.deposit_percent ?? settings?.default_deposit_percent ?? 25) / 100)
     const candidateIcrPct = loanAmount > 0 ? (indexed.monthly_rent / (loanAmount * stressRate / 100 / 12)) * 100 : Infinity
-    return { buyCost, icrOk: candidateIcrPct >= icrFloor }
+    let ltvOk = true
+    if (goal.max_ltv_pct != null) {
+      const prospectiveValue = currentValue + indexed.purchase_price
+      const prospectiveLtv = prospectiveValue > 0 ? ((currentDebt + loanAmount) / prospectiveValue) * 100 : 0
+      ltvOk = prospectiveLtv <= goal.max_ltv_pct
+    }
+    return { buyCost, icrOk: candidateIcrPct >= icrFloor, ltvOk }
   }
 
   const decisions: ScenarioEvent[] = []
@@ -365,8 +376,8 @@ function buildCashGatedEvents(
       if (strategy === 'de_gear') {
         const balances = activeBalancesAt(proj, i)
         if (balances.length < 2) {
-          const { buyCost, icrOk } = buyGateAt(i)
-          if (icrOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, indexedAssumptions(a, propertyGrowthPct, rentGrowthPct, i), interestOnly); decidedMonth = i; break }
+          const { buyCost, icrOk, ltvOk } = buyGateAt(i, proj.months[i].total_value, proj.months[i].total_debt)
+          if (icrOk && ltvOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, indexedAssumptions(a, propertyGrowthPct, rentGrowthPct, i), interestOnly); decidedMonth = i; break }
         } else {
           const target = balances.reduce((min, b) => b.debt < min.debt ? b : min)
           const ercCost = target.isEarlyExit ? target.debt * ercPct / 100 : 0
@@ -379,7 +390,11 @@ function buildCashGatedEvents(
         const candidates = refinanceCandidatesAt(proj, i, BRRR_TRIGGER_LTV_PCT)
         if (candidates.length > 0) {
           const target = candidates.reduce((min, c) => c.ltv < min.ltv ? c : min)
-          const newBalance = target.value * (BRRR_TARGET_LTV_PCT / 100)
+          // The goal's own LTV mandate can only pull the target down, never above the
+          // strategy's own 75% ceiling (§P0-2) — generation must never propose a refinance its
+          // own compliance layer (checkConstraints) would reject.
+          const targetLtvPct = Math.min(BRRR_TARGET_LTV_PCT, goal.max_ltv_pct ?? BRRR_TARGET_LTV_PCT)
+          const newBalance = target.value * (targetLtvPct / 100)
           const ercCost = target.isEarlyExit ? target.debt * ercPct / 100 : 0
           const arrangementFee = a.arrangement_fee ?? settings?.default_arrangement_fee ?? 999
           const valuationFee = a.valuation_fee ?? settings?.default_valuation_fee ?? 300
@@ -391,12 +406,12 @@ function buildCashGatedEvents(
           }
         }
         {
-          const { buyCost, icrOk } = buyGateAt(i)
-          if (icrOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, indexedAssumptions(a, propertyGrowthPct, rentGrowthPct, i), interestOnly); decidedMonth = i; break }
+          const { buyCost, icrOk, ltvOk } = buyGateAt(i, proj.months[i].total_value, proj.months[i].total_debt)
+          if (icrOk && ltvOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, indexedAssumptions(a, propertyGrowthPct, rentGrowthPct, i), interestOnly); decidedMonth = i; break }
         }
       } else {
-        const { buyCost, icrOk } = buyGateAt(i)
-        if (icrOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, indexedAssumptions(a, propertyGrowthPct, rentGrowthPct, i), interestOnly); decidedMonth = i; break }
+        const { buyCost, icrOk, ltvOk } = buyGateAt(i, proj.months[i].total_value, proj.months[i].total_debt)
+        if (icrOk && ltvOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, indexedAssumptions(a, propertyGrowthPct, rentGrowthPct, i), interestOnly); decidedMonth = i; break }
       }
     }
 

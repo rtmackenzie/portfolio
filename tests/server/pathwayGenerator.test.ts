@@ -205,6 +205,67 @@ describe('generatePathways — BRRR equity-release strategy (§P2-11)', () => {
   })
 })
 
+describe('generatePathways — BRRR/buy generation respects the goal LTV mandate (§P0-2)', () => {
+  const goal = { goal_type: 'count' as const, target_property_count: 6, director_loan_annual: 200000 }
+
+  function ltvOf(pathway: ReturnType<typeof generatePathways>[number], propertyId: number, date: string): number | null {
+    const series = pathway.results.property_series.find(p => p.property_id === propertyId)
+    const month = series?.months.find(m => m.date === date)
+    return month && month.value > 0 ? (month.debt / month.value) * 100 : null
+  }
+
+  it('caps BRRR refinance targets at a goal max_ltv_pct below the 75% strategy default', () => {
+    const ps = generatePathways({ ...goal, max_ltv_pct: 60 }, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const brrr = ps.find(p => p.template_name === 'brrr_recycler')!
+    const remortgages = brrr.events.filter(e => e.event_type === 'remortgage')
+    expect(remortgages.length).toBeGreaterThan(0)
+    for (const ev of remortgages) {
+      const params = JSON.parse(ev.parameters_json)
+      const ltv = ltvOf(brrr, params.sim_property_id, ev.date)
+      expect(ltv).not.toBeNull()
+      expect(ltv!).toBeCloseTo(60, 0)
+    }
+  })
+
+  it('a max_ltv_pct at or above 75% leaves BRRR targeting its own 75% default (regression)', () => {
+    const ps = generatePathways({ ...goal, max_ltv_pct: 95 }, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const brrr = ps.find(p => p.template_name === 'brrr_recycler')!
+    const remortgages = brrr.events.filter(e => e.event_type === 'remortgage')
+    expect(remortgages.length).toBeGreaterThan(0)
+    for (const ev of remortgages) {
+      const params = JSON.parse(ev.parameters_json)
+      const ltv = ltvOf(brrr, params.sim_property_id, ev.date)
+      expect(ltv!).toBeCloseTo(75, 0)
+    }
+  })
+
+  it('a tight max_ltv_pct also throttles ordinary buy_property events, for a non-BRRR strategy too', () => {
+    const lowLtvPortfolio: Map<number, PropertyState> = new Map([[1, {
+      id: 1, value: 200000, monthly_rent: 1200, monthly_mortgage: 300, monthly_other_expenses: 100,
+      debt: 60000, is_vacant: false, mortgage_rate: 5.5, is_interest_only: false, purchase_price: 150000,
+    }]])
+    const bigGoal = { goal_type: 'count' as const, target_property_count: 20, director_loan_annual: 200000 }
+    const uncapped = generatePathways(bigGoal, lowLtvPortfolio, ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const capped = generatePathways({ ...bigGoal, max_ltv_pct: 45 }, lowLtvPortfolio, ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const buyCount = (ps: typeof uncapped) => ps.find(p => p.template_name === 'target_hold')!.events.filter(e => e.event_type === 'buy_property').length
+    expect(buyCount(capped)).toBeLessThan(buyCount(uncapped))
+    const cappedHold = capped.find(p => p.template_name === 'target_hold')!
+    const maxLtv = Math.max(...cappedHold.results.months.map(m => m.total_value > 0 ? (m.total_debt / m.total_value) * 100 : 0))
+    expect(maxLtv).toBeLessThanOrEqual(45.01)
+  })
+
+  it('a pathway generated under a tight mandate is not marked infeasible for the LTV reason the mandate itself now prevents', () => {
+    const lowLtvPortfolio: Map<number, PropertyState> = new Map([[1, {
+      id: 1, value: 200000, monthly_rent: 1200, monthly_mortgage: 300, monthly_other_expenses: 100,
+      debt: 60000, is_vacant: false, mortgage_rate: 5.5, is_interest_only: false, purchase_price: 150000,
+    }]])
+    const bigGoal = { goal_type: 'count' as const, target_property_count: 20, director_loan_annual: 200000, max_ltv_pct: 45 }
+    const ps = generatePathways(bigGoal, lowLtvPortfolio, ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const hold = ps.find(p => p.template_name === 'target_hold')!
+    expect(hold.feasible).toBe(true)
+  })
+})
+
 describe('generatePathways — director loans drive the schedule', () => {
   const baseGoal = {
     goal_type: 'count' as const,
