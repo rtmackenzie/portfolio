@@ -379,6 +379,17 @@ function formatMonthsToGoal(m: number | null | undefined): string {
   return `${yr}yr ${mo}mo`
 }
 
+// IRR is computed under one of three conventions (§P1-4) — labelled so it's never compared
+// against a figure computed a different way.
+function irrBasisLabel(basis: string | null | undefined): string {
+  switch (basis) {
+    case 'capital_account': return 'capital-account'
+    case 'mirr': return 'MIRR'
+    case 'annualised_multiple': return 'annualised'
+    default: return '—'
+  }
+}
+
 // ─── Pathways panel ───────────────────────────────────────────────────────────
 
 const ASSUMPTION_DEFAULTS: AssumptionsFormValues = {
@@ -534,8 +545,13 @@ function PathwaysPanel({ goal }: { goal: Goal }) {
                     <div className="font-medium">{pw.summary.equity_multiple != null ? `${pw.summary.equity_multiple.toFixed(2)}x` : '—'}</div>
                   </div>
                   <div>
-                    <Tip className="text-muted-foreground" text="Annualized internal rate of return from the actual monthly cashflow timeline, including an as-if-liquidated terminal equity value. Time-value-adjusted.">IRR</Tip>
-                    <div className="font-medium">{pw.summary.irr_pct != null ? `${pw.summary.irr_pct.toFixed(1)}%` : '—'}</div>
+                    <Tip className="text-muted-foreground" text="Annualized internal rate of return on the investor's own capital — contributions and repayments (director loans), not the portfolio's unified cash account. Retained profit accrues into an as-if-liquidated terminal value alongside ending equity. Falls back to MIRR (finance rate = configured mortgage rate) when no root exists, or an annualised equity multiple when there's no capital-flow timeline at all — the basis actually used is shown alongside the figure.">IRR</Tip>
+                    <div className="font-medium">
+                      {pw.summary.irr_pct != null ? `${pw.summary.irr_pct.toFixed(1)}%` : '—'}
+                      {pw.summary.irr_pct != null && (
+                        <span className="text-[10px] text-muted-foreground ml-1">({irrBasisLabel(pw.summary.irr_basis)})</span>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <Tip className="text-muted-foreground" text="Simple annualized total return on capital employed: (equity multiple − 1) ÷ years held. Ignores cashflow timing, unlike IRR.">ROCE</Tip>

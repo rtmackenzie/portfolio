@@ -301,6 +301,7 @@ export interface ScenarioSummary {
   total_capital_invested?: number
   equity_multiple?: number | null
   irr_pct?: number | null
+  irr_basis?: 'capital_account' | 'mirr' | 'annualised_multiple' | null
   roce_pct?: number | null
   cash_on_cash_pct?: number | null
   net_yield_on_cost_pct?: number | null

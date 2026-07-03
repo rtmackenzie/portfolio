@@ -2,6 +2,7 @@ import { buildProjection, type PropertyState, type ScenarioEvent } from './scena
 import { calcTransactionCosts } from './calculations.ts'
 import { icrThresholdPct, type TaxSettings } from './tax.ts'
 import type { AssumptionSettings } from './assumptions.ts'
+import type { IrrBasis } from './returnMetrics.ts'
 
 type GoalType = 'income' | 'count' | 'net_worth' | 'mortgage_free' | 'retirement_date'
 
@@ -102,6 +103,7 @@ type ProjectionResult = {
     total_capital_invested: number
     equity_multiple: number | null
     irr_pct: number | null
+    irr_basis: IrrBasis | null
     roce_pct: number | null
     cash_on_cash_pct: number | null
     net_yield_on_cost_pct: number | null

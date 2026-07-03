@@ -1124,4 +1124,23 @@ describe('buildProjection — return metrics', () => {
     )
     expect(proj.debt_calendar.find(e => e.property_id === 1)).toBeUndefined()
   })
+
+  it('a cash-generative, director-loan-funded portfolio now renders a capital-account IRR (§P1-4) instead of the old blank', () => {
+    // The exact class of input the committee found returned a blank IRR: a portfolio that
+    // starts cash-generative (never posts an early negative cumulative-cashflow flow under the
+    // old diff-based construction) and is drip-funded by director loans (which the old
+    // construction treated as positive investor inflows instead of contributions).
+    const state = makeState({ id: 1, value: 200000, debt: 100000, monthly_rent: 1500, monthly_mortgage: 500, monthly_other_expenses: 100 })
+    const buy = makeEvent({
+      event_type: 'buy_property', date: '2027-01-01',
+      parameters_json: JSON.stringify({ purchase_price: 100000, monthly_rent: 800, deposit_percent: 25, monthly_expenses: 150, mortgage_rate: 5.5, mortgage_term_years: 25 }),
+    })
+    const loan = makeEvent({ event_type: 'director_loan_in', date: '2026-06-01', parameters_json: JSON.stringify({ amount: 40000 }) })
+    const { summary } = buildProjection(makeMap(state), [buy, loan], {
+      base_date: '2026-01-01', projection_years: 10,
+      assumptions_json: JSON.stringify({ void_months_per_year: 0, expense_inflation_pct: 0, rent_growth_pct: 0, property_growth_pct: 3, arrears_pct: 0 }),
+    })
+    expect(summary.irr_pct).not.toBeNull()
+    expect(summary.irr_basis).toBe('capital_account')
+  })
 })

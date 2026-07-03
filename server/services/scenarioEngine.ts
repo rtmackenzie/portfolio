@@ -136,6 +136,12 @@ export function buildProjection(
   // capex, ERC) — distinct from cumulativeCashflow, which nets capital events together
   // with operating returns and can't be used as an "invested capital" denominator (§P2-9).
   let totalCapitalInvested = 0
+  // Per-month timelines feeding the capital-account IRR construction (§P1-4 / Appendix C) —
+  // the scalar totals above only preserve the final sum, not when each capital call/loan flow
+  // happened, which the investor-perspective IRR needs.
+  const capitalDeployedByMonth: number[] = []
+  const directorLoanInByMonth: number[] = []
+  const directorLoanRepayByMonth: number[] = []
   let taxCumulative = 0   // running income tax + CGT (post-tax = pre-tax − this)
   let nextId = Math.max(...Array.from(stateMap.keys()), 0) + 1
   const tax = config.tax
@@ -167,6 +173,10 @@ export function buildProjection(
     const year = baseYear + Math.floor(absMonth / 12)
     const month = absMonth % 12
     const yearMonth = `${year}-${String(month + 1).padStart(2, '0')}`
+
+    let capitalDeployedThisMonth = 0
+    let directorLoanInThisMonth = 0
+    let directorLoanRepayThisMonth = 0
 
     const monthEvents = eventsByDate.get(yearMonth) ?? []
     for (const ev of monthEvents) {
@@ -217,6 +227,7 @@ export function buildProjection(
           const deposit = price * (depositPct / 100)
           cumulativeCashflow -= deposit + txCosts
           totalCapitalInvested += deposit + txCosts
+          capitalDeployedThisMonth += deposit + txCosts
           break
         }
         case 'sell_property': {
@@ -263,10 +274,12 @@ export function buildProjection(
               const erc = currentDebt * (ercPct / 100)
               cumulativeCashflow -= erc
               totalCapitalInvested += erc
+              capitalDeployedThisMonth += erc
             }
             const remortgageFees = (params.arrangement_fee ?? 0) + (params.valuation_fee ?? 0)
             cumulativeCashflow -= remortgageFees
             totalCapitalInvested += remortgageFees
+            capitalDeployedThisMonth += remortgageFees
 
             state.monthly_mortgage = calcMonthlyPayment(newDebt, newRate, isIO ? 0 : newTermYrs * 12)
             state.mortgage_rate    = newRate
@@ -330,6 +343,7 @@ export function buildProjection(
               const erc = clearedBalance * (ercPct / 100)
               cumulativeCashflow -= erc
               totalCapitalInvested += erc
+              capitalDeployedThisMonth += erc
             }
             cumulativeCashflow -= clearedBalance
             state.monthly_mortgage = 0
@@ -344,10 +358,12 @@ export function buildProjection(
         }
         case 'director_loan_in': {
           cumulativeCashflow += params.amount ?? 0
+          directorLoanInThisMonth += params.amount ?? 0
           break
         }
         case 'director_loan_repay': {
           cumulativeCashflow -= params.amount ?? 0
+          directorLoanRepayThisMonth += params.amount ?? 0
           break
         }
       }
@@ -394,6 +410,7 @@ export function buildProjection(
       if (state.next_capex_month != null && i === state.next_capex_month) {
         cumulativeCashflow -= capexCostPerProperty
         totalCapitalInvested += capexCostPerProperty
+        capitalDeployedThisMonth += capexCostPerProperty
         state.next_capex_month = i + capexCycleYears * 12
       }
 
@@ -462,6 +479,10 @@ export function buildProjection(
       monthly_icr: icr,
       total_rent: Math.round(totalRent),
     })
+
+    capitalDeployedByMonth.push(capitalDeployedThisMonth)
+    directorLoanInByMonth.push(directorLoanInThisMonth)
+    directorLoanRepayByMonth.push(directorLoanRepayThisMonth)
   }
 
   const property_series = Array.from(propMonths.entries()).map(([id, months]) => ({
@@ -484,7 +505,13 @@ export function buildProjection(
     last?.monthly_cashflow_posttax ?? 0,
     last?.total_rent ?? 0,
     last?.total_equity ?? 0,
-    config.projection_years ?? 10
+    config.projection_years ?? 10,
+    {
+      capitalDeployed: capitalDeployedByMonth,
+      directorLoanIn: directorLoanInByMonth,
+      directorLoanRepay: directorLoanRepayByMonth,
+      financeRatePctAnnual: config.defaults?.default_mortgage_rate_pct ?? 5.5,
+    }
   )
 
   // Debt-maturity calendar: derived once from each property's final state — repayment

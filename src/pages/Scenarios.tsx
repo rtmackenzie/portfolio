@@ -445,7 +445,7 @@ export default function Scenarios() {
                       {[
                         { label: 'Capital Invested', value: formatCurrency(results.summary.total_capital_invested ?? 0, true), tooltip: 'Total capital actually contributed over the projection — deposits, transaction costs, capex and early-repayment charges. The denominator for every return metric below.' },
                         { label: 'Equity Multiple',  value: results.summary.equity_multiple != null ? `${results.summary.equity_multiple.toFixed(2)}x` : '—', tooltip: 'Total value created (ending equity + cumulative net cashflow received) ÷ total capital invested. A multiple, not annualized.' },
-                        { label: 'IRR',              value: results.summary.irr_pct != null ? formatPercent(results.summary.irr_pct) : '—', tooltip: 'Annualized internal rate of return from the actual monthly cashflow timeline (capital calls, operating cashflow, and an as-if-liquidated terminal equity value). Time-value-adjusted — accounts for when cashflows happen, not just their total.' },
+                        { label: 'IRR',              value: results.summary.irr_pct != null ? `${formatPercent(results.summary.irr_pct)} (${irrBasisLabel(results.summary.irr_basis)})` : '—', tooltip: 'Annualized internal rate of return on the investor\'s own capital — contributions and repayments (director loans), not the portfolio\'s unified cash account. Retained profit accrues into an as-if-liquidated terminal value alongside ending equity. Falls back to MIRR (finance rate = configured mortgage rate) when no root exists, or an annualised equity multiple when there\'s no capital-flow timeline at all — the basis actually used is shown alongside the figure.' },
                         { label: 'ROCE',             value: results.summary.roce_pct != null ? formatPercent(results.summary.roce_pct) : '—', tooltip: 'Simple annualized total return on capital employed: (equity multiple − 1) ÷ years held. Unlike IRR, this ignores the timing of cashflows — an average, not a time-value-adjusted rate.' },
                         { label: 'Cash-on-Cash',     value: results.summary.cash_on_cash_pct != null ? formatPercent(results.summary.cash_on_cash_pct) : '—', tooltip: 'Money-on-money return: the final month\'s net cashflow (post-tax), annualized, ÷ total capital invested. An income-only yield — excludes equity growth.' },
                         { label: 'Net Yield on Cost', value: results.summary.net_yield_on_cost_pct != null ? formatPercent(results.summary.net_yield_on_cost_pct) : '—', tooltip: 'Final month\'s gross rent, annualized, ÷ total capital invested.' },
@@ -525,6 +525,17 @@ export default function Scenarios() {
       )}
     </div>
   )
+}
+
+// IRR is computed under one of three conventions (§P1-4) — labelled so it's never compared
+// against a figure computed a different way.
+function irrBasisLabel(basis: string | null | undefined): string {
+  switch (basis) {
+    case 'capital_account': return 'capital-account'
+    case 'mirr': return 'MIRR'
+    case 'annualised_multiple': return 'annualised'
+    default: return '—'
+  }
 }
 
 function KpiCard({ label, value, tooltip }: { label: string; value: string; tooltip: string }) {
