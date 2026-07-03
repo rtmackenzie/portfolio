@@ -442,6 +442,79 @@ describe('buildProjection — acquisition-dated growth', () => {
   })
 })
 
+// ─── Piecewise growth schedule (§P1-5 / Appendix A.1) ─────────────────────────
+
+describe('buildProjection — piecewise growth schedule', () => {
+  it('a single open-ended schedule segment reproduces the flat-rate growth exactly', () => {
+    const flat = { base_date: '2026-01-01', projection_years: 3, assumptions_json: JSON.stringify({ property_growth_pct: 4, rent_growth_pct: 4, void_months_per_year: 0, arrears_pct: 0, expense_inflation_pct: 0 }) }
+    const scheduled = { base_date: '2026-01-01', projection_years: 3, assumptions_json: JSON.stringify({ growth_schedule: [{ pct: 4 }], rent_growth_schedule: [{ pct: 4 }], void_months_per_year: 0, arrears_pct: 0, expense_inflation_pct: 0 }) }
+    const flatResult = buildProjection(makeMap(makeState()), [], flat)
+    const scheduledResult = buildProjection(makeMap(makeState()), [], scheduled)
+    expect(scheduledResult.months).toEqual(flatResult.months)
+  })
+
+  it('a property held from month 0 dips for 24 months then recovers (matches the downturn transform shape)', () => {
+    const state = makeState({ id: 1, value: 100000, monthly_rent: 0, monthly_mortgage: 0, monthly_other_expenses: 0, debt: 0 })
+    const cfg = {
+      base_date: '2026-01-01', projection_years: 4,
+      assumptions_json: JSON.stringify({ growth_schedule: [{ months: 24, pct: -8 }, { pct: 3 }], void_months_per_year: 0, arrears_pct: 0, expense_inflation_pct: 0 }),
+    }
+    const proj = buildProjection(makeMap(state), [], cfg)
+    const ps = proj.property_series.find(s => s.property_id === 1)!
+    const at = (ym: string) => ps.months.find(m => m.date === ym)!.value
+    expect(at('2028-01')).toBe(Math.round(100000 * Math.pow(0.92, 2)))                    // 24mo of -8%
+    expect(at('2029-01')).toBe(Math.round(100000 * Math.pow(0.92, 2) * 1.03))              // +12mo of recovery at 3%
+  })
+
+  it('a property bought mid-downturn only experiences the remaining window, not its own private 24-month clock', () => {
+    const buy = makeEvent({
+      event_type: 'buy_property', date: '2027-01-01', // month 12
+      parameters_json: JSON.stringify({ purchase_price: 100000, monthly_rent: 0, deposit_percent: 100, monthly_expenses: 0 }),
+    })
+    const cfg = {
+      base_date: '2026-01-01', projection_years: 3,
+      assumptions_json: JSON.stringify({ growth_schedule: [{ months: 24, pct: -8 }, { pct: 3 }], void_months_per_year: 0, arrears_pct: 0, expense_inflation_pct: 0 }),
+    }
+    const proj = buildProjection(new Map(), [buy], cfg)
+    const ps = proj.property_series.find(s => s.label.startsWith('New Property'))!
+    const at = (ym: string) => ps.months.find(m => m.date === ym)!.value
+    // Bought month 12 at the -8% rate; the downturn window closes at month 24 (12 months later)
+    // — only that remaining 12 months of the window applies, not a fresh 24-month dip.
+    expect(at('2028-01')).toBe(Math.round(100000 * 0.92))
+  })
+
+  it('a property bought after the downturn window has closed experiences zero downturn effect', () => {
+    const buy = makeEvent({
+      event_type: 'buy_property', date: '2028-07-01', // month 30, well past the 24-month window
+      parameters_json: JSON.stringify({ purchase_price: 100000, monthly_rent: 0, deposit_percent: 100, monthly_expenses: 0 }),
+    })
+    const cfg = {
+      base_date: '2026-01-01', projection_years: 4,
+      assumptions_json: JSON.stringify({ growth_schedule: [{ months: 24, pct: -8 }, { pct: 3 }], void_months_per_year: 0, arrears_pct: 0, expense_inflation_pct: 0 }),
+    }
+    const proj = buildProjection(new Map(), [buy], cfg)
+    const ps = proj.property_series.find(s => s.label.startsWith('New Property'))!
+    const at = (ym: string) => ps.months.find(m => m.date === ym)!.value
+    // 12 months after acquisition, purely the recovery-phase 3% rate — no trace of the downturn.
+    expect(at('2029-07')).toBe(Math.round(100000 * 1.03))
+  })
+
+  it('sell_property values the sale from the projection base date (month 0), preserving its existing anchor', () => {
+    const state = makeState({ id: 1, value: 100000, debt: 0, monthly_mortgage: 0, monthly_rent: 0, monthly_other_expenses: 0, purchase_price: 100000, acquired_month: 5 })
+    const sell = makeEvent({ event_type: 'sell_property', date: '2027-01-01', property_id: 1, parameters_json: '{}' }) // month 12
+    const cfg = {
+      base_date: '2026-01-01', projection_years: 2,
+      assumptions_json: JSON.stringify({ growth_schedule: [{ months: 24, pct: -8 }, { pct: 3 }], void_months_per_year: 0, arrears_pct: 0, expense_inflation_pct: 0 }),
+      tax: { ownership: 'personal' as const, personal_marginal_rate_pct: 0, s24_credit_rate_pct: 0, corp_tax_rate_pct: 0, cgt_rate_pct: 0, cgt_annual_exempt: 0, selling_costs_pct: 0 },
+    }
+    const proj = buildProjection(makeMap(state), [sell], cfg)
+    // Month 12 from base (not from acquired_month=5): factor = 0.92^(12/12) = 0.92, regardless
+    // of the property's own acquisition month — the sell_property site is anchored at month 0.
+    const cashAtSale = proj.months[12].cumulative_cashflow
+    expect(cashAtSale).toBe(Math.round(100000 * 0.92))
+  })
+})
+
 // ─── Post-tax cashflow (C4) ───────────────────────────────────────────────────
 
 describe('buildProjection — post-tax cashflow', () => {

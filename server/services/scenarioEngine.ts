@@ -59,6 +59,31 @@ interface MonthSnapshot {
   total_rent: number            // gross rent this month, before mortgage/expenses (§P2-9 net-yield-on-cost)
 }
 
+// Piecewise growth schedule (§P1-5 / Appendix A.1): each segment compounds at its own annual
+// rate for `months` months; the last segment may omit `months` to mean "for the rest of the
+// horizon". Anchored to ABSOLUTE month indices (a calendar/macro construction), not a
+// property's own age — a downturn window applies identically regardless of when a property was
+// bought, matching the appendix's "first 24 months of the projection" framing. A single
+// open-ended segment degenerates to today's flat-rate compounding exactly.
+type GrowthSegment = { months?: number; pct: number }
+
+function compoundedGrowthFactor(fromMonth: number, toMonth: number, schedule: GrowthSegment[]): number {
+  if (toMonth <= fromMonth) return 1
+  let factor = 1
+  let cursor = 0   // absolute month where the current segment starts
+  for (const seg of schedule) {
+    const segEnd = seg.months != null ? cursor + seg.months : Infinity
+    const overlapStart = Math.max(fromMonth, cursor)
+    const overlapEnd = Math.min(toMonth, segEnd)
+    if (overlapEnd > overlapStart) {
+      factor *= Math.pow(1 + seg.pct / 100, (overlapEnd - overlapStart) / 12)
+    }
+    cursor = segEnd
+    if (cursor >= toMonth) break
+  }
+  return factor
+}
+
 // Pure projection engine — accepts initial state directly, no DB access.
 // Exported for unit testing; runScenario() calls this after loading from DB.
 export function buildProjection(
@@ -129,6 +154,11 @@ export function buildProjection(
   // mirroring the fixed-rate reprice schedule (§6b).
   const capexCycleYears = assumptions.capex_cycle_years ?? config.defaults?.capex_cycle_years ?? 10
   const capexCostPerProperty = assumptions.capex_cost_per_property ?? config.defaults?.capex_cost_per_property ?? 3000
+  // Piecewise growth schedules (§P1-5): absent in every existing scenario, so this degenerates
+  // to the flat growthRate/rentGrowthRate above unless a caller (e.g. the downturn transform)
+  // supplies one.
+  const growthSchedule: GrowthSegment[] = assumptions.growth_schedule ?? [{ pct: growthRate }]
+  const rentGrowthSchedule: GrowthSegment[] = assumptions.rent_growth_schedule ?? [{ pct: rentGrowthRate }]
 
   const snapshots: MonthSnapshot[] = []
   let cumulativeCashflow = config.starting_cash ?? 0
@@ -234,7 +264,7 @@ export function buildProjection(
           const sellId = ev.property_id
           const state = sellId ? stateMap.get(sellId) : null
           if (state && sellId != null) {
-            const growthFactor = Math.pow(1 + growthRate / 100, i / 12)
+            const growthFactor = compoundedGrowthFactor(0, i, growthSchedule)
             const saleValue = params.sale_price ?? state.value * growthFactor
             const currentDebt = debtMap.get(sellId) ?? 0
             const t = tax ?? { ownership: 'personal' as const, personal_marginal_rate_pct: 0, s24_credit_rate_pct: 0, corp_tax_rate_pct: 0, cgt_rate_pct: 0, cgt_annual_exempt: 0, selling_costs_pct: 0 }
@@ -382,7 +412,7 @@ export function buildProjection(
       // Grow each property from its own acquisition month — not the projection
       // base date — so mid-projection purchases enter at price/base rent (§D1 fix).
       const age = Math.max(0, i - (state.acquired_month ?? 0)) / 12
-      const growthFactor = Math.pow(1 + growthRate / 100, age)
+      const growthFactor = compoundedGrowthFactor(state.acquired_month ?? 0, i, growthSchedule)
       const currentValue = state.value * growthFactor
 
       // Iterative amortisation: subtract principal portion of payment from running balance.
@@ -429,7 +459,7 @@ export function buildProjection(
       totalValue += currentValue
       totalDebt += currentDebt
 
-      const rentGrowthFactor = Math.pow(1 + rentGrowthRate / 100, age)
+      const rentGrowthFactor = compoundedGrowthFactor(state.acquired_month ?? 0, i, rentGrowthSchedule)
       const rent = state.is_vacant ? 0 : state.monthly_rent * voidFactor * arrearsFactor * rentGrowthFactor
       const inflationFactor = Math.pow(1 + inflationRate / 100, age)
       const expenses = state.monthly_other_expenses * inflationFactor

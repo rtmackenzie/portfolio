@@ -136,6 +136,7 @@ export default function Scenarios() {
   if (isLoading) return <PageLoader />
 
   const results = selected?.results as ScenarioResults | null | undefined
+  const resultsDownturn = selected?.results_downturn as ScenarioResults | null | undefined
 
   return (
     <div className="space-y-6">
@@ -339,11 +340,13 @@ export default function Scenarios() {
                   chartData = results.months.map((m, i) => ({
                     ...m,
                     ...(stressResults ? { stressed_cashflow: stressResults.months[i]?.cumulative_cashflow } : {}),
+                    ...(resultsDownturn ? { total_equity_downturn: resultsDownturn.months[i]?.total_equity } : {}),
                   }))
                   const showPre = taxView === 'pretax' || taxView === 'both'
                   const showPost = taxView === 'posttax' || taxView === 'both'
                   chartKeys = [
                     { key: 'total_equity',        name: 'Equity',              color: CHART_COLORS.success },
+                    ...(resultsDownturn ? [{ key: 'total_equity_downturn', name: 'Equity (downturn)', color: CHART_COLORS.danger, dash: true }] : []),
                     { key: 'total_debt',          name: 'Debt',                color: CHART_COLORS.danger  },
                     ...(showPre  ? [{ key: 'cumulative_cashflow',         name: taxView === 'both' ? 'Cumulative CF (pre-tax)' : 'Cumulative Cashflow', color: CHART_COLORS.primary }] : []),
                     ...(showPost ? [{ key: 'cumulative_cashflow_posttax', name: 'Cumulative CF (post-tax)', color: CHART_COLORS.warning, dash: taxView === 'both' }] : []),
@@ -440,6 +443,24 @@ export default function Scenarios() {
                       ))}
                     </div>
 
+                    {/* Downturn standing case (§P1-5 / Appendix A.1) */}
+                    {resultsDownturn && (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-3 gap-3">
+                          {[
+                            { label: 'Ending Equity (downturn)', value: formatCurrency(resultsDownturn.summary.end_equity, true), tooltip: 'Projected ending equity under the fixed downturn standing case, not the central case above.' },
+                            { label: 'Ending CF (downturn)', value: formatCurrency(resultsDownturn.summary.ending_monthly_cashflow ?? 0), tooltip: 'Final-month net monthly cashflow under the downturn standing case.' },
+                            { label: 'Cash Survival (downturn)', value: monthsToCashNegative(resultsDownturn) != null ? `${monthsToCashNegative(resultsDownturn)} mo` : 'Survives horizon', tooltip: 'First month the downturn case\'s cumulative post-tax cashflow goes negative, or "Survives horizon" if it never does. A standing-case proxy for reserve adequacy, not a lender or goal-specific reserve test.' },
+                          ].map(k => (
+                            <KpiCard key={k.label} label={k.label} value={k.value} tooltip={k.tooltip} />
+                          ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Downturn standing case: a fixed, versioned stress transform (−8% property growth and 0% rent growth for 24 months, then recovery; 2 months/yr void; 3% arrears; +300bps at next refix) applied on top of this scenario's own central-case assumptions — not user-configurable, so every plan is stressed identically and results are comparable across time.
+                        </p>
+                      </div>
+                    )}
+
                     {/* Return metrics (§P2-9) */}
                     <div className="grid grid-cols-3 gap-3">
                       {[
@@ -525,6 +546,17 @@ export default function Scenarios() {
       )}
     </div>
   )
+}
+
+// First month the downturn case's post-tax cumulative cashflow goes negative, or null if it
+// never does within the horizon — a standing-case proxy for reserve adequacy (§P1-5), not a
+// lender/goal-specific reserve test (no reserve concept exists for a plain, non-goal-linked
+// scenario).
+function monthsToCashNegative(downturn: ScenarioResults): number | null {
+  for (let i = 0; i < downturn.months.length; i++) {
+    if ((downturn.months[i].cumulative_cashflow_posttax ?? 0) < 0) return i
+  }
+  return null
 }
 
 // IRR is computed under one of three conventions (§P1-4) — labelled so it's never compared

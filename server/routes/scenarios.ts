@@ -1,6 +1,8 @@
 import { Router } from 'express'
 import { queryAll, queryOne, execute, transaction } from '../db/database.ts'
 import { runScenario } from '../services/scenarioEngine.ts'
+import { buildDownturnAssumptions } from '../services/downturn.ts'
+import { loadAssumptionSettings } from '../services/settings.ts'
 
 const router = Router()
 
@@ -32,11 +34,14 @@ router.get('/:id', (req, res) => {
     const scenario = queryOne('SELECT * FROM scenarios WHERE id=?', [id])
     if (!scenario) return res.status(404).json({ message: 'Not found' })
     const events = queryAll('SELECT * FROM scenario_events WHERE scenario_id=? ORDER BY date, sort_order', [id])
-    const results = queryOne<{ results_json: string }>('SELECT results_json FROM scenario_results WHERE scenario_id=? ORDER BY calculated_at DESC LIMIT 1', [id])
+    const results = queryOne<{ results_json: string; results_downturn_json: string | null }>(
+      'SELECT results_json, results_downturn_json FROM scenario_results WHERE scenario_id=? ORDER BY calculated_at DESC LIMIT 1', [id]
+    )
     res.json({
       ...scenario,
       events,
       results: results ? JSON.parse(results.results_json) : null,
+      results_downturn: results?.results_downturn_json ? JSON.parse(results.results_downturn_json) : null,
     })
   } catch (err) {
     res.status(500).json({ message: String(err) })
@@ -174,11 +179,21 @@ router.post('/:id/stress', (req, res) => {
 router.post('/:id/calculate', async (req, res) => {
   try {
     const id = Number(req.params.id)
-    const scenario = queryOne<{ base_date: string; projection_years: number }>('SELECT * FROM scenarios WHERE id=?', [id])
+    const scenario = queryOne<{ base_date: string; projection_years: number; assumptions_json: string | null }>('SELECT * FROM scenarios WHERE id=?', [id])
     if (!scenario) return res.status(404).json({ message: 'Not found' })
     const events = queryAll('SELECT * FROM scenario_events WHERE scenario_id=? ORDER BY date, sort_order', [id])
     const results = runScenario(scenario, events as any)
-    execute('INSERT INTO scenario_results (scenario_id, results_json) VALUES (?, ?)', [id, JSON.stringify(results)])
+    // Downturn standing case (§P1-5 / Appendix A.1): a second, deterministic run under a fixed
+    // pessimistic transform, persisted alongside the central case so the committee's
+    // single-path-false-precision finding has a companion on every calculation.
+    const resultsDownturn = runScenario(
+      { ...scenario, assumptions_json: buildDownturnAssumptions(scenario.assumptions_json, loadAssumptionSettings()) },
+      events as any
+    )
+    execute(
+      'INSERT INTO scenario_results (scenario_id, results_json, results_downturn_json) VALUES (?, ?, ?)',
+      [id, JSON.stringify(results), JSON.stringify(resultsDownturn)]
+    )
     res.json(results)
   } catch (err) {
     res.status(500).json({ message: String(err) })

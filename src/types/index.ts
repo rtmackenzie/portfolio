@@ -348,6 +348,7 @@ export interface Scenario {
   updated_at: string
   events?: ScenarioEvent[]
   results?: ScenarioResults | null
+  results_downturn?: ScenarioResults | null
 }
 
 export interface ScenarioEvent {
