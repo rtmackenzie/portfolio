@@ -213,6 +213,18 @@ function depositPlusCosts(a: PropertyAssumptions): number {
   return deposit + txCosts
 }
 
+// The candidate deal is priced/rented in today's terms; a purchase happening N months into the
+// horizon should cost/rent what that deal will actually be by then, not what it costs today —
+// otherwise later purchases clear the deposit/ICR gates far too easily (§P0-1).
+function indexedAssumptions(a: PropertyAssumptions, propertyGrowthPct: number, rentGrowthPct: number, monthIndex: number): PropertyAssumptions {
+  const years = monthIndex / 12
+  return {
+    ...a,
+    purchase_price: a.purchase_price * Math.pow(1 + propertyGrowthPct / 100, years),
+    monthly_rent:   a.monthly_rent   * Math.pow(1 + rentGrowthPct / 100, years),
+  }
+}
+
 function cloneState(initial: Map<number, PropertyState>): Map<number, PropertyState> {
   return new Map(Array.from(initial.entries()).map(([k, v]) => [k, { ...v }]))
 }
@@ -297,22 +309,35 @@ function buildCashGatedEvents(
 ): ScenarioEvent[] {
   const totalMonths = projYears * 12
   const config = { base_date: baseDate, projection_years: projYears, tax, starting_cash: startingCash, assumptions_json: assumptionsJson }
-  const buyCost = depositPlusCosts(a)
   const monthlyExp = a.monthly_expenses ?? 200
   const ercPct = goal.erc_pct ?? 3
   const cap = projYears * 4                                   // hard ceiling on decisions
   const marginGoal = withMargin(goal)
 
-  // Lender ICR buy gate (P0 #4): this deal's own rent vs. a stressed interest-only
-  // payment on the loan — the same test a real lender applies to one loan at a time,
-  // so a single unfinanceable purchase can't be masked by other properties' cashflow.
-  const stressUplift = (settings?.icr_stress_uplift_bps ?? 200) / 100
-  const stressFloor = settings?.icr_stress_floor_pct ?? 5.5
-  const stressRate = Math.max((a.mortgage_rate ?? settings?.default_mortgage_rate_pct ?? 5.5) + stressUplift, stressFloor)
-  const loanAmount = a.purchase_price * (1 - (a.deposit_percent ?? settings?.default_deposit_percent ?? 25) / 100)
-  const candidateIcrPct = loanAmount > 0 ? (a.monthly_rent / (loanAmount * stressRate / 100 / 12)) * 100 : Infinity
+  // Growth rates the candidate deal is indexed against (§P0-1) — same fields/fallback chain
+  // scenarioEngine.ts reads for the projection itself, so the deal and the projection age
+  // consistently.
+  const parsedAssumptions = JSON.parse(assumptionsJson || '{}')
+  const propertyGrowthPct = parsedAssumptions.property_growth_pct ?? settings?.default_property_growth_pct ?? 3.0
+  const rentGrowthPct     = parsedAssumptions.rent_growth_pct     ?? settings?.default_rent_growth_pct     ?? 2.5
+
   const icrFloor = goal.min_icr ?? icrThresholdPct(tax)
-  const icrOk = candidateIcrPct >= icrFloor
+
+  // Lender ICR buy gate (P0 #4): this deal's own rent vs. a stressed interest-only payment on
+  // the loan — the same test a real lender applies to one loan at a time, so a single
+  // unfinanceable purchase can't be masked by other properties' cashflow. Recomputed per month
+  // against the indexed deal (§P0-1) rather than hoisted once, so a later, pricier deal is
+  // gated on its own affordability, not month-0's.
+  function buyGateAt(monthIndex: number): { buyCost: number; icrOk: boolean } {
+    const indexed = indexedAssumptions(a, propertyGrowthPct, rentGrowthPct, monthIndex)
+    const buyCost = depositPlusCosts(indexed)
+    const stressUplift = (settings?.icr_stress_uplift_bps ?? 200) / 100
+    const stressFloor = settings?.icr_stress_floor_pct ?? 5.5
+    const stressRate = Math.max((indexed.mortgage_rate ?? settings?.default_mortgage_rate_pct ?? 5.5) + stressUplift, stressFloor)
+    const loanAmount = indexed.purchase_price * (1 - (indexed.deposit_percent ?? settings?.default_deposit_percent ?? 25) / 100)
+    const candidateIcrPct = loanAmount > 0 ? (indexed.monthly_rent / (loanAmount * stressRate / 100 / 12)) * 100 : Infinity
+    return { buyCost, icrOk: candidateIcrPct >= icrFloor }
+  }
 
   const decisions: ScenarioEvent[] = []
   let lastMonth = 0
@@ -340,7 +365,8 @@ function buildCashGatedEvents(
       if (strategy === 'de_gear') {
         const balances = activeBalancesAt(proj, i)
         if (balances.length < 2) {
-          if (icrOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, a, interestOnly); decidedMonth = i; break }
+          const { buyCost, icrOk } = buyGateAt(i)
+          if (icrOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, indexedAssumptions(a, propertyGrowthPct, rentGrowthPct, i), interestOnly); decidedMonth = i; break }
         } else {
           const target = balances.reduce((min, b) => b.debt < min.debt ? b : min)
           const ercCost = target.isEarlyExit ? target.debt * ercPct / 100 : 0
@@ -364,9 +390,13 @@ function buildCashGatedEvents(
             break
           }
         }
-        if (icrOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, a, interestOnly); decidedMonth = i; break }
+        {
+          const { buyCost, icrOk } = buyGateAt(i)
+          if (icrOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, indexedAssumptions(a, propertyGrowthPct, rentGrowthPct, i), interestOnly); decidedMonth = i; break }
+        }
       } else {
-        if (icrOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, a, interestOnly); decidedMonth = i; break }
+        const { buyCost, icrOk } = buyGateAt(i)
+        if (icrOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, indexedAssumptions(a, propertyGrowthPct, rentGrowthPct, i), interestOnly); decidedMonth = i; break }
       }
     }
 

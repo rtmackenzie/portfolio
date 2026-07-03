@@ -6,7 +6,7 @@ import {
   rankPathways,
   type RankablePathway,
 } from '../../server/services/pathwayGenerator.ts'
-import type { PropertyState } from '../../server/services/scenarioEngine.ts'
+import { buildProjection, type PropertyState } from '../../server/services/scenarioEngine.ts'
 import { DEFAULT_TAX_SETTINGS } from '../../server/services/tax.ts'
 
 const TAX_PERSONAL = { ...DEFAULT_TAX_SETTINGS, ownership: 'personal' as const, personal_marginal_rate_pct: 40 }
@@ -396,11 +396,26 @@ describe('generatePathways — configurable cash reserve (P0 #3)', () => {
   })
 
   it('Low-Risk Hold ends up worse off once ERC is charged on its opportunistic payoffs (§P1-6)', () => {
+    // Regenerating the whole pathway with erc_pct toggled lets the (now month-indexed, §P0-1)
+    // candidate deal price drift the buy/payoff timing itself, which can swing total capital
+    // deployed by more than the ERC charge — a path-dependent effect unrelated to ERC. Isolate
+    // the ERC effect by holding the exact same decision path fixed and only toggling erc_pct in
+    // the projection it's re-run against.
     const withErc = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
-    const noErc = generatePathways({ ...goal, erc_pct: 0 }, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
     const lowRiskHoldWithErc = withErc.find(p => p.template_name === 'low_risk_hold')!
-    const lowRiskHoldNoErc = noErc.find(p => p.template_name === 'low_risk_hold')!
-    expect(lowRiskHoldWithErc.results.summary.end_equity).toBeLessThan(lowRiskHoldNoErc.results.summary.end_equity)
+    const config = JSON.parse(JSON.stringify({
+      base_date: new Date().toISOString().slice(0, 10),
+      projection_years: PROJECTION_YEARS,
+      starting_cash: 0,
+      assumptions_json: lowRiskHoldWithErc.assumptions_json,
+    }))
+    const noErcConfig = { ...config, assumptions_json: JSON.stringify({ ...JSON.parse(lowRiskHoldWithErc.assumptions_json), erc_pct: 0 }) }
+    // ERC is a cash outflow charged against cumulative cashflow, not equity (clearing a
+    // mortgage reduces debt/raises equity by the same amount regardless of the ERC paid to do
+    // it) — so total_cashflow, not end_equity, is where the charge is directly observable.
+    const withErcResults = buildProjection(startingPortfolio(), lowRiskHoldWithErc.events, config) as { summary: { total_cashflow: number } }
+    const noErcResults = buildProjection(startingPortfolio(), lowRiskHoldWithErc.events, noErcConfig) as { summary: { total_cashflow: number } }
+    expect(withErcResults.summary.total_cashflow).toBeLessThan(noErcResults.summary.total_cashflow)
   })
 })
 
@@ -451,6 +466,52 @@ describe('generatePathways — configurable starting cash & rate repricing (UI/D
       expect(a.capex_cost_per_property).toBe(4500)
       expect(a.arrears_pct).toBe(2.25)
     }
+  })
+})
+
+describe('generatePathways — candidate deal is indexed to growth over the horizon (P0-1)', () => {
+  const goal = { goal_type: 'count' as const, target_property_count: 6, director_loan_annual: 200000 }
+
+  function buyEvents(events: { event_type: string; date: string; parameters_json: string }[]) {
+    return events
+      .filter(e => e.event_type === 'buy_property')
+      .map(e => ({ date: e.date, ...JSON.parse(e.parameters_json) as { purchase_price: number; monthly_rent: number } }))
+      .sort((a, b) => a.date.localeCompare(b.date))
+  }
+
+  it('a purchase late in a long horizon costs and rents more than the base candidate deal', () => {
+    const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const buys = buyEvents(ps.find(p => p.template_name === 'low_risk_hold')!.events)
+    expect(buys.length).toBeGreaterThan(1)
+    const last = buys[buys.length - 1]
+    expect(last.purchase_price).toBeGreaterThan(ASSUMPTIONS.purchase_price)
+    expect(last.monthly_rent).toBeGreaterThan(ASSUMPTIONS.monthly_rent)
+  })
+
+  it('price/rent rise roughly monotonically with purchase order, tracking the default 3%/2.5% growth', () => {
+    const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const buys = buyEvents(ps.find(p => p.template_name === 'low_risk_hold')!.events)
+    for (let k = 1; k < buys.length; k++) {
+      expect(buys[k].purchase_price).toBeGreaterThanOrEqual(buys[k - 1].purchase_price)
+      expect(buys[k].monthly_rent).toBeGreaterThanOrEqual(buys[k - 1].monthly_rent)
+    }
+    const first = buys[0]
+    const last = buys[buys.length - 1]
+    const b = new Date(first.date)
+    const t = new Date(last.date)
+    const monthsElapsed = (t.getFullYear() - b.getFullYear()) * 12 + (t.getMonth() - b.getMonth())
+    const expectedPrice = first.purchase_price * Math.pow(1.03, monthsElapsed / 12)
+    expect(last.purchase_price).toBeCloseTo(expectedPrice, -2)
+  })
+
+  it('a custom growth rate (via global settings) changes the indexed price accordingly', () => {
+    const lowGrowth = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1, undefined, { default_property_growth_pct: 0.5 } as any)
+    const highGrowth = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1, undefined, { default_property_growth_pct: 8 } as any)
+    const lastPrice = (ps: ReturnType<typeof generatePathways>) => {
+      const buys = buyEvents(ps.find(p => p.template_name === 'low_risk_hold')!.events)
+      return buys[buys.length - 1].purchase_price
+    }
+    expect(lastPrice(highGrowth)).toBeGreaterThan(lastPrice(lowGrowth))
   })
 })
 
