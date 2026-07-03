@@ -10,7 +10,14 @@ const router = Router()
 
 router.get('/', (_req, res) => {
   try {
-    res.json(queryAll('SELECT * FROM scenarios ORDER BY updated_at DESC'))
+    res.json(queryAll(`
+      SELECT s.*, MIN(gp.goal_id) AS goal_id, MIN(g.name) AS goal_name
+      FROM scenarios s
+      LEFT JOIN goal_pathways gp ON gp.scenario_id = s.id
+      LEFT JOIN goals g ON g.id = gp.goal_id
+      GROUP BY s.id
+      ORDER BY s.updated_at DESC
+    `))
   } catch (err) {
     res.status(500).json({ message: String(err) })
   }

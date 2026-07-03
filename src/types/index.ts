@@ -369,6 +369,8 @@ export interface Scenario {
   results_downturn?: ScenarioResults | null
   monte_carlo?: MonteCarloResult | null
   concentration_warnings?: ConcentrationWarning[]
+  goal_id?: number | null
+  goal_name?: string | null
 }
 
 export interface MonteCarloBand {

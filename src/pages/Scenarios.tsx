@@ -54,6 +54,14 @@ export default function Scenarios() {
     const id = Number(searchParams.get('id'))
     return Number.isFinite(id) && id > 0 ? id : null
   })
+  const [openGroups, setOpenGroups] = useState<Set<number | 'custom'>>(new Set())
+  function toggleGroup(key: number | 'custom') {
+    setOpenGroups(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
   const [showCreate, setShowCreate] = useState(false)
   const [showAddEvent, setShowAddEvent] = useState(false)
   const [timelineOpen, setTimelineOpen] = useState(false)
@@ -92,6 +100,7 @@ export default function Scenarios() {
   const [viewMode, setViewMode]               = useState<'portfolio' | 'property'>('portfolio')
   const [propMetric, setPropMetric]           = useState<'equity' | 'cashflow' | 'cumulative'>('equity')
   const [taxView, setTaxView]                 = useState<'pretax' | 'posttax' | 'both'>('pretax')
+  const [resultsTab, setResultsTab]           = useState<'overview' | 'cashflow' | 'returns' | 'stress' | 'properties' | 'warnings'>('overview')
 
   const calculate = useMutation({
     mutationFn: (id: number) => api.post<ScenarioResults>(`/scenarios/${id}/calculate`, {}),
@@ -149,6 +158,23 @@ export default function Scenarios() {
 
   if (isLoading) return <PageLoader />
 
+  // Group scenarios by the goal they were generated from; ungrouped ones fall into "Custom".
+  // Preserves the list's existing updated_at DESC order within and across groups.
+  const scenarioGroups: { key: number | 'custom'; label: string; isGoal: boolean; scenarios: Scenario[] }[] = []
+  const groupIndex = new Map<number | 'custom', number>()
+  for (const s of scenarios ?? []) {
+    const key: number | 'custom' = s.goal_id ?? 'custom'
+    let idx = groupIndex.get(key)
+    if (idx === undefined) {
+      idx = scenarioGroups.length
+      groupIndex.set(key, idx)
+      scenarioGroups.push({ key, label: key === 'custom' ? 'Custom' : (s.goal_name ?? 'Goal'), isGoal: key !== 'custom', scenarios: [] })
+    }
+    scenarioGroups[idx].scenarios.push(s)
+  }
+  // Custom always last, regardless of where its scenarios first appeared in updated_at order.
+  scenarioGroups.sort((a, b) => (a.key === 'custom' ? 1 : 0) - (b.key === 'custom' ? 1 : 0))
+
   const results = selected?.results as ScenarioResults | null | undefined
   const resultsDownturn = selected?.results_downturn as ScenarioResults | null | undefined
   const monteCarlo = selected?.monte_carlo
@@ -174,24 +200,48 @@ export default function Scenarios() {
             <p className="text-sm text-muted-foreground">No scenarios yet</p>
           ) : (
             <>
-              {scenarios.map(s => (
-                <div key={s.id} className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={compareIds.has(s.id)}
-                    onChange={() => toggleCompare(s.id)}
-                    onClick={e => e.stopPropagation()}
-                    className="rounded border-border accent-primary flex-none"
-                  />
-                  <button
-                    onClick={() => { setSelectedId(s.id); setCompareMode(false); setStressResults(null); setActiveRateShock(null); setActiveRentShock(null); setViewMode('portfolio'); setTimelineOpen(false) }}
-                    className={`flex-1 text-left px-3 py-2.5 rounded-md text-sm transition-colors ${selectedId === s.id && !compareMode ? 'bg-primary/15 text-primary' : 'bg-card text-foreground hover:bg-accent'}`}
-                  >
-                    <div className="font-medium">{s.name}</div>
-                    <div className="text-xs text-muted-foreground">{s.projection_years}yr projection</div>
-                  </button>
-                </div>
-              ))}
+              {scenarioGroups.map(group => {
+                const containsSelected = group.scenarios.some(s => s.id === selectedId)
+                const isOpen = openGroups.has(group.key) || containsSelected
+                return (
+                  <div key={group.key}>
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(group.key)}
+                      className="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-left"
+                    >
+                      <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground truncate">
+                        {group.label}
+                        {group.isGoal && (
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/15 text-primary flex-none">goal</span>
+                        )}
+                      </span>
+                      <ChevronDown
+                        size={13}
+                        className={`text-muted-foreground transition-transform duration-200 flex-none ${isOpen ? 'rotate-180' : ''}`}
+                      />
+                    </button>
+                    {isOpen && group.scenarios.map(s => (
+                      <div key={s.id} className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={compareIds.has(s.id)}
+                          onChange={() => toggleCompare(s.id)}
+                          onClick={e => e.stopPropagation()}
+                          className="rounded border-border accent-primary flex-none"
+                        />
+                        <button
+                          onClick={() => { setSelectedId(s.id); setCompareMode(false); setStressResults(null); setActiveRateShock(null); setActiveRentShock(null); setViewMode('portfolio'); setTimelineOpen(false); setResultsTab('overview') }}
+                          className={`flex-1 text-left px-3 py-2.5 rounded-md text-sm transition-colors ${selectedId === s.id && !compareMode ? 'bg-primary/15 text-primary' : 'bg-card text-foreground hover:bg-accent'}`}
+                        >
+                          <div className="font-medium">{s.name}</div>
+                          <div className="text-xs text-muted-foreground">{s.projection_years}yr projection</div>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })}
               {compareIds.size >= 2 && (
                 <button
                   onClick={() => setCompareMode(true)}
@@ -249,20 +299,12 @@ export default function Scenarios() {
                     </button>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-4 text-sm">
+                <div className="grid grid-cols-4 gap-4 text-sm">
                   <div><span className="text-muted-foreground">Base Date: </span><span className="font-medium">{formatDate(selected.base_date)}</span></div>
                   <div><span className="text-muted-foreground">Projection: </span><span className="font-medium">{selected.projection_years} years</span></div>
                   <div><span className="text-muted-foreground">Events: </span><span className="font-medium">{selected.events?.length ?? 0}</span></div>
+                  <div><span className="text-muted-foreground">Properties: </span><span className="font-medium">{results?.months?.at(-1)?.property_count ?? '—'}</span></div>
                 </div>
-                {concentrationWarnings.length > 0 && (
-                  <div className="mt-3 space-y-1.5">
-                    {concentrationWarnings.map(w => (
-                      <div key={w.field} className="flex items-start gap-2 px-4 py-2.5 rounded-md bg-warning/10 border border-warning/30 text-sm text-warning">
-                        ⚠ {w.message}
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
 
               {/* Events */}
@@ -384,202 +426,12 @@ export default function Scenarios() {
 
                 return (
                   <>
-                    {/* View + stress controls */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-semibold text-muted-foreground">View:</span>
-                      <button onClick={() => setViewMode('portfolio')} className={btnCls(viewMode === 'portfolio')}>Portfolio</button>
-                      <button onClick={() => setViewMode('property')}  className={btnCls(viewMode === 'property')}>Per Property</button>
-                      {viewMode === 'property' && results.property_series && (
-                        <>
-                          <span className="text-xs text-muted-foreground ml-2">Show:</span>
-                          <button onClick={() => setPropMetric('equity')}     className={btnCls(propMetric === 'equity')}>Equity</button>
-                          <button onClick={() => setPropMetric('cashflow')}   className={btnCls(propMetric === 'cashflow')}>Monthly CF</button>
-                          <button onClick={() => setPropMetric('cumulative')} className={btnCls(propMetric === 'cumulative')}>Cumulative CF</button>
-                        </>
-                      )}
-                      {viewMode === 'portfolio' && (
-                        <>
-                          <span className="text-xs text-muted-foreground ml-2">Tax:</span>
-                          <button onClick={() => setTaxView('pretax')}  className={btnCls(taxView === 'pretax')}>Pre-tax</button>
-                          <button onClick={() => setTaxView('posttax')} className={btnCls(taxView === 'posttax')}>Post-tax</button>
-                          <button onClick={() => setTaxView('both')}    className={btnCls(taxView === 'both')}>Both</button>
-                        </>
-                      )}
+                    <div className="grid grid-cols-4 gap-3">
+                      <KpiCard label="Ending Equity" value={formatCurrency(results.summary.end_equity, true)} tooltip="Projected total equity at the end of the projection period, after property value growth and mortgage amortisation." />
+                      <KpiCard label="Ending Cashflow / Mo" value={formatCurrency(results.summary.ending_monthly_cashflow_posttax ?? results.summary.ending_monthly_cashflow ?? 0)} tooltip="Net monthly cashflow in the final month of the projection, after tax where a tax structure is set — the steady-state figure to compare against an income goal." />
+                      <KpiCard label="Outstanding Debt" value={formatCurrency(results.months.at(-1)?.total_debt ?? 0, true)} tooltip="Total outstanding mortgage debt across all properties at the end of the projection." />
+                      <KpiCard label="IRR" value={results.summary.irr_pct != null ? `${formatPercent(results.summary.irr_pct)} (${irrBasisLabel(results.summary.irr_basis)})` : '—'} tooltip="Annualized internal rate of return on the investor's own capital — contributions and repayments (director loans), not the portfolio's unified cash account. Falls back to MIRR or an annualised equity multiple when no root exists — the basis actually used is shown alongside the figure." />
                     </div>
-
-                    {/* Stress test buttons (portfolio view only) */}
-                    {viewMode === 'portfolio' && <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-semibold text-muted-foreground">Rates:</span>
-                      {[100, 200, 300].map(bps => (
-                        <button
-                          key={bps}
-                          onClick={() => handleRateButton(bps)}
-                          disabled={runStress.isPending}
-                          className={`px-2.5 py-1 text-xs rounded-md border transition-colors disabled:opacity-50 ${
-                            activeRateShock === bps
-                              ? 'bg-warning/20 border-warning/60 text-warning'
-                              : 'border-border text-muted-foreground hover:bg-accent'
-                          }`}
-                        >+{bps / 100}%</button>
-                      ))}
-                      <span className="text-xs font-semibold text-muted-foreground ml-2">Rent:</span>
-                      {[-10, -20].map(pct => (
-                        <button
-                          key={pct}
-                          onClick={() => handleRentButton(pct)}
-                          disabled={runStress.isPending}
-                          className={`px-2.5 py-1 text-xs rounded-md border transition-colors disabled:opacity-50 ${
-                            activeRentShock === pct
-                              ? 'bg-warning/20 border-warning/60 text-warning'
-                              : 'border-border text-muted-foreground hover:bg-accent'
-                          }`}
-                        >{pct}%</button>
-                      ))}
-                      {(activeRateShock !== null || activeRentShock !== null) && (
-                        <button
-                          onClick={() => { setActiveRateShock(null); setActiveRentShock(null); setStressResults(null) }}
-                          className="px-2.5 py-1 text-xs rounded-md border border-border text-muted-foreground hover:bg-accent ml-1"
-                        >Clear</button>
-                      )}
-                    </div>}
-
-                    {/* Lender ICR breach warning (portfolio view only) */}
-                    {viewMode === 'portfolio' && stressResults && (stressResults.summary.months_below_icr ?? 0) > 0 && (
-                      <div className="flex items-center gap-2 px-4 py-2.5 rounded-md bg-warning/10 border border-warning/30 text-sm text-warning">
-                        ⚠ {stressResults.summary.months_below_icr} month{stressResults.summary.months_below_icr !== 1 ? 's' : ''} breach the lender ICR floor under {stressLabel}. Min ICR: {(stressResults.summary.min_icr ?? 0).toFixed(0)}%.
-                      </div>
-                    )}
-
-                    <div className="grid grid-cols-3 gap-3">
-                      {[
-                        { label: 'Starting Equity',  value: formatCurrency(results.summary.start_equity, true), tooltip: 'Total equity across all properties at the start of the projection — current market value minus outstanding mortgage debt.' },
-                        { label: 'Ending Equity',    value: formatCurrency(results.summary.end_equity, true),   tooltip: 'Projected total equity at the end of the projection period, after property value growth and mortgage amortisation.' },
-                        { label: 'Equity Growth',    value: `+${formatCurrency(results.summary.equity_growth, true)} (${formatPercent(results.summary.equity_growth_pct)})`, tooltip: 'Net increase in equity over the projection: property appreciation plus principal repaid, minus any new debt taken on.' },
-                        { label: 'Total Cashflow',   value: formatCurrency(results.summary.total_cashflow, true), tooltip: 'Cumulative net cashflow over the full projection period — rent received minus mortgage payments, expenses, and one-off acquisition costs.' },
-                        { label: 'Avg Monthly CF',   value: formatCurrency(results.summary.avg_monthly_cashflow), tooltip: 'Average monthly net cashflow across all properties and all months in the projection. Lower than the ending figure because the early years hold fewer properties.' },
-                        { label: 'Ending Monthly CF', value: formatCurrency(results.summary.ending_monthly_cashflow ?? 0), tooltip: 'Net monthly cashflow in the final month of the projection — the steady-state income once the full portfolio is built and mortgages have amortised. This is the figure to compare against an income goal. Re-run the projection if this reads £0 on an older scenario.' },
-                        { label: 'Ending CF (post-tax)', value: formatCurrency(results.summary.ending_monthly_cashflow_posttax ?? 0), tooltip: 'Final-month net monthly cashflow after income tax (S24 personal or corporation tax for Ltd), using the global Tax settings. The real spendable FI figure. Set your structure in Business Overview → Tax settings.' },
-                        { label: 'Tax paid (total)', value: formatCurrency(results.summary.total_tax_paid ?? 0, true), tooltip: 'Total income tax plus CGT paid across the whole projection. £0 means no tax settings were applied (re-run the projection after setting your tax structure).' },
-                        { label: 'Cover Ratio',      value: (results.summary.min_cover_ratio ?? 0).toFixed(2), tooltip: 'Lowest ratio of total rent to the actual mortgage payment recorded in any month. An informal cashflow-cover figure — not a lender affordability test (see Lender ICR for that).' },
-                        { label: 'Lender ICR',       value: `${(results.summary.min_icr ?? 0).toFixed(0)}%`, tooltip: 'Lowest lender Interest Coverage Ratio recorded in any month — rent ÷ a stressed interest-only payment (the higher of pay-rate+2% or a 5.5% floor). Real lenders require 125% (personal, basic-rate) or 145% (higher-rate personal / Ltd company).' },
-                        { label: 'ICR Breaches',     value: `${results.summary.months_below_icr ?? '—'} mo`, tooltip: 'Number of months where the lender ICR fell below the required floor. A high count under stress scenarios suggests vulnerability to rate rises.' },
-                      ].map(k => (
-                        <KpiCard key={k.label} label={k.label} value={k.value} tooltip={k.tooltip} />
-                      ))}
-                    </div>
-
-                    {/* Downturn standing case (§P1-5 / Appendix A.1) */}
-                    {resultsDownturn && (
-                      <div className="space-y-2">
-                        <div className="grid grid-cols-3 gap-3">
-                          {[
-                            { label: 'Ending Equity (downturn)', value: formatCurrency(resultsDownturn.summary.end_equity, true), tooltip: 'Projected ending equity under the fixed downturn standing case, not the central case above.' },
-                            { label: 'Ending CF (downturn)', value: formatCurrency(resultsDownturn.summary.ending_monthly_cashflow ?? 0), tooltip: 'Final-month net monthly cashflow under the downturn standing case.' },
-                            { label: 'Cash Survival (downturn)', value: monthsToCashNegative(resultsDownturn) != null ? `${monthsToCashNegative(resultsDownturn)} mo` : 'Survives horizon', tooltip: 'First month the downturn case\'s cumulative post-tax cashflow goes negative, or "Survives horizon" if it never does. A standing-case proxy for reserve adequacy, not a lender or goal-specific reserve test.' },
-                          ].map(k => (
-                            <KpiCard key={k.label} label={k.label} value={k.value} tooltip={k.tooltip} />
-                          ))}
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Downturn standing case: a fixed, versioned stress transform (−8% property growth and 0% rent growth for 24 months, then recovery; 2 months/yr void; 3% arrears; +300bps at next refix) applied on top of this scenario's own central-case assumptions — not user-configurable, so every plan is stressed identically and results are comparable across time.
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Return metrics (§P2-9) */}
-                    <div className="grid grid-cols-3 gap-3">
-                      {[
-                        { label: 'Capital Invested', value: formatCurrency(results.summary.total_capital_invested ?? 0, true), tooltip: 'Total capital actually contributed over the projection — deposits, transaction costs, capex and early-repayment charges. The denominator for every return metric below.' },
-                        { label: 'Equity Multiple',  value: results.summary.equity_multiple != null ? `${results.summary.equity_multiple.toFixed(2)}x` : '—', tooltip: 'Total value created (ending equity + cumulative net cashflow received) ÷ total capital invested. A multiple, not annualized.' },
-                        { label: 'IRR',              value: results.summary.irr_pct != null ? `${formatPercent(results.summary.irr_pct)} (${irrBasisLabel(results.summary.irr_basis)})` : '—', tooltip: 'Annualized internal rate of return on the investor\'s own capital — contributions and repayments (director loans), not the portfolio\'s unified cash account. Retained profit accrues into an as-if-liquidated terminal value alongside ending equity. Falls back to MIRR (finance rate = configured mortgage rate) when no root exists, or an annualised equity multiple when there\'s no capital-flow timeline at all — the basis actually used is shown alongside the figure.' },
-                        { label: 'ROCE',             value: results.summary.roce_pct != null ? formatPercent(results.summary.roce_pct) : '—', tooltip: 'Simple annualized total return on capital employed: (equity multiple − 1) ÷ years held. Unlike IRR, this ignores the timing of cashflows — an average, not a time-value-adjusted rate.' },
-                        { label: 'Cash-on-Cash',     value: results.summary.cash_on_cash_pct != null ? formatPercent(results.summary.cash_on_cash_pct) : '—', tooltip: 'Money-on-money return: the final month\'s net cashflow (post-tax), annualized, ÷ total capital invested. An income-only yield — excludes equity growth.' },
-                        { label: 'Net Yield on Cost', value: results.summary.net_yield_on_cost_pct != null ? formatPercent(results.summary.net_yield_on_cost_pct) : '—', tooltip: 'Final month\'s gross rent, annualized, ÷ total capital invested.' },
-                        { label: 'Payback Period',   value: results.summary.months_to_payback != null ? `${results.summary.months_to_payback} mo` : '—', tooltip: 'Months from the point of maximum capital deployed until cumulative cashflow recovers back to the starting cash position.' },
-                      ].map(k => (
-                        <KpiCard key={k.label} label={k.label} value={k.value} tooltip={k.tooltip} />
-                      ))}
-                    </div>
-
-                    {/* Monte-Carlo band (§P1-5b / Appendix A.2) */}
-                    <div className="bg-card rounded-lg p-5 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-semibold">Monte-Carlo Band</h3>
-                        <button
-                          type="button"
-                          onClick={() => setMcOpen(o => !o)}
-                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                        >
-                          {mcOpen ? 'Hide settings' : 'Settings'} <ChevronDown size={12} className={mcOpen ? 'rotate-180' : ''} />
-                        </button>
-                      </div>
-                      {mcOpen && (
-                        <div className="flex items-end gap-3 flex-wrap">
-                          <div>
-                            <label className={labelCls}>Runs</label>
-                            <input type="number" value={mcRuns} onChange={e => setMcRuns(Number(e.target.value))} className={`${inputCls} w-24`} />
-                          </div>
-                          <div>
-                            <label className={labelCls}>Target monthly income (£, optional)</label>
-                            <input type="number" value={mcTarget} onChange={e => setMcTarget(e.target.value)} placeholder="e.g. 5000" className={`${inputCls} w-48`} />
-                          </div>
-                          <button
-                            onClick={() => runMonteCarlo.mutate({ id: selected.id, runs: mcRuns, targetMonthlyIncome: mcTarget ? Number(mcTarget) : undefined })}
-                            disabled={runMonteCarlo.isPending}
-                            className="px-3 py-2 bg-primary text-primary-foreground rounded-md text-xs font-medium disabled:opacity-50"
-                          >
-                            {runMonteCarlo.isPending ? 'Running…' : 'Run Monte-Carlo'}
-                          </button>
-                        </div>
-                      )}
-                      {monteCarlo ? (
-                        <>
-                          {monteCarlo.goal_probability != null && (
-                            <div className="px-4 py-2.5 rounded-md bg-primary/10 border border-primary/30 text-sm">
-                              Reaches the target in <strong>{(monteCarlo.goal_probability * 100).toFixed(0)}%</strong> of {monteCarlo.runs} simulated worlds.
-                            </div>
-                          )}
-                          <ScenarioFanChart
-                            data={monteCarlo.equity_band.map((b, i) => ({ ...b, central: results.months[i]?.total_equity }))}
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            {monteCarlo.runs} simulated worlds (seed {monteCarlo.seed}), sampling property growth, rent growth, void, arrears and refix uplift once per run around this scenario's central-case assumptions. Shows <strong>model uncertainty under stated distributions, not a probability of outcome</strong> — the distributions are priors, not market data, and the median (P50) is not an "expected" value.
-                          </p>
-                        </>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">No Monte-Carlo run yet — open Settings above and click Run Monte-Carlo.</p>
-                      )}
-                    </div>
-
-                    {/* Debt Maturity Calendar (§P2-9) */}
-                    {results.debt_calendar && results.debt_calendar.length > 0 && (
-                      <div className="bg-card rounded-lg p-5">
-                        <h3 className="text-sm font-semibold mb-4">Debt Maturity Calendar</h3>
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="text-left text-xs text-muted-foreground border-b border-border">
-                              <th className="pb-2 font-medium">Property</th>
-                              <th className="pb-2 font-medium">Next Reprice</th>
-                              <th className="pb-2 font-medium">Mortgage Maturity</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {results.debt_calendar.map(d => (
-                              <tr key={d.property_id} className="border-b border-border/50 last:border-0">
-                                <td className="py-2">{d.label}</td>
-                                <td className="py-2 text-muted-foreground">{d.next_reprice_date ?? '—'}</td>
-                                <td className="py-2 text-muted-foreground">{d.maturity_date ?? '—'}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-
-                    {/* Per-property: no data guard */}
-                    {viewMode === 'property' && !results.property_series && (
-                      <p className="text-sm text-muted-foreground py-4 text-center">Re-run the projection to enable per-property view.</p>
-                    )}
 
                     <div className="bg-card rounded-lg p-5">
                       <h3 className="text-sm font-semibold mb-4">Projection Chart</h3>
@@ -602,6 +454,262 @@ export default function Scenarios() {
                         )
                       })()}
                     </div>
+
+                    {/* Results tabs */}
+                    <div className="flex items-center gap-1 border-b border-border">
+                      {([
+                        ['overview', 'Overview'],
+                        ['cashflow', 'Cash Flow'],
+                        ['returns', 'Returns'],
+                        ['stress', 'Stress Test'],
+                        ['properties', 'Properties'],
+                        ['warnings', 'Warnings'],
+                      ] as const).map(([key, label]) => (
+                        <button
+                          key={key}
+                          onClick={() => setResultsTab(key)}
+                          className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                            resultsTab === key
+                              ? 'border-primary text-primary'
+                              : 'border-transparent text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          {label}
+                          {key === 'warnings' && concentrationWarnings.length > 0 && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-warning" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+
+                    {resultsTab === 'overview' && (
+                      <>
+                        <div className="grid grid-cols-3 gap-3">
+                          {[
+                            { label: 'Starting Equity',  value: formatCurrency(results.summary.start_equity, true), tooltip: 'Total equity across all properties at the start of the projection — current market value minus outstanding mortgage debt.' },
+                            { label: 'Ending Equity',    value: formatCurrency(results.summary.end_equity, true),   tooltip: 'Projected total equity at the end of the projection period, after property value growth and mortgage amortisation.' },
+                            { label: 'Equity Growth',    value: `+${formatCurrency(results.summary.equity_growth, true)} (${formatPercent(results.summary.equity_growth_pct)})`, tooltip: 'Net increase in equity over the projection: property appreciation plus principal repaid, minus any new debt taken on.' },
+                            { label: 'Cover Ratio',      value: (results.summary.min_cover_ratio ?? 0).toFixed(2), tooltip: 'Lowest ratio of total rent to the actual mortgage payment recorded in any month. An informal cashflow-cover figure — not a lender affordability test (see Lender ICR for that).' },
+                            { label: 'Lender ICR',       value: `${(results.summary.min_icr ?? 0).toFixed(0)}%`, tooltip: 'Lowest lender Interest Coverage Ratio recorded in any month — rent ÷ a stressed interest-only payment (the higher of pay-rate+2% or a 5.5% floor). Real lenders require 125% (personal, basic-rate) or 145% (higher-rate personal / Ltd company).' },
+                            { label: 'ICR Breaches',     value: `${results.summary.months_below_icr ?? '—'} mo`, tooltip: 'Number of months where the lender ICR fell below the required floor. A high count under stress scenarios suggests vulnerability to rate rises.' },
+                          ].map(k => (
+                            <KpiCard key={k.label} label={k.label} value={k.value} tooltip={k.tooltip} />
+                          ))}
+                        </div>
+
+                        {/* Downturn standing case (§P1-5 / Appendix A.1) */}
+                        {resultsDownturn && (
+                          <div className="space-y-2">
+                            <div className="grid grid-cols-3 gap-3">
+                              {[
+                                { label: 'Ending Equity (downturn)', value: formatCurrency(resultsDownturn.summary.end_equity, true), tooltip: 'Projected ending equity under the fixed downturn standing case, not the central case above.' },
+                                { label: 'Ending CF (downturn)', value: formatCurrency(resultsDownturn.summary.ending_monthly_cashflow ?? 0), tooltip: 'Final-month net monthly cashflow under the downturn standing case.' },
+                                { label: 'Cash Survival (downturn)', value: monthsToCashNegative(resultsDownturn) != null ? `${monthsToCashNegative(resultsDownturn)} mo` : 'Survives horizon', tooltip: 'First month the downturn case\'s cumulative post-tax cashflow goes negative, or "Survives horizon" if it never does. A standing-case proxy for reserve adequacy, not a lender or goal-specific reserve test.' },
+                              ].map(k => (
+                                <KpiCard key={k.label} label={k.label} value={k.value} tooltip={k.tooltip} />
+                              ))}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Downturn standing case: a fixed, versioned stress transform (−8% property growth and 0% rent growth for 24 months, then recovery; 2 months/yr void; 3% arrears; +300bps at next refix) applied on top of this scenario's own central-case assumptions — not user-configurable, so every plan is stressed identically and results are comparable across time.
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {resultsTab === 'cashflow' && (
+                      <>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-semibold text-muted-foreground">Chart tax view:</span>
+                          <button onClick={() => setTaxView('pretax')}  className={btnCls(taxView === 'pretax')}>Pre-tax</button>
+                          <button onClick={() => setTaxView('posttax')} className={btnCls(taxView === 'posttax')}>Post-tax</button>
+                          <button onClick={() => setTaxView('both')}    className={btnCls(taxView === 'both')}>Both</button>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3">
+                          {[
+                            { label: 'Total Cashflow',   value: formatCurrency(results.summary.total_cashflow, true), tooltip: 'Cumulative net cashflow over the full projection period — rent received minus mortgage payments, expenses, and one-off acquisition costs.' },
+                            { label: 'Avg Monthly CF',   value: formatCurrency(results.summary.avg_monthly_cashflow), tooltip: 'Average monthly net cashflow across all properties and all months in the projection. Lower than the ending figure because the early years hold fewer properties.' },
+                            { label: 'Ending Monthly CF', value: formatCurrency(results.summary.ending_monthly_cashflow ?? 0), tooltip: 'Net monthly cashflow in the final month of the projection — the steady-state income once the full portfolio is built and mortgages have amortised. This is the figure to compare against an income goal. Re-run the projection if this reads £0 on an older scenario.' },
+                            { label: 'Ending CF (post-tax)', value: formatCurrency(results.summary.ending_monthly_cashflow_posttax ?? 0), tooltip: 'Final-month net monthly cashflow after income tax (S24 personal or corporation tax for Ltd), using the global Tax settings. The real spendable FI figure. Set your structure in Business Overview → Tax settings.' },
+                            { label: 'Tax paid (total)', value: formatCurrency(results.summary.total_tax_paid ?? 0, true), tooltip: 'Total income tax plus CGT paid across the whole projection. £0 means no tax settings were applied (re-run the projection after setting your tax structure).' },
+                          ].map(k => (
+                            <KpiCard key={k.label} label={k.label} value={k.value} tooltip={k.tooltip} />
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    {resultsTab === 'returns' && (
+                      <div className="grid grid-cols-3 gap-3">
+                        {[
+                          { label: 'Capital Invested', value: formatCurrency(results.summary.total_capital_invested ?? 0, true), tooltip: 'Total capital actually contributed over the projection — deposits, transaction costs, capex and early-repayment charges. The denominator for every return metric below.' },
+                          { label: 'Equity Multiple',  value: results.summary.equity_multiple != null ? `${results.summary.equity_multiple.toFixed(2)}x` : '—', tooltip: 'Total value created (ending equity + cumulative net cashflow received) ÷ total capital invested. A multiple, not annualized.' },
+                          { label: 'IRR',              value: results.summary.irr_pct != null ? `${formatPercent(results.summary.irr_pct)} (${irrBasisLabel(results.summary.irr_basis)})` : '—', tooltip: 'Annualized internal rate of return on the investor\'s own capital — contributions and repayments (director loans), not the portfolio\'s unified cash account. Retained profit accrues into an as-if-liquidated terminal value alongside ending equity. Falls back to MIRR (finance rate = configured mortgage rate) when no root exists, or an annualised equity multiple when there\'s no capital-flow timeline at all — the basis actually used is shown alongside the figure.' },
+                          { label: 'ROCE',             value: results.summary.roce_pct != null ? formatPercent(results.summary.roce_pct) : '—', tooltip: 'Simple annualized total return on capital employed: (equity multiple − 1) ÷ years held. Unlike IRR, this ignores the timing of cashflows — an average, not a time-value-adjusted rate.' },
+                          { label: 'Cash-on-Cash',     value: results.summary.cash_on_cash_pct != null ? formatPercent(results.summary.cash_on_cash_pct) : '—', tooltip: 'Money-on-money return: the final month\'s net cashflow (post-tax), annualized, ÷ total capital invested. An income-only yield — excludes equity growth.' },
+                          { label: 'Net Yield on Cost', value: results.summary.net_yield_on_cost_pct != null ? formatPercent(results.summary.net_yield_on_cost_pct) : '—', tooltip: 'Final month\'s gross rent, annualized, ÷ total capital invested.' },
+                          { label: 'Payback Period',   value: results.summary.months_to_payback != null ? `${results.summary.months_to_payback} mo` : '—', tooltip: 'Months from the point of maximum capital deployed until cumulative cashflow recovers back to the starting cash position.' },
+                        ].map(k => (
+                          <KpiCard key={k.label} label={k.label} value={k.value} tooltip={k.tooltip} />
+                        ))}
+                      </div>
+                    )}
+
+                    {resultsTab === 'stress' && (
+                      <>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-semibold text-muted-foreground">Rates:</span>
+                          {[100, 200, 300].map(bps => (
+                            <button
+                              key={bps}
+                              onClick={() => handleRateButton(bps)}
+                              disabled={runStress.isPending}
+                              className={`px-2.5 py-1 text-xs rounded-md border transition-colors disabled:opacity-50 ${
+                                activeRateShock === bps
+                                  ? 'bg-warning/20 border-warning/60 text-warning'
+                                  : 'border-border text-muted-foreground hover:bg-accent'
+                              }`}
+                            >+{bps / 100}%</button>
+                          ))}
+                          <span className="text-xs font-semibold text-muted-foreground ml-2">Rent:</span>
+                          {[-10, -20].map(pct => (
+                            <button
+                              key={pct}
+                              onClick={() => handleRentButton(pct)}
+                              disabled={runStress.isPending}
+                              className={`px-2.5 py-1 text-xs rounded-md border transition-colors disabled:opacity-50 ${
+                                activeRentShock === pct
+                                  ? 'bg-warning/20 border-warning/60 text-warning'
+                                  : 'border-border text-muted-foreground hover:bg-accent'
+                              }`}
+                            >{pct}%</button>
+                          ))}
+                          {(activeRateShock !== null || activeRentShock !== null) && (
+                            <button
+                              onClick={() => { setActiveRateShock(null); setActiveRentShock(null); setStressResults(null) }}
+                              className="px-2.5 py-1 text-xs rounded-md border border-border text-muted-foreground hover:bg-accent ml-1"
+                            >Clear</button>
+                          )}
+                        </div>
+
+                        {stressResults && (stressResults.summary.months_below_icr ?? 0) > 0 && (
+                          <div className="flex items-center gap-2 px-4 py-2.5 rounded-md bg-warning/10 border border-warning/30 text-sm text-warning">
+                            ⚠ {stressResults.summary.months_below_icr} month{stressResults.summary.months_below_icr !== 1 ? 's' : ''} breach the lender ICR floor under {stressLabel}. Min ICR: {(stressResults.summary.min_icr ?? 0).toFixed(0)}%.
+                          </div>
+                        )}
+
+                        {/* Monte-Carlo band (§P1-5b / Appendix A.2) */}
+                        <div className="bg-card rounded-lg p-5 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-semibold">Monte-Carlo Band</h3>
+                            <button
+                              type="button"
+                              onClick={() => setMcOpen(o => !o)}
+                              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                            >
+                              {mcOpen ? 'Hide settings' : 'Settings'} <ChevronDown size={12} className={mcOpen ? 'rotate-180' : ''} />
+                            </button>
+                          </div>
+                          {mcOpen && (
+                            <div className="flex items-end gap-3 flex-wrap">
+                              <div>
+                                <label className={labelCls}>Runs</label>
+                                <input type="number" value={mcRuns} onChange={e => setMcRuns(Number(e.target.value))} className={`${inputCls} w-24`} />
+                              </div>
+                              <div>
+                                <label className={labelCls}>Target monthly income (£, optional)</label>
+                                <input type="number" value={mcTarget} onChange={e => setMcTarget(e.target.value)} placeholder="e.g. 5000" className={`${inputCls} w-48`} />
+                              </div>
+                              <button
+                                onClick={() => runMonteCarlo.mutate({ id: selected.id, runs: mcRuns, targetMonthlyIncome: mcTarget ? Number(mcTarget) : undefined })}
+                                disabled={runMonteCarlo.isPending}
+                                className="px-3 py-2 bg-primary text-primary-foreground rounded-md text-xs font-medium disabled:opacity-50"
+                              >
+                                {runMonteCarlo.isPending ? 'Running…' : 'Run Monte-Carlo'}
+                              </button>
+                            </div>
+                          )}
+                          {monteCarlo ? (
+                            <>
+                              {monteCarlo.goal_probability != null && (
+                                <div className="px-4 py-2.5 rounded-md bg-primary/10 border border-primary/30 text-sm">
+                                  Reaches the target in <strong>{(monteCarlo.goal_probability * 100).toFixed(0)}%</strong> of {monteCarlo.runs} simulated worlds.
+                                </div>
+                              )}
+                              <ScenarioFanChart
+                                data={monteCarlo.equity_band.map((b, i) => ({ ...b, central: results.months[i]?.total_equity }))}
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                {monteCarlo.runs} simulated worlds (seed {monteCarlo.seed}), sampling property growth, rent growth, void, arrears and refix uplift once per run around this scenario's central-case assumptions. Shows <strong>model uncertainty under stated distributions, not a probability of outcome</strong> — the distributions are priors, not market data, and the median (P50) is not an "expected" value.
+                              </p>
+                            </>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">No Monte-Carlo run yet — open Settings above and click Run Monte-Carlo.</p>
+                          )}
+                        </div>
+                      </>
+                    )}
+
+                    {resultsTab === 'properties' && (
+                      <>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-semibold text-muted-foreground">Chart view:</span>
+                          <button onClick={() => setViewMode('portfolio')} className={btnCls(viewMode === 'portfolio')}>Portfolio</button>
+                          <button onClick={() => setViewMode('property')}  className={btnCls(viewMode === 'property')}>Per Property</button>
+                          {viewMode === 'property' && results.property_series && (
+                            <>
+                              <span className="text-xs text-muted-foreground ml-2">Show:</span>
+                              <button onClick={() => setPropMetric('equity')}     className={btnCls(propMetric === 'equity')}>Equity</button>
+                              <button onClick={() => setPropMetric('cashflow')}   className={btnCls(propMetric === 'cashflow')}>Monthly CF</button>
+                              <button onClick={() => setPropMetric('cumulative')} className={btnCls(propMetric === 'cumulative')}>Cumulative CF</button>
+                            </>
+                          )}
+                        </div>
+
+                        {viewMode === 'property' && !results.property_series && (
+                          <p className="text-sm text-muted-foreground py-4 text-center">Re-run the projection to enable per-property view.</p>
+                        )}
+
+                        {/* Debt Maturity Calendar (§P2-9) */}
+                        {results.debt_calendar && results.debt_calendar.length > 0 && (
+                          <div className="bg-card rounded-lg p-5">
+                            <h3 className="text-sm font-semibold mb-4">Debt Maturity Calendar</h3>
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="text-left text-xs text-muted-foreground border-b border-border">
+                                  <th className="pb-2 font-medium">Property</th>
+                                  <th className="pb-2 font-medium">Next Reprice</th>
+                                  <th className="pb-2 font-medium">Mortgage Maturity</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {results.debt_calendar.map(d => (
+                                  <tr key={d.property_id} className="border-b border-border/50 last:border-0">
+                                    <td className="py-2">{d.label}</td>
+                                    <td className="py-2 text-muted-foreground">{d.next_reprice_date ?? '—'}</td>
+                                    <td className="py-2 text-muted-foreground">{d.maturity_date ?? '—'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {resultsTab === 'warnings' && (
+                      concentrationWarnings.length > 0 ? (
+                        <div className="space-y-1.5">
+                          {concentrationWarnings.map(w => (
+                            <div key={w.field} className="flex items-start gap-2 px-4 py-2.5 rounded-md bg-warning/10 border border-warning/30 text-sm text-warning">
+                              ⚠ {w.message}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No concentration warnings for this scenario.</p>
+                      )
+                    )}
                   </>
                 )
               })()}

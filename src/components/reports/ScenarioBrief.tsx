@@ -34,7 +34,7 @@ function ScenarioKpis({ results }: { results: ScenarioResults }) {
       <Kpi label="End Equity" value={formatCurrency(s.end_equity, true)} />
       <Kpi label="Equity Growth" value={`${formatCurrency(s.equity_growth, true)} (${formatPercent(s.equity_growth_pct)})`} />
       <Kpi label="Total Cashflow" value={formatCurrency(s.total_cashflow, true)} />
-      <Kpi label="Avg Monthly CF" value={formatCurrency(s.avg_monthly_cashflow)} />
+      <Kpi label="End Debt" value={formatCurrency(results.months[results.months.length - 1]?.total_debt ?? 0, true)} />
       <Kpi label="Ending Monthly CF" value={formatCurrency(s.ending_monthly_cashflow ?? 0)} />
       <Kpi label="Ending CF (post-tax)" value={formatCurrency(s.ending_monthly_cashflow_posttax ?? s.ending_monthly_cashflow ?? 0)} />
       <Kpi label="Total Tax Paid" value={formatCurrency(s.total_tax_paid ?? 0, true)} />

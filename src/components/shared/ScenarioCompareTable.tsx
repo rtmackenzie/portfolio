@@ -41,6 +41,8 @@ export function deriveMetrics(results: ScenarioResults | null, targetEquity: num
     liquidity:         summary.min_cumulative_cashflow ?? 0,
     months_to_target:  monthsToTarget,
     final_properties:  months[months.length - 1]?.property_count ?? 0,
+    total_value:       months[months.length - 1]?.total_value ?? 0,
+    total_debt:        months[months.length - 1]?.total_debt ?? 0,
     equity_multiple:   summary.equity_multiple ?? NaN,
     irr_pct:           summary.irr_pct ?? NaN,
     roce_pct:          summary.roce_pct ?? NaN,
@@ -71,6 +73,8 @@ const ROWS: {
   { label: 'Total Cashflow',     key: 'total_cashflow',    format: v => formatCurrency(v),          bestHighest: true  },
   { label: 'Avg Monthly CF',     key: 'avg_monthly_cf',    format: v => formatCurrency(v),          bestHighest: true  },
   { label: 'Peak LTV',           key: 'peak_ltv',          format: v => `${v.toFixed(1)}%`,         bestHighest: false },
+  { label: 'Total Value',        key: 'total_value',       format: v => formatCurrency(v),          bestHighest: true  },
+  { label: 'Outstanding Debt',   key: 'total_debt',        format: v => formatCurrency(v),          bestHighest: false },
   { label: 'Cover Ratio (risk)', key: 'min_cover_ratio',   format: v => `${v.toFixed(2)}×`,         bestHighest: true  },
   { label: 'Liquidity (min cash)', key: 'liquidity',       format: v => formatCurrency(v),          bestHighest: true  },
   { label: 'Time to Target',     key: 'months_to_target',  format: formatMonths,                    bestHighest: false },
@@ -123,6 +127,14 @@ export function buildDiff(a: Metrics, b: Metrics): string[] {
   const ltv = b.peak_ltv - a.peak_ltv
   if (Math.abs(ltv) > 0.5)
     parts.push(`${ltv >= 0 ? '+' : ''}${ltv.toFixed(1)}pp LTV`)
+
+  const val = b.total_value - a.total_value
+  if (Math.abs(val) > 1000)
+    parts.push(`${signedCurrency(val)} total value`)
+
+  const debt = b.total_debt - a.total_debt
+  if (Math.abs(debt) > 1000)
+    parts.push(`${signedCurrency(debt)} debt`)
 
   const cover = b.min_cover_ratio - a.min_cover_ratio
   if (Math.abs(cover) >= 0.1)
