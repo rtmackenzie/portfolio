@@ -323,7 +323,7 @@ function buildCashGatedEvents(
   startingCash: number,
   assumptionsJson: string,
   settings?: AssumptionSettings
-): ScenarioEvent[] {
+): { decisions: ScenarioEvent[]; icrBlocked: { candidateIcrPct: number; icrFloor: number } | null } {
   const totalMonths = projYears * 12
   const config = { base_date: baseDate, projection_years: projYears, tax, starting_cash: startingCash, assumptions_json: assumptionsJson }
   const monthlyExp = a.monthly_expenses ?? 200
@@ -350,7 +350,7 @@ function buildCashGatedEvents(
   // portfolio's own aggregate LTV past the goal's mandate — previously only checkConstraints
   // caught this, after the fact, rejecting the whole 15-year pathway instead of the engine
   // simply not proposing the breaching buy in the first place.
-  function buyGateAt(monthIndex: number, currentValue: number, currentDebt: number): { buyCost: number; icrOk: boolean; ltvOk: boolean } {
+  function buyGateAt(monthIndex: number, currentValue: number, currentDebt: number): { buyCost: number; icrOk: boolean; ltvOk: boolean; candidateIcrPct: number } {
     const indexed = indexedAssumptions(a, propertyGrowthPct, rentGrowthPct, monthIndex)
     const stressUplift = (settings?.icr_stress_uplift_bps ?? 200) / 100
     const stressFloor = settings?.icr_stress_floor_pct ?? 5.5
@@ -372,10 +372,15 @@ function buildCashGatedEvents(
     const estimatedMonthlyMortgage = calcMonthlyPayment(loanAmount, indexed.mortgage_rate ?? settings?.default_mortgage_rate_pct ?? 5.5, termMonths)
     const voidDrag = estimatedMonthlyMortgage * onboardingVoidMonths
     const buyCost = depositPlusCosts(indexed) + voidDrag
-    return { buyCost, icrOk: candidateIcrPct >= icrFloor, ltvOk }
+    return { buyCost, icrOk: candidateIcrPct >= icrFloor, ltvOk, candidateIcrPct }
   }
 
   const decisions: ScenarioEvent[] = []
+  // Captures the first month where a buy was blocked purely by the lender ICR test — cash and
+  // LTV would otherwise have permitted the purchase — so generatePathways() can report the real
+  // reason instead of analyzeBinding()'s realized-portfolio view, which is blind to a candidate
+  // deal that was rejected before it ever became an event.
+  let icrBlocked: { candidateIcrPct: number; icrFloor: number } | null = null
   let lastMonth = 0
   // Earliest month a NEW buy may be decided — advanced past a pending buy's own completion
   // month (§P1-6, 2nd review) so overlapping in-flight purchases can't each pass the LTV/reserve
@@ -406,8 +411,9 @@ function buildCashGatedEvents(
       if (strategy === 'de_gear') {
         const balances = activeBalancesAt(proj, i)
         if (balances.length < 2) {
-          const { buyCost, icrOk, ltvOk } = buyGateAt(i, proj.months[i].total_value, proj.months[i].total_debt)
+          const { buyCost, icrOk, ltvOk, candidateIcrPct } = buyGateAt(i, proj.months[i].total_value, proj.months[i].total_debt)
           if (i >= nextBuyEligibleMonth && icrOk && ltvOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, indexedAssumptions(a, propertyGrowthPct, rentGrowthPct, i), interestOnly, settings); decidedMonth = i; break }
+          if (!icrOk && ltvOk && icrBlocked === null && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) icrBlocked = { candidateIcrPct, icrFloor }
         } else {
           const target = balances.reduce((min, b) => b.debt < min.debt ? b : min)
           const ercCost = target.isEarlyExit ? target.debt * ercPct / 100 : 0
@@ -436,12 +442,14 @@ function buildCashGatedEvents(
           }
         }
         {
-          const { buyCost, icrOk, ltvOk } = buyGateAt(i, proj.months[i].total_value, proj.months[i].total_debt)
+          const { buyCost, icrOk, ltvOk, candidateIcrPct } = buyGateAt(i, proj.months[i].total_value, proj.months[i].total_debt)
           if (i >= nextBuyEligibleMonth && icrOk && ltvOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, indexedAssumptions(a, propertyGrowthPct, rentGrowthPct, i), interestOnly, settings); decidedMonth = i; break }
+          if (!icrOk && ltvOk && icrBlocked === null && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) icrBlocked = { candidateIcrPct, icrFloor }
         }
       } else {
-        const { buyCost, icrOk, ltvOk } = buyGateAt(i, proj.months[i].total_value, proj.months[i].total_debt)
+        const { buyCost, icrOk, ltvOk, candidateIcrPct } = buyGateAt(i, proj.months[i].total_value, proj.months[i].total_debt)
         if (i >= nextBuyEligibleMonth && icrOk && ltvOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, indexedAssumptions(a, propertyGrowthPct, rentGrowthPct, i), interestOnly, settings); decidedMonth = i; break }
+        if (!icrOk && ltvOk && icrBlocked === null && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) icrBlocked = { candidateIcrPct, icrFloor }
       }
     }
 
@@ -461,7 +469,7 @@ function buildCashGatedEvents(
     lastMonth = decidedMonth + 1   // guarantee forward progress
   }
 
-  return decisions
+  return { decisions, icrBlocked }
 }
 
 // ─── Director loan events ─────────────────────────────────────────────────────
@@ -876,7 +884,7 @@ export function generatePathways(
 
   return templates.map(t => {
     // Cash-gated decisions (buys/payoffs), then merge loan events for the final run
-    const decisions = buildCashGatedEvents(t.strategy, baseDate, projectionYears, assumptions, initialState, loanEvents, tax, goal, t.stopAtGoal, t.interestOnly, startingCash, assumptionsJson, settings)
+    const { decisions, icrBlocked } = buildCashGatedEvents(t.strategy, baseDate, projectionYears, assumptions, initialState, loanEvents, tax, goal, t.stopAtGoal, t.interestOnly, startingCash, assumptionsJson, settings)
     const allEvents = [...decisions, ...loanEvents].sort((a, b) => a.date.localeCompare(b.date))
 
     const results = buildProjection(cloneState(initialState), allEvents, config) as ProjectionResult
@@ -885,11 +893,21 @@ export function generatePathways(
 
     const risk100 = computeRiskScore100(results.months, allEvents, results.summary, goal, projectionYears, monthlyExp, tax)
 
-    const binding = analyzeBinding(goal, results.months, results.summary, reached, depositPlusCosts(assumptions), monthlyExp, tax)
-    const binding_constraint = binding.key
-    const binding_detail = t.interestOnly
-      ? `Interest-only — rate-exposed, debt not amortised. ${binding.detail}`
-      : binding.detail
+    // No purchase was ever made, and the reason was the candidate deal itself failing the
+    // lender ICR stress test (not cash/LTV) — analyzeBinding() only sees the realized,
+    // unchanged portfolio in that case and would otherwise misreport "deposit capital" as the
+    // limiter, when the deal was never financeable to begin with.
+    let binding_constraint: string
+    let binding_detail: string
+    if (decisions.length === 0 && icrBlocked != null) {
+      binding_constraint = 'icr'
+      binding_detail = `Limited by lender affordability — this candidate deal's stressed ICR (${icrBlocked.candidateIcrPct.toFixed(0)}%) never clears your ${icrBlocked.icrFloor.toFixed(0)}% lender floor. Try a higher-yielding deal, a bigger deposit, or relax the goal's Min Lender ICR.`
+    } else {
+      const binding = analyzeBinding(goal, results.months, results.summary, reached, depositPlusCosts(assumptions), monthlyExp, tax)
+      binding_constraint = binding.key
+      binding_detail = binding.detail
+    }
+    if (t.interestOnly) binding_detail = `Interest-only — rate-exposed, debt not amortised. ${binding_detail}`
 
     const shortfall = reached ? 0 : computeShortfall(goal, results)
 

@@ -323,6 +323,49 @@ describe('generatePathways — director loans drive the schedule', () => {
   })
 })
 
+describe('generatePathways — binding_detail reports lender ICR, not "deposit capital", when the candidate deal is unfinanceable', () => {
+  // Same shape as the real "10 Properties" goal that surfaced this: a low-yield deal (£180k
+  // purchase / £950pm rent) whose stressed ICR (~113%) never clears the 145% Ltd/higher-rate
+  // floor, no matter how much cash accumulates — so zero buys ever happen, and the reason must
+  // be attributed to the lender gate, not to insufficient capital (which analyzeBinding() would
+  // otherwise wrongly report, since the realized, unchanged 1-property portfolio shows huge
+  // cash/LTV headroom).
+  const unfinanceableDeal = {
+    purchase_price: 180000,
+    monthly_rent: 950,
+    monthly_expenses: 200,
+    deposit_percent: 25,
+    mortgage_rate: 5.5,
+    mortgage_term_years: 25,
+  }
+  const goal: Goal = { goal_type: 'count', target_property_count: 10, max_ltv_pct: 75 }
+
+  it('flags binding_constraint as icr and names the stressed ICR / floor in binding_detail', () => {
+    const ps = generatePathways(goal, startingPortfolio(), unfinanceableDeal, PROJECTION_YEARS, 1)
+    for (const p of ps) {
+      expect(buyCount(p.events)).toBe(0)
+      expect(p.binding_constraint).toBe('icr')
+      expect(p.binding_detail).not.toMatch(/deposit capital/i)
+      // BRRR still refinances the pre-existing property even with zero new buys — that's a
+      // genuine, different realized-portfolio infeasibility (analyzeBinding's normal "violated
+      // constraint" path), not the zero-decisions candidate-deal case this fix targets.
+      if (p.events.length === 0) {
+        expect(p.binding_detail).toMatch(/lender affordability/i)
+        expect(p.binding_detail).toMatch(/never clears/i)
+      } else {
+        expect(p.binding_detail).toMatch(/ICR fell to/i)
+      }
+    }
+  })
+
+  it('still reports the underlying reason for interest-only templates, prefixed as before', () => {
+    const ps = generatePathways(goal, startingPortfolio(), unfinanceableDeal, PROJECTION_YEARS, 1)
+    const io = ps.find(p => p.template_name === 'max_cashflow')!
+    expect(io.binding_detail).toMatch(/interest-only/i)
+    expect(io.binding_detail).toMatch(/lender affordability/i)
+  })
+})
+
 // ─── C3: ranking + binding constraint ────────────────────────────────────────────
 
 // ─── §P2-8 Appendix B.1: bounded 0-100 risk score ─────────────────────────────
