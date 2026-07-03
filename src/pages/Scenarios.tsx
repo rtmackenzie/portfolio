@@ -3,14 +3,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Play, X, Trash2, Pencil, Copy, ChevronDown, FileDown } from 'lucide-react'
 import { api } from '@/services/api'
 import { PageLoader } from '@/components/shared/LoadingSpinner'
-import { ScenarioAreaChart, CHART_COLORS } from '@/components/charts'
+import { ScenarioAreaChart, ScenarioFanChart, CHART_COLORS } from '@/components/charts'
 import { formatCurrency, formatPercent } from '@/utils/currency'
 import { formatDate } from '@/utils/dates'
 import { calcTransactionCosts, calcMonthlyMortgage } from '@/utils/calculations'
 import { useForm, type UseFormRegister } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import type { Scenario, ScenarioResults, Settings } from '@/types'
+import type { Scenario, ScenarioResults, MonteCarloResult, Settings } from '@/types'
 import { ScenarioCompareTable } from '@/components/shared/ScenarioCompareTable'
 import { useSettings } from '@/hooks/useSettings'
 
@@ -99,6 +99,15 @@ export default function Scenarios() {
     onSuccess: (data) => setStressResults(data),
   })
 
+  const [mcRuns, setMcRuns] = useState(500)
+  const [mcTarget, setMcTarget] = useState('')
+  const [mcOpen, setMcOpen] = useState(false)
+  const runMonteCarlo = useMutation({
+    mutationFn: ({ id, runs, targetMonthlyIncome }: { id: number; runs: number; targetMonthlyIncome?: number }) =>
+      api.post<MonteCarloResult>(`/scenarios/${id}/monte-carlo`, { runs, targetMonthlyIncome }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['scenarios', selectedId] }),
+  })
+
   function handleRateButton(bps: number) {
     const newRate = activeRateShock === bps ? null : bps
     setActiveRateShock(newRate)
@@ -137,6 +146,8 @@ export default function Scenarios() {
 
   const results = selected?.results as ScenarioResults | null | undefined
   const resultsDownturn = selected?.results_downturn as ScenarioResults | null | undefined
+  const monteCarlo = selected?.monte_carlo
+  const concentrationWarnings = selected?.concentration_warnings ?? []
 
   return (
     <div className="space-y-6">
@@ -238,6 +249,15 @@ export default function Scenarios() {
                   <div><span className="text-muted-foreground">Projection: </span><span className="font-medium">{selected.projection_years} years</span></div>
                   <div><span className="text-muted-foreground">Events: </span><span className="font-medium">{selected.events?.length ?? 0}</span></div>
                 </div>
+                {concentrationWarnings.length > 0 && (
+                  <div className="mt-3 space-y-1.5">
+                    {concentrationWarnings.map(w => (
+                      <div key={w.field} className="flex items-start gap-2 px-4 py-2.5 rounded-md bg-warning/10 border border-warning/30 text-sm text-warning">
+                        ⚠ {w.message}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Events */}
@@ -474,6 +494,56 @@ export default function Scenarios() {
                       ].map(k => (
                         <KpiCard key={k.label} label={k.label} value={k.value} tooltip={k.tooltip} />
                       ))}
+                    </div>
+
+                    {/* Monte-Carlo band (§P1-5b / Appendix A.2) */}
+                    <div className="bg-card rounded-lg p-5 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold">Monte-Carlo Band</h3>
+                        <button
+                          type="button"
+                          onClick={() => setMcOpen(o => !o)}
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                        >
+                          {mcOpen ? 'Hide settings' : 'Settings'} <ChevronDown size={12} className={mcOpen ? 'rotate-180' : ''} />
+                        </button>
+                      </div>
+                      {mcOpen && (
+                        <div className="flex items-end gap-3 flex-wrap">
+                          <div>
+                            <label className={labelCls}>Runs</label>
+                            <input type="number" value={mcRuns} onChange={e => setMcRuns(Number(e.target.value))} className={`${inputCls} w-24`} />
+                          </div>
+                          <div>
+                            <label className={labelCls}>Target monthly income (£, optional)</label>
+                            <input type="number" value={mcTarget} onChange={e => setMcTarget(e.target.value)} placeholder="e.g. 5000" className={`${inputCls} w-48`} />
+                          </div>
+                          <button
+                            onClick={() => runMonteCarlo.mutate({ id: selected.id, runs: mcRuns, targetMonthlyIncome: mcTarget ? Number(mcTarget) : undefined })}
+                            disabled={runMonteCarlo.isPending}
+                            className="px-3 py-2 bg-primary text-primary-foreground rounded-md text-xs font-medium disabled:opacity-50"
+                          >
+                            {runMonteCarlo.isPending ? 'Running…' : 'Run Monte-Carlo'}
+                          </button>
+                        </div>
+                      )}
+                      {monteCarlo ? (
+                        <>
+                          {monteCarlo.goal_probability != null && (
+                            <div className="px-4 py-2.5 rounded-md bg-primary/10 border border-primary/30 text-sm">
+                              Reaches the target in <strong>{(monteCarlo.goal_probability * 100).toFixed(0)}%</strong> of {monteCarlo.runs} simulated worlds.
+                            </div>
+                          )}
+                          <ScenarioFanChart
+                            data={monteCarlo.equity_band.map((b, i) => ({ ...b, central: results.months[i]?.total_equity }))}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            {monteCarlo.runs} simulated worlds (seed {monteCarlo.seed}), sampling property growth, rent growth, void, arrears and refix uplift once per run around this scenario's central-case assumptions. Shows <strong>model uncertainty under stated distributions, not a probability of outcome</strong> — the distributions are priors, not market data, and the median (P50) is not an "expected" value.
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">No Monte-Carlo run yet — open Settings above and click Run Monte-Carlo.</p>
+                      )}
                     </div>
 
                     {/* Debt Maturity Calendar (§P2-9) */}

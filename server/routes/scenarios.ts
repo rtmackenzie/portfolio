@@ -1,8 +1,10 @@
 import { Router } from 'express'
 import { queryAll, queryOne, execute, transaction } from '../db/database.ts'
-import { runScenario } from '../services/scenarioEngine.ts'
+import { runScenario, loadPortfolioState } from '../services/scenarioEngine.ts'
 import { buildDownturnAssumptions } from '../services/downturn.ts'
-import { loadAssumptionSettings } from '../services/settings.ts'
+import { loadAssumptionSettings, loadTaxSettings } from '../services/settings.ts'
+import { runMonteCarlo } from '../services/monteCarlo.ts'
+import { loadConcentrationWarnings } from '../services/concentration.ts'
 
 const router = Router()
 
@@ -37,11 +39,16 @@ router.get('/:id', (req, res) => {
     const results = queryOne<{ results_json: string; results_downturn_json: string | null }>(
       'SELECT results_json, results_downturn_json FROM scenario_results WHERE scenario_id=? ORDER BY calculated_at DESC LIMIT 1', [id]
     )
+    const monteCarlo = queryOne<{ bands_json: string }>(
+      'SELECT bands_json FROM scenario_montecarlo WHERE scenario_id=? ORDER BY calculated_at DESC LIMIT 1', [id]
+    )
     res.json({
       ...scenario,
       events,
       results: results ? JSON.parse(results.results_json) : null,
       results_downturn: results?.results_downturn_json ? JSON.parse(results.results_downturn_json) : null,
+      monte_carlo: monteCarlo ? JSON.parse(monteCarlo.bands_json) : null,
+      concentration_warnings: loadConcentrationWarnings(),
     })
   } catch (err) {
     res.status(500).json({ message: String(err) })
@@ -195,6 +202,30 @@ router.post('/:id/calculate', async (req, res) => {
       [id, JSON.stringify(results), JSON.stringify(resultsDownturn)]
     )
     res.json(results)
+  } catch (err) {
+    res.status(500).json({ message: String(err) })
+  }
+})
+
+// Monte-Carlo band (§P1-5b / Appendix A.2): on-demand, persisted so reloading the scenario
+// shows the last-computed band without re-running hundreds of projections.
+router.post('/:id/monte-carlo', (req, res) => {
+  try {
+    const id = Number(req.params.id)
+    const scenario = queryOne<{ base_date: string; projection_years: number; assumptions_json: string | null }>('SELECT * FROM scenarios WHERE id=?', [id])
+    if (!scenario) return res.status(404).json({ message: 'Not found' })
+    const events = queryAll('SELECT * FROM scenario_events WHERE scenario_id=? ORDER BY date, sort_order', [id])
+    const { runs, seed, targetMonthlyIncome } = req.body as { runs?: number; seed?: number; targetMonthlyIncome?: number }
+
+    const { initialState } = loadPortfolioState()
+    const config = { ...scenario, tax: loadTaxSettings(), defaults: loadAssumptionSettings() }
+    const result = runMonteCarlo(initialState, events as any, config, { runs, seed, targetMonthlyIncome })
+
+    execute(
+      'INSERT INTO scenario_montecarlo (scenario_id, seed, runs, target_monthly_income, goal_probability, bands_json) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, result.seed, result.runs, targetMonthlyIncome ?? null, result.goal_probability, JSON.stringify(result)]
+    )
+    res.json(result)
   } catch (err) {
     res.status(500).json({ message: String(err) })
   }

@@ -349,6 +349,30 @@ export interface Scenario {
   events?: ScenarioEvent[]
   results?: ScenarioResults | null
   results_downturn?: ScenarioResults | null
+  monte_carlo?: MonteCarloResult | null
+  concentration_warnings?: ConcentrationWarning[]
+}
+
+export interface MonteCarloBand {
+  date: string
+  p10: number
+  p25: number
+  p50: number
+  p75: number
+  p90: number
+}
+
+export interface MonteCarloResult {
+  seed: number
+  runs: number
+  equity_band: MonteCarloBand[]
+  cashflow_band: MonteCarloBand[]
+  goal_probability: number | null
+}
+
+export interface ConcentrationWarning {
+  field: string
+  message: string
 }
 
 export interface ScenarioEvent {

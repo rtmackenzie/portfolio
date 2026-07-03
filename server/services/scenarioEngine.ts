@@ -5,7 +5,7 @@ import { loadTaxSettings, loadAssumptionSettings } from './settings.ts'
 import type { AssumptionSettings } from './assumptions.ts'
 import { computeReturnMetrics } from './returnMetrics.ts'
 
-interface ScenarioConfig {
+export interface ScenarioConfig {
   base_date: string
   projection_years: number
   assumptions_json?: string | null

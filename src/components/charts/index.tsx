@@ -1,7 +1,7 @@
 import {
   AreaChart as ReAreaChart, Area, BarChart as ReBarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
+  PieChart, Pie, Cell, Legend, Line,
   RadarChart as ReRadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar
 } from 'recharts'
 import { formatCurrency, formatPercent } from '@/utils/currency'
@@ -145,6 +145,51 @@ export function ScenarioAreaChart({ data, keys }: { data: ChartData[]; keys: { k
         {keys.map(k => (
           <Area key={k.key} type="monotone" dataKey={k.key} name={k.name} stroke={k.color} fill={k.dash ? 'none' : `url(#grad-${k.key})`} strokeWidth={2} strokeDasharray={k.dash ? '5 5' : undefined} />
         ))}
+      </ReAreaChart>
+    </ResponsiveContainer>
+  )
+}
+
+// Monte-Carlo fan chart (§P1-5b / Appendix A.2): P10-P90 shaded band (P25-P75 darker), a solid
+// P50 line, and the deterministic central case overlaid as a sanity check — persistent
+// divergence between P50 and the central line would mean the distributions are mis-centred.
+// Built as stacked delta-areas (Recharts has no native band primitive): an invisible base area
+// up to P10, then three visible delta-areas (P10→P25, P25→P75, P75→P90) stacked on top.
+export interface FanChartRow { date: string; p10: number; p25: number; p50: number; p75: number; p90: number; central?: number }
+
+export function ScenarioFanChart({ data }: { data: FanChartRow[] }) {
+  const rows = data.map(d => ({
+    date: d.date,
+    p10: d.p10,
+    band_p10_p25: d.p25 - d.p10,
+    band_p25_p75: d.p75 - d.p25,
+    band_p75_p90: d.p90 - d.p75,
+    p50: d.p50,
+    central: d.central,
+  }))
+  const allValues = data.flatMap(d => [d.p10, d.p90, d.central ?? d.p50])
+  const rawMax = allValues.length > 0 ? Math.max(...allValues) : 100000
+  const rawMin = allValues.length > 0 ? Math.min(...allValues) : 0
+  const upperStep = rawMax >= 100000 ? 50000 : rawMax >= 10000 ? 5000 : rawMax >= 1000 ? 500 : 100
+  const lowerStep = rawMax >= 100000 ? 10000 : rawMax >= 10000 ? 1000 : rawMax >= 1000 ? 500 : 100
+  const yMax = Math.ceil(rawMax * 1.05 / upperStep) * upperStep
+  const negCap = rawMax > 0 ? -(rawMax * 0.1) : -lowerStep
+  const yMin = rawMin < 0 ? Math.floor(Math.max(rawMin, negCap) / lowerStep) * lowerStep : 0
+
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <ReAreaChart data={rows} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
+        <CartesianGrid {...gridStyle} />
+        <XAxis dataKey="date" tick={axisStyle} interval="preserveStartEnd" tickFormatter={formatMonthYear} />
+        <YAxis tick={axisStyle} tickFormatter={yAxisFormatter} width={55} domain={[yMin, yMax]} allowDataOverflow />
+        <Tooltip contentStyle={tooltipStyle} formatter={currencyFormatter} labelFormatter={monthLabelFormatter} />
+        <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: 'var(--color-muted-foreground)' }} />
+        <Area dataKey="p10" stackId="band" stroke="none" fill="none" name="P10 floor" legendType="none" isAnimationActive={false} />
+        <Area dataKey="band_p10_p25" stackId="band" stroke="none" fill={CHART_COLORS.primary} fillOpacity={0.15} name="P10–P90 range" isAnimationActive={false} />
+        <Area dataKey="band_p25_p75" stackId="band" stroke="none" fill={CHART_COLORS.primary} fillOpacity={0.35} name="P25–P75 range" isAnimationActive={false} />
+        <Area dataKey="band_p75_p90" stackId="band" stroke="none" fill={CHART_COLORS.primary} fillOpacity={0.15} legendType="none" isAnimationActive={false} />
+        <Line type="monotone" dataKey="p50" stroke={CHART_COLORS.primary} strokeWidth={2} dot={false} name="Median (P50)" />
+        <Line type="monotone" dataKey="central" stroke={CHART_COLORS.success} strokeWidth={2} strokeDasharray="5 5" dot={false} name="Central case" />
       </ReAreaChart>
     </ResponsiveContainer>
   )
