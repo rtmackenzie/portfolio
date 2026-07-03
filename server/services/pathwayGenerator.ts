@@ -5,7 +5,7 @@ import type { AssumptionSettings } from './assumptions.ts'
 
 type GoalType = 'income' | 'count' | 'net_worth' | 'mortgage_free' | 'retirement_date'
 
-interface Goal {
+export interface Goal {
   goal_type: GoalType
   target_monthly_income?: number | null
   target_property_count?: number | null
@@ -137,6 +137,13 @@ function monthDiff(baseDate: string, targetDate: string): number {
   return (t.getFullYear() - b.getFullYear()) * 12 + (t.getMonth() - b.getMonth())
 }
 
+// A stored 0 for these fields means "unset" (a blank form field or an operator-zeroed
+// Settings value), not "explicitly disable this floor/fee" — cascade to the next tier
+// instead of silently switching a safety gate off (§P0-3).
+export function positiveOr(value: number | null | undefined, fallback: number): number {
+  return value != null && value > 0 ? value : fallback
+}
+
 // ─── Event builder ────────────────────────────────────────────────────────────
 
 function buyEvent(date: string, a: PropertyAssumptions, interestOnly = false): ScenarioEvent {
@@ -152,9 +159,9 @@ function buyEvent(date: string, a: PropertyAssumptions, interestOnly = false): S
       mortgage_rate:      a.mortgage_rate ?? 5.5,
       mortgage_term_years: a.mortgage_term_years ?? 25,
       interest_only:      interestOnly,
-      legal_fees:         a.legal_fees ?? 2000,
-      arrangement_fee:    a.arrangement_fee ?? 999,
-      valuation_fee:      a.valuation_fee ?? 300,
+      legal_fees:         positiveOr(a.legal_fees, 2000),
+      arrangement_fee:    positiveOr(a.arrangement_fee, 999),
+      valuation_fee:      positiveOr(a.valuation_fee, 300),
     }),
   }
 }
@@ -192,8 +199,8 @@ function remortgageEvent(
       new_rate:            a.mortgage_rate ?? settings?.default_mortgage_rate_pct ?? 5.5,
       new_term_years:      a.mortgage_term_years ?? 25,
       new_balance:         Math.round(newBalance),
-      arrangement_fee:     a.arrangement_fee ?? settings?.default_arrangement_fee ?? 999,
-      valuation_fee:       a.valuation_fee ?? settings?.default_valuation_fee ?? 300,
+      arrangement_fee:     positiveOr(a.arrangement_fee, positiveOr(settings?.default_arrangement_fee, 999)),
+      valuation_fee:       positiveOr(a.valuation_fee, positiveOr(settings?.default_valuation_fee, 300)),
     }),
   }
 }
@@ -209,7 +216,7 @@ type Strategy = 'steady' | 'accelerated' | 'de_gear' | 'brrr'
 function depositPlusCosts(a: PropertyAssumptions): number {
   const price = a.purchase_price
   const deposit = price * ((a.deposit_percent ?? 25) / 100)
-  const { total: txCosts } = calcTransactionCosts(price, a.legal_fees ?? 2000, 0, a.arrangement_fee ?? 999, a.valuation_fee ?? 300)
+  const { total: txCosts } = calcTransactionCosts(price, positiveOr(a.legal_fees, 2000), 0, positiveOr(a.arrangement_fee, 999), positiveOr(a.valuation_fee, 300))
   return deposit + txCosts
 }
 
@@ -288,7 +295,7 @@ function withMargin(goal: Goal): Goal {
 // constraint-checking and binding-constraint analysis so all three stay in lockstep.
 function reserveFloor(goal: Goal, monthlyExp: number, propertyCount: number): number {
   const months = goal.min_cash_reserve_months ?? 3
-  const capex = goal.capex_reserve_per_property ?? 1000
+  const capex = positiveOr(goal.capex_reserve_per_property, 1000)
   return months * monthlyExp * Math.max(1, propertyCount) + capex * propertyCount
 }
 
@@ -321,7 +328,7 @@ function buildCashGatedEvents(
   const propertyGrowthPct = parsedAssumptions.property_growth_pct ?? settings?.default_property_growth_pct ?? 3.0
   const rentGrowthPct     = parsedAssumptions.rent_growth_pct     ?? settings?.default_rent_growth_pct     ?? 2.5
 
-  const icrFloor = goal.min_icr ?? icrThresholdPct(tax)
+  const icrFloor = positiveOr(goal.min_icr, icrThresholdPct(tax))
 
   // Lender ICR buy gate (P0 #4): this deal's own rent vs. a stressed interest-only payment on
   // the loan — the same test a real lender applies to one loan at a time, so a single
@@ -396,8 +403,8 @@ function buildCashGatedEvents(
           const targetLtvPct = Math.min(BRRR_TARGET_LTV_PCT, goal.max_ltv_pct ?? BRRR_TARGET_LTV_PCT)
           const newBalance = target.value * (targetLtvPct / 100)
           const ercCost = target.isEarlyExit ? target.debt * ercPct / 100 : 0
-          const arrangementFee = a.arrangement_fee ?? settings?.default_arrangement_fee ?? 999
-          const valuationFee = a.valuation_fee ?? settings?.default_valuation_fee ?? 300
+          const arrangementFee = positiveOr(a.arrangement_fee, positiveOr(settings?.default_arrangement_fee, 999))
+          const valuationFee = positiveOr(a.valuation_fee, positiveOr(settings?.default_valuation_fee, 300))
           const netRelease = (newBalance - target.debt) - ercCost - arrangementFee - valuationFee
           if (netRelease > 0) {
             decided = remortgageEvent(proj.months[i].date, target.property_id, newBalance, a, settings)
@@ -451,7 +458,7 @@ function buildDirectorLoanEvents(
 function checkConstraints(months: MonthSnapshot[], goal: Goal, monthlyExp: number = 200, tax?: TaxSettings): boolean {
   // Lender ICR (P0 #4): a hard, always-on real-world constraint — not optional like
   // LTV/cashflow, since it reflects whether a lender would actually approve the deal.
-  const icrFloor = goal.min_icr ?? icrThresholdPct(tax)
+  const icrFloor = positiveOr(goal.min_icr, icrThresholdPct(tax))
   for (const m of months) {
     if (goal.max_ltv_pct != null && m.total_value > 0) {
       const ltv = (m.total_debt / m.total_value) * 100
@@ -543,7 +550,7 @@ export function analyzeBinding(
       label: `LTV peaked at ${maxLtv.toFixed(0)}% vs ${goal.max_ltv_pct}% ceiling` })
   }
   if (summary.min_icr > 0) {
-    const icrFloor = goal.min_icr ?? icrThresholdPct(tax)
+    const icrFloor = positiveOr(goal.min_icr, icrThresholdPct(tax))
     cons.push({ key: 'icr', headroom: (summary.min_icr - icrFloor) / icrFloor,
       label: `ICR fell to ${summary.min_icr.toFixed(0)}% vs ${icrFloor.toFixed(0)}% lender floor` })
   }
@@ -645,7 +652,7 @@ export function generatePathways(
     mortgage_reprice_uplift_bps: goal.mortgage_reprice_uplift_bps ?? 200,
     erc_pct: goal.erc_pct ?? 3,
     capex_cycle_years: settings?.capex_cycle_years ?? 10,
-    capex_cost_per_property: settings?.capex_cost_per_property ?? 3000,
+    capex_cost_per_property: positiveOr(settings?.capex_cost_per_property, 3000),
     arrears_pct: settings?.arrears_pct ?? 1.5,
   })
 

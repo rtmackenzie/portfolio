@@ -117,6 +117,16 @@ function AssumptionSettingsCard() {
         </button>
       </div>
 
+      {settings?.warnings != null && settings.warnings.length > 0 && (
+        <div className="space-y-1.5">
+          {settings.warnings.map(w => (
+            <div key={w.field} className="flex items-start gap-2 px-4 py-2.5 rounded-md bg-warning/10 border border-warning/30 text-sm text-warning">
+              ⚠ {w.message}
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="grid grid-cols-4 gap-4">
         <div><label className={taxLabelCls}><Tip text="Deposit % used for a new purchase whenever a scenario or goal pathway doesn't specify its own deposit.">Default deposit (%)</Tip></label>{num('default_deposit_percent')}</div>
         <div><label className={taxLabelCls}><Tip text="Mortgage interest rate assumed for a new purchase whenever a scenario or goal pathway doesn't specify its own rate.">Default mortgage rate (%)</Tip></label>{num('default_mortgage_rate_pct')}</div>

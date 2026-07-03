@@ -2,8 +2,9 @@ import { Router } from 'express'
 import { queryAll, queryOne, execute, transaction } from '../db/database.ts'
 import { logActivity } from '../services/activityLogger.ts'
 import { loadPortfolioState } from '../services/scenarioEngine.ts'
-import { generatePathways, rankPathways, type PropertyAssumptions, type RankablePathway } from '../services/pathwayGenerator.ts'
+import { generatePathways, rankPathways, positiveOr, type Goal, type PropertyAssumptions, type RankablePathway } from '../services/pathwayGenerator.ts'
 import { loadTaxSettings, loadAssumptionSettings } from '../services/settings.ts'
+import { computeGoalWarnings } from '../services/goalValidation.ts'
 
 const router = Router()
 
@@ -15,7 +16,9 @@ const GOAL_SELECT = `
 
 router.get('/', (_req, res) => {
   try {
-    res.json(queryAll(GOAL_SELECT + 'ORDER BY g.created_at DESC'))
+    const goals = queryAll<Goal>(GOAL_SELECT + 'ORDER BY g.created_at DESC')
+    const tax = loadTaxSettings()
+    res.json(goals.map(g => ({ ...g, warnings: computeGoalWarnings(g, tax) })))
   } catch (err) {
     res.status(500).json({ message: String(err) })
   }
@@ -24,9 +27,9 @@ router.get('/', (_req, res) => {
 router.get('/:id', (req, res) => {
   try {
     const id = Number(req.params.id)
-    const goal = queryOne(GOAL_SELECT + 'WHERE g.id = ?', [id])
+    const goal = queryOne<Goal>(GOAL_SELECT + 'WHERE g.id = ?', [id])
     if (!goal) return res.status(404).json({ message: 'Not found' })
-    res.json(goal)
+    res.json({ ...goal, warnings: computeGoalWarnings(goal, loadTaxSettings()) })
   } catch (err) {
     res.status(500).json({ message: String(err) })
   }
@@ -153,9 +156,9 @@ router.post('/:id/pathways/generate', (req, res) => {
       deposit_percent:     body.deposit_percent ?? assumptionSettings.default_deposit_percent,
       mortgage_rate:       body.mortgage_rate ?? assumptionSettings.default_mortgage_rate_pct,
       mortgage_term_years: body.mortgage_term_years ?? 25,
-      legal_fees:          body.legal_fees ?? assumptionSettings.default_legal_fees,
-      arrangement_fee:     body.arrangement_fee ?? assumptionSettings.default_arrangement_fee,
-      valuation_fee:       body.valuation_fee ?? assumptionSettings.default_valuation_fee,
+      legal_fees:          positiveOr(body.legal_fees, positiveOr(assumptionSettings.default_legal_fees, 2000)),
+      arrangement_fee:     positiveOr(body.arrangement_fee, positiveOr(assumptionSettings.default_arrangement_fee, 999)),
+      valuation_fee:       positiveOr(body.valuation_fee, positiveOr(assumptionSettings.default_valuation_fee, 300)),
     }
     const projectionYears = body.projection_years ?? 15
 

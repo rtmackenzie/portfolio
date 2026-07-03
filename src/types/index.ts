@@ -248,6 +248,11 @@ export interface AcquisitionOpportunity {
 
 export type GoalType = 'income' | 'count' | 'net_worth' | 'mortgage_free' | 'retirement_date'
 
+export interface PrudenceWarning {
+  field: string
+  message: string
+}
+
 export interface Goal {
   id: number
   name: string
@@ -272,6 +277,7 @@ export interface Goal {
   notes?: string | null
   created_at: string
   updated_at: string
+  warnings?: PrudenceWarning[]
 }
 
 export interface ScenarioSummary {
@@ -457,7 +463,7 @@ export interface AssumptionSettings {
   arrears_pct: number
 }
 
-export type Settings = TaxSettings & AssumptionSettings
+export type Settings = TaxSettings & AssumptionSettings & { warnings?: PrudenceWarning[] }
 
 export interface MonthSnapshot {
   [key: string]: string | number

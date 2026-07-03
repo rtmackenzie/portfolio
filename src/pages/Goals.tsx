@@ -10,6 +10,11 @@ import { useGoalPathways, useGeneratePathways } from '@/hooks/useGoals'
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
+// A blank number input submits '' — z.coerce.number() would turn that into 0, not
+// "unset". For fields where 0 has a special "silently use a different default" meaning
+// downstream (min_icr, capex_reserve_per_property), a blank field must stay unset (§P0-3).
+const blankToUndefined = (v: unknown) => (v === '' ? undefined : v)
+
 const goalSchema = z.object({
   name: z.string().min(1),
   goal_type: z.enum(['income', 'count', 'net_worth', 'mortgage_free', 'retirement_date']),
@@ -18,7 +23,7 @@ const goalSchema = z.object({
   target_equity:          z.coerce.number().optional(),
   target_date:            z.string().optional(),
   max_ltv_pct:            z.coerce.number().min(0).max(100).optional(),
-  min_icr:                z.coerce.number().min(0).optional(),
+  min_icr:                z.preprocess(blankToUndefined, z.coerce.number().min(0).optional()),
   min_annual_cashflow:    z.coerce.number().optional(),
   director_loan_annual:       z.coerce.number().min(0).optional(),
   director_loan_start_date:   z.string().optional(),
@@ -26,7 +31,7 @@ const goalSchema = z.object({
   mortgage_reprice_years:     z.coerce.number().min(1).optional(),
   mortgage_reprice_uplift_bps: z.coerce.number().min(0).optional(),
   min_cash_reserve_months:    z.coerce.number().min(0).optional(),
-  capex_reserve_per_property: z.coerce.number().min(0).optional(),
+  capex_reserve_per_property: z.preprocess(blankToUndefined, z.coerce.number().min(0).optional()),
   erc_pct:                    z.coerce.number().min(0).optional(),
   scenario_id:            z.coerce.number().optional(),
   notes: z.string().optional(),
@@ -192,6 +197,16 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+      {goal?.warnings != null && goal.warnings.length > 0 && (
+        <div className="space-y-1.5">
+          {goal.warnings.map(w => (
+            <div key={w.field} className="flex items-start gap-2 px-4 py-2.5 rounded-md bg-warning/10 border border-warning/30 text-sm text-warning">
+              ⚠ {w.message}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Basic */}
       <div className="grid grid-cols-2 gap-4">
         <div className="col-span-2">

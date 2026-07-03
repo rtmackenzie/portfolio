@@ -602,4 +602,64 @@ describe('generatePathways — lender ICR buy gate (P0 #4)', () => {
       expect(buyCount(p.events)).toBe(0)
     }
   })
+
+  it('min_icr: 0 does not silently disable the gate — the tax-derived floor still applies (§P0-3)', () => {
+    // Same unfinanceable deal as above (~53% stressed ICR) — a naive `?? ` fallback would
+    // treat 0 as "no floor" and buy it anyway; the fix must still reject it.
+    const unfinanceable = { purchase_price: 200000, monthly_rent: 500, monthly_expenses: 200, deposit_percent: 25, mortgage_rate: 5.5, mortgage_term_years: 25 }
+    const ps = generatePathways({ ...goal, min_icr: 0 }, startingPortfolio(), unfinanceable, PROJECTION_YEARS, 1)
+    for (const p of ps) {
+      expect(buyCount(p.events)).toBe(0)
+    }
+  })
+})
+
+describe('generatePathways — 0 for min_icr/capex reserve/fees means "use default", not "disable" (§P0-3)', () => {
+  const goal = { goal_type: 'count' as const, target_property_count: 6, director_loan_annual: 200000 }
+
+  it('capex_reserve_per_property: 0 still enforces the default £1,000/property reserve floor', () => {
+    const zeroReserve = generatePathways({ ...goal, capex_reserve_per_property: 0 }, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const defaultReserve = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    // Same reserve floor applied either way -> identical buy/payoff timing.
+    const dates = (ps: typeof zeroReserve) => ps.find(p => p.template_name === 'target_hold')!.events.map(e => e.date)
+    expect(dates(zeroReserve)).toEqual(dates(defaultReserve))
+  })
+
+  it('a candidate deal with arrangement_fee: 0 still reflects the £999 default fee in the resulting buy event', () => {
+    const zeroFee = { ...ASSUMPTIONS, arrangement_fee: 0 }
+    const ps = generatePathways(goal, startingPortfolio(), zeroFee, PROJECTION_YEARS, 1)
+    const hold = ps.find(p => p.template_name === 'target_hold')!
+    const buys = hold.events.filter(e => e.event_type === 'buy_property').map(e => JSON.parse(e.parameters_json))
+    expect(buys.length).toBeGreaterThan(0)
+    for (const b of buys) expect(b.arrangement_fee).toBe(999)
+  })
+
+  it('a candidate deal with legal_fees: 0 still reflects the £2,000 default in the resulting buy event', () => {
+    const zeroFee = { ...ASSUMPTIONS, legal_fees: 0 }
+    const ps = generatePathways(goal, startingPortfolio(), zeroFee, PROJECTION_YEARS, 1)
+    const hold = ps.find(p => p.template_name === 'target_hold')!
+    const buys = hold.events.filter(e => e.event_type === 'buy_property').map(e => JSON.parse(e.parameters_json))
+    expect(buys.length).toBeGreaterThan(0)
+    for (const b of buys) expect(b.legal_fees).toBe(2000)
+  })
+
+  it('erc_pct: 0 is unaffected (legitimate, deliberate "no ERC" — regression)', () => {
+    // erc_pct is not in scope for the 0-guardrail: 0 genuinely means "disable ERC" and is
+    // asserted elsewhere (Low-Risk Hold ERC test) — this just confirms positiveOr wasn't
+    // accidentally applied to it too.
+    const ps = generatePathways({ ...goal, erc_pct: 0 }, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    expect(ps.length).toBeGreaterThan(0)
+  })
+
+  it('an operator-zeroed global default_arrangement_fee/capex_cost_per_property still falls through to the engine literal', () => {
+    const zeroedSettings = { default_arrangement_fee: 0, capex_cost_per_property: 0 } as any
+    const noFeeInAssumptions = { ...ASSUMPTIONS, arrangement_fee: undefined }
+    const ps = generatePathways(goal, startingPortfolio(), noFeeInAssumptions, PROJECTION_YEARS, 1, undefined, zeroedSettings)
+    const hold = ps.find(p => p.template_name === 'target_hold')!
+    const buys = hold.events.filter(e => e.event_type === 'buy_property').map(e => JSON.parse(e.parameters_json))
+    expect(buys.length).toBeGreaterThan(0)
+    for (const b of buys) expect(b.arrangement_fee).toBe(999)
+    const capexCostPerProperty = JSON.parse(hold.assumptions_json).capex_cost_per_property
+    expect(capexCostPerProperty).toBe(3000)
+  })
 })

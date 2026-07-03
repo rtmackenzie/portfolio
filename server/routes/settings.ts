@@ -1,12 +1,14 @@
 import { Router } from 'express'
 import { getSettings, updateSettings, type Settings } from '../services/settings.ts'
 import { DEFAULT_TAX_SETTINGS } from '../services/tax.ts'
+import { computeSettingsWarnings } from '../services/goalValidation.ts'
 
 const router = Router()
 
 router.get('/', (_req, res) => {
   try {
-    res.json(getSettings())
+    const settings = getSettings()
+    res.json({ ...settings, warnings: computeSettingsWarnings(settings) })
   } catch (err) {
     res.status(500).json({ message: String(err) })
   }
