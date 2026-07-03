@@ -144,6 +144,9 @@ function AssumptionSettingsCard() {
         <div><label className={taxLabelCls}><Tip text="The lump-sum cost charged per property at each capex cycle.">Capex cost per property (£)</Tip></label>{num('capex_cost_per_property', '1')}</div>
         <div><label className={taxLabelCls}><Tip text="Rent arrears/bad debt as a % of rent, reducing effective rent every month — distinct from void (vacancy).">Rent arrears (% of rent)</Tip></label>{num('arrears_pct')}</div>
         <div className="col-span-4 text-xs text-muted-foreground">Every property incurs a lump-sum capex cost (boiler/roof/kitchens) each cycle. Arrears reduces effective rent every month, distinct from void.</div>
+        <div><label className={taxLabelCls}><Tip text="Offer-to-completion delay for a new purchase (conveyancing, valuation, chain) — the property doesn't enter the portfolio, and no capital is drawn, until this many months after the buy decision.">Completion lag (months)</Tip></label>{num('default_completion_lag_months', '1')}</div>
+        <div><label className={taxLabelCls}><Tip text="No-rent onboarding period immediately after completion (re-letting, works) — the property is treated as vacant for this many months before rent begins.">Onboarding void (months)</Tip></label>{num('default_onboarding_void_months', '1')}</div>
+        <div className="col-span-4 text-xs text-muted-foreground">Completion lag delays when a new purchase enters the portfolio at all; onboarding void then delays its first rent once it does.</div>
       </div>
     </div>
   )

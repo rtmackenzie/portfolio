@@ -18,6 +18,8 @@ export interface AssumptionSettings {
   capex_cycle_years: number               // e.g. 10 (lumpy capex — boiler/roof/kitchens — recurs every N years/property)
   capex_cost_per_property: number         // e.g. 3000 (£ charged per property at each capex cycle)
   arrears_pct: number                     // e.g. 1.5 (rent arrears/bad debt, distinct from void)
+  default_completion_lag_months: number   // e.g. 2 (offer-to-completion delay; §P1-6 transaction-timing)
+  default_onboarding_void_months: number  // e.g. 1 (no-rent re-letting/works period post-completion; §P1-6 transaction-timing)
 }
 
 export const DEFAULT_ASSUMPTION_SETTINGS: AssumptionSettings = {
@@ -35,4 +37,6 @@ export const DEFAULT_ASSUMPTION_SETTINGS: AssumptionSettings = {
   capex_cycle_years: 10,
   capex_cost_per_property: 3000,
   arrears_pct: 1.5,
+  default_completion_lag_months: 2,
+  default_onboarding_void_months: 1,
 }

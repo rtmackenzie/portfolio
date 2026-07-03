@@ -1,7 +1,7 @@
 import { execute } from '../db/database.ts'
 
 type EntityType = 'property' | 'tenant' | 'mortgage' | 'expense' | 'maintenance' |
-  'certificate' | 'document' | 'acquisition' | 'scenario' | 'payment'
+  'certificate' | 'document' | 'acquisition' | 'scenario' | 'payment' | 'goal'
 
 export function logActivity(
   eventType: string,

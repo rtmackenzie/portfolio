@@ -41,6 +41,8 @@ router.put('/', (req, res) => {
       capex_cycle_years: d.capex_cycle_years ?? current.capex_cycle_years,
       capex_cost_per_property: d.capex_cost_per_property ?? current.capex_cost_per_property,
       arrears_pct: d.arrears_pct ?? current.arrears_pct,
+      default_completion_lag_months: d.default_completion_lag_months ?? current.default_completion_lag_months,
+      default_onboarding_void_months: d.default_onboarding_void_months ?? current.default_onboarding_void_months,
     }
     if (next.ownership !== 'personal' && next.ownership !== 'ltd') {
       next.ownership = DEFAULT_TAX_SETTINGS.ownership

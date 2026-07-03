@@ -662,6 +662,105 @@ describe('buildProjection — buy_property event', () => {
   })
 })
 
+// ─── Transaction-timing model (§P1-6, 2nd review) ──────────────────────────────
+
+describe('buildProjection — completion lag & onboarding void (§P1-6, 2nd review)', () => {
+  it('a purchase with completion_lag_months does not enter the portfolio until completion, and its capital is not drawn until then', () => {
+    const { months } = buildProjection(
+      new Map(),
+      [makeEvent({
+        event_type: 'buy_property', date: '2026-01-01', // month 0
+        parameters_json: JSON.stringify({
+          purchase_price: 100000, monthly_rent: 800, deposit_percent: 100, monthly_expenses: 0,
+          legal_fees: 0, arrangement_fee: 0, valuation_fee: 0, completion_lag_months: 3, onboarding_void_months: 0,
+        }),
+      })],
+      BASE_CONFIG
+    )
+    // Months 0-2: not yet completed — no cash drawn, no property in the portfolio.
+    for (let i = 0; i < 3; i++) {
+      expect(months[i].property_count).toBe(0)
+      expect(months[i].cumulative_cashflow).toBe(0)
+      expect(months[i].total_value).toBe(0)
+    }
+    // Month 3: completes — deposit + ADS (8% of £100k, no LBTT below the nil-rate band) drawn,
+    // property enters, value/rent start.
+    expect(months[3].property_count).toBe(1)
+    expect(months[3].total_value).toBe(100000)
+    expect(months[3].cumulative_cashflow).toBe(800 - 100000 - 8000)
+  })
+
+  it('a purchase with onboarding_void_months produces zero rent for its first N months post-completion, then resumes', () => {
+    const { property_series } = buildProjection(
+      new Map(),
+      [makeEvent({
+        event_type: 'buy_property', date: '2026-01-01', // month 0
+        parameters_json: JSON.stringify({
+          purchase_price: 100000, monthly_rent: 800, deposit_percent: 100, monthly_expenses: 0,
+          legal_fees: 0, arrangement_fee: 0, valuation_fee: 0, completion_lag_months: 0, onboarding_void_months: 2,
+        }),
+      })],
+      { ...BASE_CONFIG, projection_years: 1 }
+    )
+    const ps = property_series.find(p => p.label.startsWith('New Property'))!
+    // Completes month 0; void for months 0-1 (2 months); rent resumes month 2.
+    expect(ps.months[0].monthly_cashflow).toBe(0)
+    expect(ps.months[1].monthly_cashflow).toBe(0)
+    expect(ps.months[2].monthly_cashflow).toBe(800)
+  })
+
+  it('completion_lag_months: 0 (or omitted) reproduces instant completion exactly — regression', () => {
+    // No completion_lag_months/onboarding_void_months in params, and BASE_CONFIG supplies no
+    // defaults, so the engine-literal fallback (0) applies — identical to pre-§P1-6 behaviour.
+    const { months } = buildProjection(
+      new Map(),
+      [makeEvent({
+        event_type: 'buy_property', date: '2026-01-01',
+        parameters_json: JSON.stringify({ purchase_price: 150000, monthly_rent: 800, deposit_percent: 25, mortgage_rate: 5.5 }),
+      })],
+      BASE_CONFIG
+    )
+    expect(months[0].property_count).toBe(1)
+    expect(months[0].total_value).toBe(150000)
+  })
+
+  it('a purchase whose completion falls beyond the projection horizon never completes', () => {
+    const { months } = buildProjection(
+      new Map(),
+      [makeEvent({
+        event_type: 'buy_property', date: '2026-11-01', // month 10, in a 1-year (12mo) projection
+        parameters_json: JSON.stringify({
+          purchase_price: 100000, monthly_rent: 800, deposit_percent: 100, monthly_expenses: 0,
+          legal_fees: 0, arrangement_fee: 0, valuation_fee: 0, completion_lag_months: 6, // completes month 16, past the 12-month horizon
+        }),
+      })],
+      { ...BASE_CONFIG, projection_years: 1 }
+    )
+    for (const m of months) {
+      expect(m.property_count).toBe(0)
+      expect(m.cumulative_cashflow).toBe(0)
+    }
+  })
+
+  it('the onboarding-void auto-clear does not interfere with a later, unrelated manual vacancy_period event', () => {
+    const buy = makeEvent({
+      event_type: 'buy_property', date: '2026-01-01', // month 0, void_ends_month = 1
+      parameters_json: JSON.stringify({
+        purchase_price: 100000, monthly_rent: 800, deposit_percent: 100, monthly_expenses: 0,
+        legal_fees: 0, arrangement_fee: 0, valuation_fee: 0, completion_lag_months: 0, onboarding_void_months: 1,
+      }),
+    })
+    // A manual vacancy declared well after onboarding has already ended.
+    const vacancy = makeEvent({ event_type: 'vacancy_period', date: '2026-06-01', property_id: 1, parameters_json: '{}' })
+    const { property_series } = buildProjection(new Map(), [buy, vacancy], { ...BASE_CONFIG, projection_years: 1 })
+    const ps = property_series.find(p => p.label.startsWith('New Property'))!
+    expect(ps.months[0].monthly_cashflow).toBe(0)    // onboarding void, month 0
+    expect(ps.months[1].monthly_cashflow).toBe(800)  // resumed rent, months 1-4
+    expect(ps.months[4].monthly_cashflow).toBe(800)
+    expect(ps.months[5].monthly_cashflow).toBe(0)    // manual vacancy_period fires, month 5 onward
+  })
+})
+
 describe('buildProjection — sell_property event', () => {
   it('decreases property_count after sell', () => {
     const state = makeState({ id: 1 })

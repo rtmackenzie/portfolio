@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "server": "tsx watch server/index.ts",
     "client": "vite",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
     "db:seed": "tsx server/db/seeds/seed.ts",
     "create-scenarios": "tsx server/db/seeds/create-scenarios.ts",
     "test": "vitest run --config vitest.config.ts",

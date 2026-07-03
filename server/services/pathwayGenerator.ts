@@ -1,5 +1,5 @@
 import { buildProjection, type PropertyState, type ScenarioEvent } from './scenarioEngine.ts'
-import { calcTransactionCosts } from './calculations.ts'
+import { calcTransactionCosts, calcMonthlyPayment } from './calculations.ts'
 import { icrThresholdPct, type TaxSettings } from './tax.ts'
 import type { AssumptionSettings } from './assumptions.ts'
 import type { IrrBasis } from './returnMetrics.ts'
@@ -36,6 +36,8 @@ export interface PropertyAssumptions {
   legal_fees?: number        // legal/survey fee at purchase; default £2,000
   arrangement_fee?: number   // mortgage product fee at purchase; default £999 (§P1-6)
   valuation_fee?: number     // lender valuation/survey fee at purchase; default £300 (§P1-6)
+  completion_lag_months?: number   // offer-to-completion delay; default 2 (§P1-6, 2nd review)
+  onboarding_void_months?: number  // no-rent re-letting/works period post-completion; default 1 (§P1-6, 2nd review)
 }
 
 type MonthSnapshot = {
@@ -148,7 +150,7 @@ export function positiveOr(value: number | null | undefined, fallback: number): 
 
 // ─── Event builder ────────────────────────────────────────────────────────────
 
-function buyEvent(date: string, a: PropertyAssumptions, interestOnly = false): ScenarioEvent {
+function buyEvent(date: string, a: PropertyAssumptions, interestOnly = false, settings?: AssumptionSettings): ScenarioEvent {
   return {
     event_type: 'buy_property',
     property_id: null,
@@ -164,6 +166,9 @@ function buyEvent(date: string, a: PropertyAssumptions, interestOnly = false): S
       legal_fees:         positiveOr(a.legal_fees, 2000),
       arrangement_fee:    positiveOr(a.arrangement_fee, 999),
       valuation_fee:      positiveOr(a.valuation_fee, 300),
+      // Transaction-timing model (§P1-6, 2nd review): completion lag + onboarding void.
+      completion_lag_months:   a.completion_lag_months   ?? settings?.default_completion_lag_months   ?? 2,
+      onboarding_void_months:  a.onboarding_void_months  ?? settings?.default_onboarding_void_months  ?? 1,
     }),
   }
 }
@@ -344,7 +349,6 @@ function buildCashGatedEvents(
   // simply not proposing the breaching buy in the first place.
   function buyGateAt(monthIndex: number, currentValue: number, currentDebt: number): { buyCost: number; icrOk: boolean; ltvOk: boolean } {
     const indexed = indexedAssumptions(a, propertyGrowthPct, rentGrowthPct, monthIndex)
-    const buyCost = depositPlusCosts(indexed)
     const stressUplift = (settings?.icr_stress_uplift_bps ?? 200) / 100
     const stressFloor = settings?.icr_stress_floor_pct ?? 5.5
     const stressRate = Math.max((indexed.mortgage_rate ?? settings?.default_mortgage_rate_pct ?? 5.5) + stressUplift, stressFloor)
@@ -356,11 +360,25 @@ function buildCashGatedEvents(
       const prospectiveLtv = prospectiveValue > 0 ? ((currentDebt + loanAmount) / prospectiveValue) * 100 : 0
       ltvOk = prospectiveLtv <= goal.max_ltv_pct
     }
+    // Transaction-timing model (§P1-6, 2nd review): the new property carries a mortgage
+    // payment from completion but earns no rent during its onboarding void — the reserve-floor
+    // gate must anticipate that near-term cash drag now, not just the upfront deposit/fees,
+    // or the "cash never breaches the reserve floor" invariant (P0 #3) would silently break.
+    const onboardingVoidMonths = indexed.onboarding_void_months ?? settings?.default_onboarding_void_months ?? 1
+    const termMonths = (indexed.mortgage_term_years ?? 25) * 12
+    const estimatedMonthlyMortgage = calcMonthlyPayment(loanAmount, indexed.mortgage_rate ?? settings?.default_mortgage_rate_pct ?? 5.5, termMonths)
+    const voidDrag = estimatedMonthlyMortgage * onboardingVoidMonths
+    const buyCost = depositPlusCosts(indexed) + voidDrag
     return { buyCost, icrOk: candidateIcrPct >= icrFloor, ltvOk }
   }
 
   const decisions: ScenarioEvent[] = []
   let lastMonth = 0
+  // Earliest month a NEW buy may be decided — advanced past a pending buy's own completion
+  // month (§P1-6, 2nd review) so overlapping in-flight purchases can't each pass the LTV/reserve
+  // gates against a stale pre-completion snapshot. Scoped to buys only; refinances/payoffs
+  // complete instantly and aren't subject to this.
+  let nextBuyEligibleMonth = 0
 
   while (decisions.length < cap) {
     const events = [...loanEvents, ...decisions].sort((x, y) => x.date.localeCompare(y.date))
@@ -386,7 +404,7 @@ function buildCashGatedEvents(
         const balances = activeBalancesAt(proj, i)
         if (balances.length < 2) {
           const { buyCost, icrOk, ltvOk } = buyGateAt(i, proj.months[i].total_value, proj.months[i].total_debt)
-          if (icrOk && ltvOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, indexedAssumptions(a, propertyGrowthPct, rentGrowthPct, i), interestOnly); decidedMonth = i; break }
+          if (i >= nextBuyEligibleMonth && icrOk && ltvOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, indexedAssumptions(a, propertyGrowthPct, rentGrowthPct, i), interestOnly, settings); decidedMonth = i; break }
         } else {
           const target = balances.reduce((min, b) => b.debt < min.debt ? b : min)
           const ercCost = target.isEarlyExit ? target.debt * ercPct / 100 : 0
@@ -416,16 +434,27 @@ function buildCashGatedEvents(
         }
         {
           const { buyCost, icrOk, ltvOk } = buyGateAt(i, proj.months[i].total_value, proj.months[i].total_debt)
-          if (icrOk && ltvOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, indexedAssumptions(a, propertyGrowthPct, rentGrowthPct, i), interestOnly); decidedMonth = i; break }
+          if (i >= nextBuyEligibleMonth && icrOk && ltvOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, indexedAssumptions(a, propertyGrowthPct, rentGrowthPct, i), interestOnly, settings); decidedMonth = i; break }
         }
       } else {
         const { buyCost, icrOk, ltvOk } = buyGateAt(i, proj.months[i].total_value, proj.months[i].total_debt)
-        if (icrOk && ltvOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, indexedAssumptions(a, propertyGrowthPct, rentGrowthPct, i), interestOnly); decidedMonth = i; break }
+        if (i >= nextBuyEligibleMonth && icrOk && ltvOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, indexedAssumptions(a, propertyGrowthPct, rentGrowthPct, i), interestOnly, settings); decidedMonth = i; break }
       }
     }
 
     if (!decided || decidedMonth < lastMonth) break
     decisions.push(decided)
+    // A buy doesn't actually land until completion (§P1-6, 2nd review) — track when the next
+    // one may be considered so overlapping in-flight purchases can't each look individually
+    // LTV/reserve-compliant against a pre-completion snapshot while collectively breaching the
+    // mandate once they all land. Scoped to buys only — refinances/payoffs complete instantly
+    // and should keep being evaluated every month (BRRR's refinance cadence doesn't need to
+    // wait on an unrelated buy's completion).
+    if (decided.event_type === 'buy_property') {
+      const decidedParams = JSON.parse(decided.parameters_json)
+      const lagMonths = decidedParams.completion_lag_months ?? 0
+      nextBuyEligibleMonth = decidedMonth + lagMonths + 1
+    }
     lastMonth = decidedMonth + 1   // guarantee forward progress
   }
 

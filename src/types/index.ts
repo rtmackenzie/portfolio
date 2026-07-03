@@ -487,6 +487,8 @@ export interface AssumptionSettings {
   capex_cycle_years: number
   capex_cost_per_property: number
   arrears_pct: number
+  default_completion_lag_months: number
+  default_onboarding_void_months: number
 }
 
 export type Settings = TaxSettings & AssumptionSettings & { warnings?: PrudenceWarning[] }

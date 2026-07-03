@@ -174,13 +174,18 @@ describe('generatePathways — BRRR equity-release strategy (§P2-11)', () => {
     }
   })
 
-  it('grows property count over the projection, unlike Low-Risk Hold', () => {
+  it('grows property count at least as fast as Low-Risk Hold — never falls behind the de-gearing strategy', () => {
+    // Both strategies now share the same buy-completion cadence bottleneck (§P1-6, 2nd review:
+    // a buy can't land until completion_lag_months later, and the generator won't consider
+    // another buy until the pending one completes), so BRRR's equity-release edge can narrow to
+    // a tie on some fixtures — its distinct (higher-debt, equity-release) risk profile is the
+    // strategic differentiator, verified separately below via ending debt.
     const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
     const brrr = ps.find(p => p.template_name === 'brrr_recycler')!
     const lowRiskHold = ps.find(p => p.template_name === 'low_risk_hold')!
     const brrrCount = brrr.results.months[brrr.results.months.length - 1].property_count
     const lowRiskHoldCount = lowRiskHold.results.months[lowRiskHold.results.months.length - 1].property_count
-    expect(brrrCount).toBeGreaterThan(lowRiskHoldCount)
+    expect(brrrCount).toBeGreaterThanOrEqual(lowRiskHoldCount)
   })
 
   it('ends up with more debt than Low-Risk Hold — the opposite risk profile', () => {
@@ -526,6 +531,31 @@ describe('generatePathways — configurable starting cash & rate repricing (UI/D
       expect(a.capex_cycle_years).toBe(7)
       expect(a.capex_cost_per_property).toBe(4500)
       expect(a.arrears_pct).toBe(2.25)
+    }
+  })
+
+  it('buy_property events carry the resolved completion_lag_months/onboarding_void_months from global settings (§P1-6, 2nd review)', () => {
+    const settings = { default_completion_lag_months: 4, default_onboarding_void_months: 2 } as any
+    const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1, undefined, settings)
+    const hold = ps.find(p => p.template_name === 'target_hold')!
+    const buys = hold.events.filter(e => e.event_type === 'buy_property').map(e => JSON.parse(e.parameters_json))
+    expect(buys.length).toBeGreaterThan(0)
+    for (const b of buys) {
+      expect(b.completion_lag_months).toBe(4)
+      expect(b.onboarding_void_months).toBe(2)
+    }
+  })
+
+  it('a candidate-deal override for completion_lag_months/onboarding_void_months takes priority over global settings', () => {
+    const settings = { default_completion_lag_months: 4, default_onboarding_void_months: 2 } as any
+    const overriddenAssumptions = { ...ASSUMPTIONS, completion_lag_months: 0, onboarding_void_months: 0 }
+    const ps = generatePathways(goal, startingPortfolio(), overriddenAssumptions, PROJECTION_YEARS, 1, undefined, settings)
+    const hold = ps.find(p => p.template_name === 'target_hold')!
+    const buys = hold.events.filter(e => e.event_type === 'buy_property').map(e => JSON.parse(e.parameters_json))
+    expect(buys.length).toBeGreaterThan(0)
+    for (const b of buys) {
+      expect(b.completion_lag_months).toBe(0)
+      expect(b.onboarding_void_months).toBe(0)
     }
   })
 })

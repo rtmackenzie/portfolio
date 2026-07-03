@@ -41,6 +41,7 @@ export interface PropertyState {
   mortgage_term_months?: number     // needed to compute remaining term at reprice (repayment only)
   next_reprice_month?: number | null  // absolute month index of the next scheduled reprice
   next_capex_month?: number | null    // absolute month index of the next scheduled lumpy-capex hit (§6b)
+  void_ends_month?: number | null     // absolute month the onboarding void auto-clears (§P1-6 transaction-timing)
 }
 
 interface MonthSnapshot {
@@ -176,6 +177,75 @@ export function buildProjection(
   let nextId = Math.max(...Array.from(stateMap.keys()), 0) + 1
   const tax = config.tax
 
+  // Reset at the top of each month's iteration below. Declared here (not inside the loop) so
+  // completePurchase() — called both for immediate buys and for deferred completions drained at
+  // the top of a later month's iteration — can accumulate into the correct month's totals.
+  let capitalDeployedThisMonth = 0
+  let directorLoanInThisMonth = 0
+  let directorLoanRepayThisMonth = 0
+
+  // Completion lag (§P1-6 transaction-timing): a buy_property event fires at the decision/exchange month, but the
+  // property doesn't enter the portfolio — capital drawn, mortgage originated, rent/growth
+  // starting — until it actually completes. Deferred completions are queued here, keyed by
+  // absolute completion month, mirroring the next_reprice_month/next_capex_month
+  // deferred-scheduling pattern already used elsewhere in this file.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pendingBuys = new Map<number, any[]>()
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function completePurchase(params: any, completionMonth: number) {
+    const depositPct = params.deposit_percent ?? config.defaults?.default_deposit_percent ?? 25
+    const price = params.purchase_price ?? 0
+    const rate = (params.mortgage_rate ?? config.defaults?.default_mortgage_rate_pct ?? 5.5) + (config.rate_shock_bps ?? 0) / 100
+    const termYears = params.mortgage_term_years ?? 25
+    const debt = price * (1 - depositPct / 100)
+    const isIO = params.interest_only ?? false
+    const monthly_mortgage = isIO
+      ? (debt * rate / 100) / 12
+      : calcMonthlyPayment(debt, rate, termYears * 12)
+    const newId = nextId++
+    // Acquisition-void onboarding (§P1-6 transaction-timing): new stock generates no rent for its first N months
+    // post-completion (re-letting/works), auto-clearing via void_ends_month — is_vacant on its
+    // own never expires, so a dedicated scheduled field is needed (same shape as
+    // next_reprice_month/next_capex_month).
+    const onboardingVoidMonths = params.onboarding_void_months ?? config.defaults?.default_onboarding_void_months ?? 0
+    stateMap.set(newId, {
+      id: newId,
+      value: price,
+      monthly_rent: (params.monthly_rent ?? 0) * (1 + (config.rent_shock_pct ?? 0) / 100),
+      monthly_mortgage,
+      monthly_other_expenses: params.monthly_expenses ?? 200,
+      debt,
+      is_vacant: onboardingVoidMonths > 0,
+      mortgage_rate: rate,
+      is_interest_only: isIO,
+      purchase_price: price,
+      acquired_month: completionMonth,
+      is_fixed_rate: true,   // pathway-generated / manually-added purchases assumed fixed
+      mortgage_term_months: isIO ? undefined : termYears * 12,
+      next_reprice_month: isIO ? null : completionMonth + repriceYears * 12,
+      next_capex_month: completionMonth + capexCycleYears * 12,
+      void_ends_month: onboardingVoidMonths > 0 ? completionMonth + onboardingVoidMonths : null,
+    })
+    debtMap.set(newId, debt)
+    propLabels.set(newId, params.address ?? `New Property ${newId}`)
+    propMonths.set(newId, [])
+    propCumCashflow.set(newId, 0)
+    const { total: txCosts } = calcTransactionCosts(
+      price,
+      params.legal_fees ?? config.defaults?.default_legal_fees ?? 2000,
+      params.refurb_costs ?? 0,
+      params.arrangement_fee ?? config.defaults?.default_arrangement_fee ?? 999,
+      params.valuation_fee ?? config.defaults?.default_valuation_fee ?? 300
+    )
+    // Deposit + transaction costs are a real capital outflow drawn from the
+    // accumulated cash pot (retained cashflow + director loans) — at completion, not decision.
+    const deposit = price * (depositPct / 100)
+    cumulativeCashflow -= deposit + txCosts
+    totalCapitalInvested += deposit + txCosts
+    capitalDeployedThisMonth += deposit + txCosts
+  }
+
   // Use UTC-safe arithmetic to avoid DST/timezone shifts corrupting month keys
   const baseDate = new Date(config.base_date)
   const baseYear = baseDate.getUTCFullYear()
@@ -204,9 +274,17 @@ export function buildProjection(
     const month = absMonth % 12
     const yearMonth = `${year}-${String(month + 1).padStart(2, '0')}`
 
-    let capitalDeployedThisMonth = 0
-    let directorLoanInThisMonth = 0
-    let directorLoanRepayThisMonth = 0
+    capitalDeployedThisMonth = 0
+    directorLoanInThisMonth = 0
+    directorLoanRepayThisMonth = 0
+
+    // Deferred completions (§P1-6 transaction-timing): purchases decided in an earlier month whose completion
+    // (decision month + completion_lag_months) lands on this month.
+    const pending = pendingBuys.get(i)
+    if (pending) {
+      for (const params of pending) completePurchase(params, i)
+      pendingBuys.delete(i)
+    }
 
     const monthEvents = eventsByDate.get(yearMonth) ?? []
     for (const ev of monthEvents) {
@@ -214,50 +292,17 @@ export function buildProjection(
 
       switch (ev.event_type) {
         case 'buy_property': {
-          const depositPct = params.deposit_percent ?? config.defaults?.default_deposit_percent ?? 25
-          const price = params.purchase_price ?? 0
-          const rate = (params.mortgage_rate ?? config.defaults?.default_mortgage_rate_pct ?? 5.5) + (config.rate_shock_bps ?? 0) / 100
-          const termYears = params.mortgage_term_years ?? 25
-          const debt = price * (1 - depositPct / 100)
-          const isIO = params.interest_only ?? false
-          const monthly_mortgage = isIO
-            ? (debt * rate / 100) / 12
-            : calcMonthlyPayment(debt, rate, termYears * 12)
-          const newId = nextId++
-          stateMap.set(newId, {
-            id: newId,
-            value: price,
-            monthly_rent: (params.monthly_rent ?? 0) * (1 + (config.rent_shock_pct ?? 0) / 100),
-            monthly_mortgage,
-            monthly_other_expenses: params.monthly_expenses ?? 200,
-            debt,
-            is_vacant: false,
-            mortgage_rate: rate,
-            is_interest_only: isIO,
-            purchase_price: price,
-            acquired_month: i,
-            is_fixed_rate: true,   // pathway-generated / manually-added purchases assumed fixed
-            mortgage_term_months: isIO ? undefined : termYears * 12,
-            next_reprice_month: isIO ? null : i + repriceYears * 12,
-            next_capex_month: i + capexCycleYears * 12,
-          })
-          debtMap.set(newId, debt)
-          propLabels.set(newId, params.address ?? `New Property ${newId}`)
-          propMonths.set(newId, [])
-          propCumCashflow.set(newId, 0)
-          const { total: txCosts } = calcTransactionCosts(
-            price,
-            params.legal_fees ?? config.defaults?.default_legal_fees ?? 2000,
-            params.refurb_costs ?? 0,
-            params.arrangement_fee ?? config.defaults?.default_arrangement_fee ?? 999,
-            params.valuation_fee ?? config.defaults?.default_valuation_fee ?? 300
-          )
-          // Deposit + transaction costs are a real capital outflow drawn from the
-          // accumulated cash pot (retained cashflow + director loans).
-          const deposit = price * (depositPct / 100)
-          cumulativeCashflow -= deposit + txCosts
-          totalCapitalInvested += deposit + txCosts
-          capitalDeployedThisMonth += deposit + txCosts
+          // Completion lag (§P1-6 transaction-timing): the event fires at the decision/exchange month, but the
+          // purchase doesn't actually complete — capital drawn, property enters the portfolio —
+          // until completion_lag_months later (8-12 week conveyancing, typically).
+          const lagMonths = params.completion_lag_months ?? config.defaults?.default_completion_lag_months ?? 0
+          const completionMonth = i + lagMonths
+          if (lagMonths <= 0) {
+            completePurchase(params, completionMonth)
+          } else {
+            if (!pendingBuys.has(completionMonth)) pendingBuys.set(completionMonth, [])
+            pendingBuys.get(completionMonth)!.push(params)
+          }
           break
         }
         case 'sell_property': {
@@ -442,6 +487,13 @@ export function buildProjection(
         totalCapitalInvested += capexCostPerProperty
         capitalDeployedThisMonth += capexCostPerProperty
         state.next_capex_month = i + capexCycleYears * 12
+      }
+
+      // Onboarding void auto-clear (§P1-6 transaction-timing): is_vacant never expires on its own, so the void set
+      // at completion needs its own scheduled end.
+      if (state.void_ends_month != null && i === state.void_ends_month) {
+        state.is_vacant = false
+        state.void_ends_month = null
       }
 
       // Interest portion of this month's payment (for tax — principal is not deductible).

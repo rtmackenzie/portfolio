@@ -10,7 +10,13 @@ A single-user, locally-hosted property investment dashboard. Not accounting soft
 npm test              # Run all tests once
 npm run test:watch    # Watch mode (re-runs on save)
 npm run test:coverage # Run with V8 coverage report → coverage/
+npm run typecheck     # tsc --noEmit on BOTH tsconfig.json (src/) and tsconfig.node.json (server/)
 ```
+
+`npx tsc --noEmit` alone only checks `src/` — the root `tsconfig.json`'s `include` is `["src"]`
+only, and `tsx watch` (used by `npm run server`/`npm run dev`) strips types without validating
+them. `npm run typecheck` is the only command that actually checks `server/`; use it, not a bare
+`tsc --noEmit`, after any server-side change.
 
 Tests live in `tests/` mirroring source structure:
 - `tests/server/calculations.test.ts` — `calculatePropertyFinancials`, `calculateAcquisitionMetrics`, `calculatePortfolioKPIs`

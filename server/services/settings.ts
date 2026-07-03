@@ -24,6 +24,8 @@ interface SettingsRow {
   capex_cycle_years: number
   capex_cost_per_property: number
   arrears_pct: number
+  default_completion_lag_months: number
+  default_onboarding_void_months: number
 }
 
 export type Settings = TaxSettings & AssumptionSettings
@@ -56,6 +58,8 @@ function rowToAssumptions(r: SettingsRow): AssumptionSettings {
     capex_cycle_years: r.capex_cycle_years,
     capex_cost_per_property: r.capex_cost_per_property,
     arrears_pct: r.arrears_pct,
+    default_completion_lag_months: r.default_completion_lag_months,
+    default_onboarding_void_months: r.default_onboarding_void_months,
   }
 }
 
@@ -87,6 +91,7 @@ export function updateSettings(s: Settings): Settings {
        default_rent_growth_pct=?, default_expense_inflation_pct=?, default_void_months_per_year=?,
        icr_stress_uplift_bps=?, icr_stress_floor_pct=?,
        capex_cycle_years=?, capex_cost_per_property=?, arrears_pct=?,
+       default_completion_lag_months=?, default_onboarding_void_months=?,
        updated_at=datetime('now')
      WHERE id = 1`,
     [s.ownership, s.personal_marginal_rate_pct, s.s24_credit_rate_pct,
@@ -95,7 +100,8 @@ export function updateSettings(s: Settings): Settings {
      s.default_arrangement_fee, s.default_valuation_fee, s.default_property_growth_pct,
      s.default_rent_growth_pct, s.default_expense_inflation_pct, s.default_void_months_per_year,
      s.icr_stress_uplift_bps, s.icr_stress_floor_pct,
-     s.capex_cycle_years, s.capex_cost_per_property, s.arrears_pct]
+     s.capex_cycle_years, s.capex_cost_per_property, s.arrears_pct,
+     s.default_completion_lag_months, s.default_onboarding_void_months]
   )
   return getSettings()
 }
