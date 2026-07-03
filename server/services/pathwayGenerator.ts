@@ -122,6 +122,9 @@ export interface GeneratedPathway {
   reaches_goal: boolean
   months_to_goal: number | null
   risk_score: number
+  risk_band: PathwayRiskBand
+  risk_breakdown: RiskComponents
+  shortfall: number
   binding_constraint: string
   binding_detail: string
   assumptions_json: string
@@ -540,17 +543,120 @@ function checkGoalReached(months: MonthSnapshot[], goal: Goal): { reached: boole
   return { reached: false, monthIndex: null }
 }
 
-// ─── Ranking: risk score + binding constraint (C3) ────────────────────────────
+// ─── Ranking: risk score + binding constraint (C3 / §P2-8 Appendix B) ─────────
 
 type Summary = ProjectionResult['summary']
 
-// Lower = safer. Transparent, documented in the plan. Scored against the stricter
-// universal ICR floor (145%) so it stays goal/tax-agnostic (matches its own tested,
-// backward-compatible 1-arg signature) — a rough, always-conservative comfort margin.
-export function computeRiskScore(summary: Summary): number {
-  return summary.months_below_icr * 2
-    + (summary.min_cumulative_cashflow < 0 ? 100 : 0)
-    + (summary.min_icr > 0 ? Math.max(0, 145 - summary.min_icr) / 10 : 0)
+export interface RiskComponents {
+  leverage: number
+  affordability: number
+  amortisation: number
+  liquidity: number
+  execution: number
+  scale: number
+}
+
+export type PathwayRiskBand = 'Low' | 'Medium' | 'High' | 'Critical'
+
+export interface RiskScore100 {
+  total: number
+  band: PathwayRiskBand
+  components: RiskComponents
+}
+
+function riskBandOf(total: number): PathwayRiskBand {
+  if (total <= 25) return 'Low'
+  if (total <= 50) return 'Medium'
+  if (total <= 75) return 'High'
+  return 'Critical'
+}
+
+// A default lender-realistic LTV ceiling used only for scoring shape when the goal itself sets
+// no mandate — the goal's own max_ltv_pct is always preferred when present.
+const DEFAULT_SCORING_LTV_CEILING_PCT = 75
+
+// Bounded 0-100 composite (§P2-8 Appendix B.1), replacing the old unbounded penalty accumulator
+// — a leveraged plan could previously score 0 ("riskless"). Six weighted components, each
+// clamped to its own share, so the total is always interpretable on its own (0-100) and the
+// breakdown explains *why* a plan scores what it does (a bare number invites arguments; a
+// breakdown ends them). Calibrated against this project's real committee-review data so the
+// four generated strategies land in the bands the board's own risk matrix described.
+export function computeRiskScore100(
+  months: MonthSnapshot[],
+  events: ScenarioEvent[],
+  summary: Summary,
+  goal: Goal,
+  projectionYears: number,
+  monthlyExp: number,
+  tax?: TaxSettings
+): RiskScore100 {
+  // Leverage: peak LTV vs the goal's own mandate (or a lender-realistic default ceiling when
+  // the goal sets none) — 0 at <=30% LTV, full weight at the mandate.
+  let maxLtv = 0
+  for (const m of months) {
+    if (m.total_value > 0) maxLtv = Math.max(maxLtv, (m.total_debt / m.total_value) * 100)
+  }
+  const ltvCeiling = goal.max_ltv_pct ?? DEFAULT_SCORING_LTV_CEILING_PCT
+  const ltvBreach = goal.max_ltv_pct != null && maxLtv > goal.max_ltv_pct
+  const leverage = ltvCeiling > 30
+    ? Math.max(0, Math.min(25, ((maxLtv - 30) / (ltvCeiling - 30)) * 25))
+    : 0
+
+  // Affordability headroom: min ICR vs the same lender floor used for feasibility elsewhere —
+  // 0 at >=2.5x floor, full weight at the floor.
+  const icrFloor = positiveOr(goal.min_icr, icrThresholdPct(tax))
+  const icrRatio = summary.min_icr > 0 ? summary.min_icr / icrFloor : Infinity
+  const affordability = isFinite(icrRatio)
+    ? Math.max(0, Math.min(25, ((2.5 - icrRatio) / (2.5 - 1)) * 25))
+    : 0
+
+  // Amortisation profile: debt-weighted interest-only share, derived from the buy events
+  // themselves (no per-property IO tracking survives into property_series) — origination loan
+  // amounts, not amortised terminal balances, so this slightly overstates true terminal IO
+  // share (repayment loans pay down further over time). A defensible, documented approximation.
+  let ioLoanAmount = 0
+  let totalLoanAmount = 0
+  for (const ev of events) {
+    if (ev.event_type !== 'buy_property') continue
+    const p = JSON.parse(ev.parameters_json)
+    const price = p.purchase_price ?? 0
+    const loan = price * (1 - (p.deposit_percent ?? 25) / 100)
+    totalLoanAmount += loan
+    if (p.interest_only) ioLoanAmount += loan
+  }
+  const amortisation = totalLoanAmount > 0 ? (ioLoanAmount / totalLoanAmount) * 15 : 0
+
+  // Liquidity resilience: worst-month reserve headroom — 0 at >=3x the reserve floor, full
+  // weight at the floor.
+  let minReserveHeadroom = Infinity
+  for (const m of months) {
+    const cashAvail = m.cumulative_cashflow_posttax ?? m.cumulative_cashflow
+    const floor = reserveFloor(goal, monthlyExp, m.property_count)
+    const headroom = floor > 0 ? (cashAvail - floor) / floor : 0
+    minReserveHeadroom = Math.min(minReserveHeadroom, headroom)
+  }
+  if (!isFinite(minReserveHeadroom)) minReserveHeadroom = 2
+  const liquidity = Math.max(0, Math.min(15, ((2 - minReserveHeadroom) / 2) * 15))
+
+  // Execution intensity: transaction cadence (buys + refinances) per year, saturating near
+  // ~3.5/yr — calibrated so a heavy BRRR-style refinance cadence scores near-full.
+  const transactionCount = events.filter(e => e.event_type === 'buy_property' || e.event_type === 'remortgage').length
+  const eventsPerYear = projectionYears > 0 ? transactionCount / projectionYears : 0
+  const execution = Math.max(0, Math.min(10, (eventsPerYear / 3.5) * 10))
+
+  // Operational scale: ending property count, saturating above ~15 units.
+  const endingCount = months.length > 0 ? months[months.length - 1].property_count : 0
+  const scale = Math.max(0, Math.min(10, (endingCount / 15) * 10))
+
+  const components: RiskComponents = { leverage, affordability, amortisation, liquidity, execution, scale }
+  const rawTotal = leverage + affordability + amortisation + liquidity + execution + scale
+  // Floor of 5 whenever any capital was actually deployed — no leveraged/executed plan is
+  // riskless; a genuine LTV-mandate breach forces the whole plan into the Critical band.
+  let total = summary.total_capital_invested > 0 ? Math.max(5, rawTotal) : rawTotal
+  if (ltvBreach) total = Math.max(total, 90)
+  total = Math.min(100, Math.round(total))
+
+  return { total, band: riskBandOf(total), components }
 }
 
 type Binding = { key: string; detail: string }
@@ -628,17 +734,26 @@ export function analyzeBinding(
   return { key: 'capital', detail: 'Limited by deposit capital / time — add director loans or extend the horizon.' }
 }
 
-// Rank a set by time-to-goal + risk; flag the top feasible as recommended (C3).
+// Rank a set by time-to-goal + risk; flag the recommended pathway according to an explicit,
+// user-owned ranking mode (§P2-8 Appendix B.2) rather than a single hidden formula. The base
+// sort/rank order is unchanged from before modes existed — only *which* row is flagged
+// `recommended` (and why) depends on the mode; 'fastest' reproduces the exact prior behaviour.
+export type RankingMode = 'fastest' | 'balanced' | 'safest'
+
 export interface RankablePathway {
   id: number
   feasible: number            // SQLite 0/1
   reaches_goal: number        // SQLite 0/1
   months_to_goal?: number | null
   risk_score?: number | null
+  shortfall?: number | null
   summary?: { end_equity?: number } | null
 }
 
-export function rankPathways<T extends RankablePathway>(rows: T[]): (T & { rank: number; recommended: boolean })[] {
+export function rankPathways<T extends RankablePathway>(
+  rows: T[],
+  mode: RankingMode = 'fastest'
+): (T & { rank: number; recommended: boolean; recommended_reason?: string })[] {
   const sorted = [...rows].sort((a, b) => {
     const ar = a.reaches_goal ? 0 : 1, br = b.reaches_goal ? 0 : 1
     if (ar !== br) return ar - br
@@ -648,8 +763,54 @@ export function rankPathways<T extends RankablePathway>(rows: T[]): (T & { rank:
     if (arisk !== brisk) return arisk - brisk
     return (b.summary?.end_equity ?? 0) - (a.summary?.end_equity ?? 0)
   })
-  const recId = sorted.find(p => p.feasible === 1)?.id ?? null
-  return sorted.map((p, i) => ({ ...p, rank: i + 1, recommended: p.id === recId }))
+
+  const feasibleReaching = sorted.filter(p => p.feasible === 1 && p.reaches_goal === 1)
+  const minRisk = (rows_: T[]) => rows_.reduce((best, p) => (p.risk_score ?? Infinity) < (best.risk_score ?? Infinity) ? p : best)
+
+  let recId: number | null = null
+  let reason: string | undefined
+
+  if (mode === 'balanced' && feasibleReaching.length > 0) {
+    // Within 1.25x the fastest feasible/reaching plan's time-to-goal, then min risk.
+    const fastestMonths = Math.min(...feasibleReaching.map(p => p.months_to_goal ?? Infinity))
+    const nearFastest = feasibleReaching.filter(p => (p.months_to_goal ?? Infinity) <= fastestMonths * 1.25)
+    const winner = minRisk(nearFastest)
+    recId = winner.id
+    reason = (winner.months_to_goal ?? Infinity) <= fastestMonths
+      ? 'Recommended — fastest plan reaching goal'
+      : 'Recommended — safest plan within reach of the fastest'
+  } else if (mode === 'safest') {
+    if (feasibleReaching.length > 0) {
+      const winner = minRisk(feasibleReaching)
+      recId = winner.id
+      reason = 'Recommended — safest plan reaching goal'
+    } else {
+      // No plan reaches goal within the horizon — fall back to the feasible plan with the
+      // least risk, tie-broken by the smallest shortfall from target.
+      const feasible = sorted.filter(p => p.feasible === 1)
+      if (feasible.length > 0) {
+        const winner = feasible.reduce((best, p) => {
+          const pRisk = p.risk_score ?? Infinity, bRisk = best.risk_score ?? Infinity
+          if (pRisk !== bRisk) return pRisk < bRisk ? p : best
+          return (p.shortfall ?? Infinity) < (best.shortfall ?? Infinity) ? p : best
+        })
+        recId = winner.id
+        reason = 'Closest safe plan — goal not met'
+      }
+    }
+  }
+
+  if (recId == null) {
+    // 'fastest' mode (or balanced/safest with nothing to recommend) — unchanged prior
+    // behaviour: the first feasible row after the base sort.
+    recId = sorted.find(p => p.feasible === 1)?.id ?? null
+    if (recId != null && mode !== 'fastest') reason = 'Recommended — fastest feasible plan'
+  }
+
+  return sorted.map((p, i) => ({
+    ...p, rank: i + 1, recommended: p.id === recId,
+    recommended_reason: p.id === recId ? reason : undefined,
+  }))
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
@@ -722,18 +883,15 @@ export function generatePathways(
     const feasible = checkConstraints(results.months, goal, monthlyExp, tax) && results.summary.min_cumulative_cashflow >= 0
     const { reached, monthIndex } = checkGoalReached(results.months, goal)
 
-    // Interim risk penalty: interest-only carries rate + no-amortisation risk the model
-    // doesn't yet price (P1 #5). Penalise proportional to sustained (terminal) leverage so
-    // an IO book can't rank as "safest". Replaced by real repricing once P1 #5 lands.
-    const last = results.months[results.months.length - 1]
-    const terminalLtv = last && last.total_value > 0 ? (last.total_debt / last.total_value) * 100 : 0
-    const risk_score = computeRiskScore(results.summary) + (t.interestOnly ? Math.round(terminalLtv) : 0)
+    const risk100 = computeRiskScore100(results.months, allEvents, results.summary, goal, projectionYears, monthlyExp, tax)
 
     const binding = analyzeBinding(goal, results.months, results.summary, reached, depositPlusCosts(assumptions), monthlyExp, tax)
     const binding_constraint = binding.key
     const binding_detail = t.interestOnly
       ? `Interest-only — rate-exposed, debt not amortised. ${binding.detail}`
       : binding.detail
+
+    const shortfall = reached ? 0 : computeShortfall(goal, results)
 
     return {
       template_name: t.template_name,
@@ -743,12 +901,37 @@ export function generatePathways(
       feasible,
       reaches_goal: reached,
       months_to_goal: monthIndex,
-      risk_score,
+      risk_score: risk100.total,
+      risk_band: risk100.band,
+      risk_breakdown: risk100.components,
+      shortfall,
       binding_constraint,
       binding_detail,
       assumptions_json: assumptionsJson,
     }
   })
+}
+
+// Goal-specific distance from target when a pathway doesn't reach it — the Safest ranking
+// mode's fallback tie-break when no plan reaches goal within the horizon (§P2-8). Date-based
+// goals (mortgage_free/retirement_date) have no continuous distance metric, so shortfall is 0
+// for those — feasibility/reaches_goal already carries the meaningful signal there.
+function computeShortfall(goal: Goal, results: ProjectionResult): number {
+  const last = results.months[results.months.length - 1]
+  if (!last) return 0
+  switch (goal.goal_type) {
+    case 'income': {
+      if (goal.target_monthly_income == null) return 0
+      const ending = last.monthly_cashflow_posttax ?? last.monthly_cashflow
+      return Math.max(0, goal.target_monthly_income - ending)
+    }
+    case 'count':
+      return goal.target_property_count != null ? Math.max(0, goal.target_property_count - last.property_count) : 0
+    case 'net_worth':
+      return goal.target_equity != null ? Math.max(0, goal.target_equity - last.total_equity) : 0
+    default:
+      return 0
+  }
 }
 
 export { monthDiff }

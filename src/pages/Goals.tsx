@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/services/api'
-import type { Goal, GoalType, GoalPathway, PropertyAssumptions, Scenario } from '@/types'
+import type { Goal, GoalType, GoalPathway, PropertyAssumptions, Scenario, RankingMode } from '@/types'
 import { formatCurrency } from '@/utils/currency'
-import { useGoalPathways, useGeneratePathways } from '@/hooks/useGoals'
+import { useGoalPathways, useGeneratePathways, useUpdateGoal } from '@/hooks/useGoals'
+import { RiskFrontierChart, type RiskFrontierPoint } from '@/components/charts'
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
@@ -73,12 +75,12 @@ const labelCls = 'block text-xs font-medium text-muted-foreground mb-1'
 // Hover tooltip wrapper. Uses React state, not CSS group-hover (which doesn't
 // work in this project's Tailwind v4 setup). Renders an inline dotted-underline
 // span with an absolutely-positioned popover above it.
-function Tip({ text, children, className = '' }: { text: string; children: string; className?: string }) {
+function Tip({ text, children, className = '', bare = false }: { text: string; children: ReactNode; className?: string; bare?: boolean }) {
   const [show, setShow] = useState(false)
   return (
     <span className={`relative ${className}`}>
       <span
-        className="underline decoration-dotted decoration-muted-foreground/40 cursor-default"
+        className={bare ? 'cursor-default' : 'underline decoration-dotted decoration-muted-foreground/40 cursor-default'}
         onMouseEnter={() => setShow(true)}
         onMouseLeave={() => setShow(false)}
       >
@@ -402,9 +404,73 @@ const ASSUMPTION_DEFAULTS: AssumptionsFormValues = {
   projection_years: 15,
 }
 
+const RANKING_MODE_LABELS: Record<RankingMode, string> = {
+  fastest:  'Fastest',
+  balanced: 'Balanced',
+  safest:   'Safest',
+}
+
+const RANKING_MODE_TIPS: Record<RankingMode, string> = {
+  fastest:  'Always recommends the quickest feasible plan that reaches the goal, regardless of risk.',
+  balanced: 'Recommends the lowest-risk plan among those within 25% of the fastest time to goal.',
+  safest:   'Recommends the lowest-risk feasible plan that reaches the goal, even if slower.',
+}
+
+const RISK_BAND_STYLE: Record<string, string> = {
+  Low:      'bg-emerald-500/15 text-emerald-400',
+  Medium:   'bg-blue-500/15 text-blue-400',
+  High:     'bg-orange-500/15 text-orange-400',
+  Critical: 'bg-red-500/15 text-red-400',
+}
+
+const RISK_COMPONENT_LABELS: Record<string, string> = {
+  leverage:      'Leverage',
+  affordability: 'Affordability',
+  amortisation:  'Amortisation (IO share)',
+  liquidity:     'Liquidity',
+  execution:     'Execution intensity',
+  scale:         'Operational scale',
+}
+
+function RiskFrontierModal({ pathways, onClose }: { pathways: GoalPathway[]; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="bg-card rounded-xl shadow-2xl w-full max-w-2xl p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold">Risk vs. speed</h2>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-sm">✕ Close</button>
+        </div>
+        <RiskFrontierChart
+          yLabel="Months to goal"
+          yBetterWhen="lower"
+          points={pathways.map((pw): RiskFrontierPoint => ({
+            label: pw.label,
+            risk: pw.risk_score ?? 0,
+            y: pw.months_to_goal ?? (pw.assumptions?.projection_years ?? ASSUMPTION_DEFAULTS.projection_years) * 12,
+            feasible: !!pw.feasible,
+            bindingDetail: pw.binding_detail ?? undefined,
+          }))}
+        />
+      </div>
+    </div>
+  )
+}
+
 function PathwaysPanel({ goal }: { goal: Goal }) {
   const { data: pathways = [], isLoading } = useGoalPathways(goal.id)
   const generate = useGeneratePathways(goal.id)
+  const updateGoal = useUpdateGoal(goal.id)
+  const [showFrontier, setShowFrontier] = useState(false)
+
+  function setRankingMode(mode: RankingMode) {
+    updateGoal.mutate({ ...goal, ranking_mode: mode })
+  }
 
   const { register, handleSubmit, reset } = useForm<AssumptionsFormValues>({
     resolver: zodResolver(assumptionsSchema) as any,
@@ -490,6 +556,27 @@ function PathwaysPanel({ goal }: { goal: Goal }) {
       )}
 
       {pathways.length > 0 && (
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-medium text-muted-foreground">Rank by:</span>
+          {(Object.keys(RANKING_MODE_LABELS) as RankingMode[]).map(mode => (
+            <button
+              key={mode}
+              onClick={() => setRankingMode(mode)}
+              disabled={updateGoal.isPending}
+              title={RANKING_MODE_TIPS[mode]}
+              className={`text-[11px] font-medium px-2.5 py-1 rounded-md border transition-colors disabled:opacity-50 ${
+                (goal.ranking_mode ?? 'fastest') === mode
+                  ? 'bg-primary/15 border-primary/60 text-primary'
+                  : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
+              }`}
+            >
+              {RANKING_MODE_LABELS[mode]}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {pathways.length > 0 && (
         <div className="grid grid-cols-3 gap-3">
           {pathways.map(pw => (
             <div
@@ -505,6 +592,19 @@ function PathwaysPanel({ goal }: { goal: Goal }) {
                   {pw.recommended && (
                     <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/15 text-primary">★ Recommended</span>
                   )}
+                  {pw.risk_band && (
+                    <Tip bare text={
+                      pw.risk_breakdown
+                        ? (Object.entries(pw.risk_breakdown) as [string, number][])
+                            .map(([k, v]) => `${RISK_COMPONENT_LABELS[k] ?? k}: ${v.toFixed(1)}`)
+                            .join(' · ')
+                        : `Risk score ${pw.risk_score ?? '—'}/100`
+                    }>
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${RISK_BAND_STYLE[pw.risk_band] ?? 'bg-muted text-muted-foreground'}`}>
+                        {pw.risk_band} risk ({pw.risk_score ?? '—'})
+                      </span>
+                    </Tip>
+                  )}
                   <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${pw.feasible ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
                     {pw.feasible ? 'feasible' : 'infeasible'}
                   </span>
@@ -513,6 +613,10 @@ function PathwaysPanel({ goal }: { goal: Goal }) {
                   </span>
                 </div>
               </div>
+
+              {pw.recommended && pw.recommended_reason && (
+                <div className="text-[11px] text-primary">{pw.recommended_reason}</div>
+              )}
 
               {pw.summary && (
                 <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
@@ -567,16 +671,29 @@ function PathwaysPanel({ goal }: { goal: Goal }) {
               )}
 
               {pw.scenario_id && (
-                <a
-                  href="/scenarios"
+                <Link
+                  to={`/scenarios?id=${pw.scenario_id}`}
                   className="block text-[11px] text-primary hover:underline mt-1"
                 >
                   View in What-If →
-                </a>
+                </Link>
               )}
             </div>
           ))}
         </div>
+      )}
+
+      {pathways.length > 1 && (
+        <button
+          onClick={() => setShowFrontier(true)}
+          className="text-[11px] font-medium px-2.5 py-1.5 rounded-md border border-border text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+        >
+          View risk vs. speed chart →
+        </button>
+      )}
+
+      {showFrontier && (
+        <RiskFrontierModal pathways={pathways} onClose={() => setShowFrontier(false)} />
       )}
     </div>
   )

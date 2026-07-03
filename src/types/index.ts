@@ -274,11 +274,25 @@ export interface Goal {
   min_cash_reserve_months?: number | null
   capex_reserve_per_property?: number | null
   erc_pct?: number | null
+  ranking_mode?: RankingMode
   notes?: string | null
   created_at: string
   updated_at: string
   warnings?: PrudenceWarning[]
 }
+
+export type RankingMode = 'fastest' | 'balanced' | 'safest'
+
+export interface RiskComponents {
+  leverage: number
+  affordability: number
+  amortisation: number
+  liquidity: number
+  execution: number
+  scale: number
+}
+
+export type PathwayRiskBand = 'Low' | 'Medium' | 'High' | 'Critical'
 
 export interface ScenarioSummary {
   start_equity: number
@@ -321,10 +335,14 @@ export interface GoalPathway {
   summary?: ScenarioSummary | null
   assumptions?: PropertyAssumptions | null
   risk_score?: number | null
+  risk_band?: PathwayRiskBand | null
+  risk_breakdown?: RiskComponents | null
+  shortfall?: number | null
   binding_constraint?: string | null
   binding_detail?: string | null
   rank?: number
   recommended?: boolean
+  recommended_reason?: string
   created_at: string
 }
 

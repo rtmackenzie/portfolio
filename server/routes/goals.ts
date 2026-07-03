@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { queryAll, queryOne, execute, transaction } from '../db/database.ts'
 import { logActivity } from '../services/activityLogger.ts'
 import { loadPortfolioState } from '../services/scenarioEngine.ts'
-import { generatePathways, rankPathways, positiveOr, type Goal, type PropertyAssumptions, type RankablePathway } from '../services/pathwayGenerator.ts'
+import { generatePathways, rankPathways, positiveOr, type Goal, type PropertyAssumptions, type RankablePathway, type RankingMode } from '../services/pathwayGenerator.ts'
 import { loadTaxSettings, loadAssumptionSettings } from '../services/settings.ts'
 import { computeGoalWarnings } from '../services/goalValidation.ts'
 
@@ -43,8 +43,8 @@ router.post('/', (req, res) => {
         target_date, max_ltv_pct, min_icr, min_annual_cashflow, scenario_id,
         director_loan_annual, director_loan_start_date,
         starting_cash, mortgage_reprice_years, mortgage_reprice_uplift_bps,
-        min_cash_reserve_months, capex_reserve_per_property, erc_pct, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        min_cash_reserve_months, capex_reserve_per_property, erc_pct, ranking_mode, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [d.name, d.goal_type,
        d.target_monthly_income ?? null, d.target_property_count ?? null,
        d.target_equity ?? null, d.target_date ?? null,
@@ -53,7 +53,7 @@ router.post('/', (req, res) => {
        d.director_loan_annual ?? null, d.director_loan_start_date ?? null,
        d.starting_cash ?? null, d.mortgage_reprice_years ?? null, d.mortgage_reprice_uplift_bps ?? null,
        d.min_cash_reserve_months ?? null, d.capex_reserve_per_property ?? null, d.erc_pct ?? null,
-       d.notes ?? null]
+       d.ranking_mode ?? 'fastest', d.notes ?? null]
     )
     const goal = queryOne(GOAL_SELECT + 'WHERE g.id = ?', [result.lastInsertRowid])
     logActivity('goal_created', 'goal', Number(result.lastInsertRowid), `Goal created: ${d.name}`)
@@ -72,7 +72,7 @@ router.put('/:id', (req, res) => {
         target_equity=?, target_date=?, max_ltv_pct=?, min_icr=?, min_annual_cashflow=?,
         scenario_id=?, director_loan_annual=?, director_loan_start_date=?,
         starting_cash=?, mortgage_reprice_years=?, mortgage_reprice_uplift_bps=?,
-        min_cash_reserve_months=?, capex_reserve_per_property=?, erc_pct=?,
+        min_cash_reserve_months=?, capex_reserve_per_property=?, erc_pct=?, ranking_mode=?,
         notes=?, updated_at=datetime('now') WHERE id=?`,
       [d.name, d.goal_type,
        d.target_monthly_income ?? null, d.target_property_count ?? null,
@@ -82,6 +82,7 @@ router.put('/:id', (req, res) => {
        d.director_loan_annual ?? null, d.director_loan_start_date ?? null,
        d.starting_cash ?? null, d.mortgage_reprice_years ?? null, d.mortgage_reprice_uplift_bps ?? null,
        d.min_cash_reserve_months ?? null, d.capex_reserve_per_property ?? null, d.erc_pct ?? null,
+       d.ranking_mode ?? 'fastest',
        d.notes ?? null, id]
     )
     const goal = queryOne(GOAL_SELECT + 'WHERE g.id = ?', [id])
@@ -110,7 +111,8 @@ router.delete('/:id', (req, res) => {
 router.get('/:id/pathways', (req, res) => {
   try {
     const id = Number(req.params.id)
-    const rows = queryAll<{ summary_json: string | null; assumptions_json: string | null } & Record<string, unknown>>(
+    const goal = queryOne<{ ranking_mode: RankingMode }>('SELECT ranking_mode FROM goals WHERE id=?', [id])
+    const rows = queryAll<{ summary_json: string | null; assumptions_json: string | null; risk_breakdown_json: string | null } & Record<string, unknown>>(
       `SELECT gp.*, s.name as scenario_name
        FROM goal_pathways gp
        LEFT JOIN scenarios s ON s.id = gp.scenario_id
@@ -122,12 +124,15 @@ router.get('/:id/pathways', (req, res) => {
       ...r,
       summary: r.summary_json ? JSON.parse(r.summary_json as string) : null,
       assumptions: r.assumptions_json ? JSON.parse(r.assumptions_json as string) : null,
+      risk_breakdown: r.risk_breakdown_json ? JSON.parse(r.risk_breakdown_json as string) : null,
       summary_json: undefined,
       assumptions_json: undefined,
+      risk_breakdown_json: undefined,
     }))
 
-    // Rank by time-to-goal + risk; flag the recommended (top feasible) pathway (C3)
-    res.json(rankPathways(parsed as unknown as RankablePathway[]))
+    // Rank by time-to-goal + risk under the goal's chosen ranking mode (§P2-8 Appendix B.2);
+    // flag the recommended pathway with its provenance (C3).
+    res.json(rankPathways(parsed as unknown as RankablePathway[], goal?.ranking_mode ?? 'fastest'))
   } catch (err) {
     res.status(500).json({ message: String(err) })
   }
@@ -219,14 +224,15 @@ router.post('/:id/pathways/generate', (req, res) => {
 
         // Create pathway record
         const pathwayResult = execute(
-          `INSERT INTO goal_pathways (goal_id, scenario_id, template_name, label, feasible, reaches_goal, months_to_goal, summary_json, assumptions_json, risk_score, binding_constraint, binding_detail)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO goal_pathways (goal_id, scenario_id, template_name, label, feasible, reaches_goal, months_to_goal, summary_json, assumptions_json, risk_score, risk_breakdown_json, shortfall, binding_constraint, binding_detail)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id, scenarioId, pw.template_name, pw.label,
             pw.feasible ? 1 : 0, pw.reaches_goal ? 1 : 0,
             pw.months_to_goal, JSON.stringify(pw.results.summary),
             JSON.stringify({ ...assumptions, projection_years: projectionYears }),
-            pw.risk_score, pw.binding_constraint, pw.binding_detail,
+            pw.risk_score, JSON.stringify(pw.risk_breakdown), pw.shortfall,
+            pw.binding_constraint, pw.binding_detail,
           ]
         )
 
@@ -244,6 +250,9 @@ router.post('/:id/pathways/generate', (req, res) => {
           assumptions: { ...assumptions, projection_years: projectionYears },
           assumptions_json: pw.assumptions_json,
           risk_score: pw.risk_score,
+          risk_band: pw.risk_band,
+          risk_breakdown: pw.risk_breakdown,
+          shortfall: pw.shortfall,
           binding_constraint: pw.binding_constraint,
           binding_detail: pw.binding_detail,
           created_at: new Date().toISOString(),

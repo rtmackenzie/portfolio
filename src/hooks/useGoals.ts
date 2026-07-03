@@ -38,6 +38,7 @@ export function useUpdateGoal(id: number) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: goalKeys.lists() })
       qc.invalidateQueries({ queryKey: goalKeys.detail(id) })
+      qc.invalidateQueries({ queryKey: ['goals', id, 'pathways'] })
     },
   })
 }

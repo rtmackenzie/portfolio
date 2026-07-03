@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Play, X, Trash2, Pencil, Copy, ChevronDown, FileDown } from 'lucide-react'
 import { api } from '@/services/api'
@@ -48,7 +49,11 @@ export default function Scenarios() {
     queryKey: ['scenarios'],
     queryFn: () => api.get<Scenario[]>('/scenarios'),
   })
-  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [searchParams] = useSearchParams()
+  const [selectedId, setSelectedId] = useState<number | null>(() => {
+    const id = Number(searchParams.get('id'))
+    return Number.isFinite(id) && id > 0 ? id : null
+  })
   const [showCreate, setShowCreate] = useState(false)
   const [showAddEvent, setShowAddEvent] = useState(false)
   const [timelineOpen, setTimelineOpen] = useState(false)

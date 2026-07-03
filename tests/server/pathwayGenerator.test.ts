@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import {
   generatePathways,
-  computeRiskScore,
+  computeRiskScore100,
   analyzeBinding,
   rankPathways,
   type RankablePathway,
+  type Goal,
 } from '../../server/services/pathwayGenerator.ts'
 import { buildProjection, type PropertyState } from '../../server/services/scenarioEngine.ts'
 import { DEFAULT_TAX_SETTINGS } from '../../server/services/tax.ts'
@@ -324,24 +325,102 @@ describe('generatePathways — director loans drive the schedule', () => {
 
 // ─── C3: ranking + binding constraint ────────────────────────────────────────────
 
-describe('computeRiskScore', () => {
-  it('a liquidity breach scores far riskier than a clean run', () => {
-    const clean = computeRiskScore(makeSummary())
-    const breach = computeRiskScore(makeSummary({ min_cumulative_cashflow: -1 }))
-    expect(breach).toBeGreaterThan(clean + 50)
+// ─── §P2-8 Appendix B.1: bounded 0-100 risk score ─────────────────────────────
+
+describe('computeRiskScore100', () => {
+  const baseGoal: Goal = { goal_type: 'count', target_property_count: 6, max_ltv_pct: 75, min_icr: 145 }
+
+  function summary100(over: Partial<{ min_icr: number; total_capital_invested: number }> = {}) {
+    return { min_icr: 200, total_capital_invested: 50000, ...over } as any
+  }
+
+  function monthsAt(totalValue: number, totalDebt: number, cash = 100000, propertyCount = 1) {
+    return [{
+      date: '2030-01', total_value: totalValue, total_debt: totalDebt, total_equity: totalValue - totalDebt,
+      monthly_cashflow: 1000, cumulative_cashflow: cash, cumulative_cashflow_posttax: cash,
+      property_count: propertyCount, monthly_icr: 200,
+    }] as any
+  }
+
+  function buyEv(price: number, depositPercent = 25, interestOnly = false) {
+    return { event_type: 'buy_property', property_id: null, date: '2026-01-01', parameters_json: JSON.stringify({ purchase_price: price, deposit_percent: depositPercent, interest_only: interestOnly }) }
+  }
+
+  it('is always bounded within 0-100, even under an extreme worst-case input', () => {
+    const months = monthsAt(100000, 95000, -50000, 20)
+    const events = Array.from({ length: 60 }, () => buyEv(100000, 25, true))
+    const r = computeRiskScore100(months, events, summary100({ min_icr: 50, total_capital_invested: 500000 }), baseGoal, 15, 200)
+    expect(r.total).toBeGreaterThanOrEqual(0)
+    expect(r.total).toBeLessThanOrEqual(100)
   })
 
-  it('more months below the ICR floor increases risk', () => {
-    const few = computeRiskScore(makeSummary({ months_below_icr: 1 }))
-    const many = computeRiskScore(makeSummary({ months_below_icr: 10 }))
-    expect(many).toBeGreaterThan(few)
+  it('a genuine LTV mandate breach forces the total into the Critical band (>=90)', () => {
+    // goal ceiling 75%; portfolio peaks at 80% — a real breach.
+    const months = monthsAt(100000, 80000)
+    const r = computeRiskScore100(months, [], summary100(), baseGoal, 15, 200)
+    expect(r.total).toBeGreaterThanOrEqual(90)
+    expect(r.band).toBe('Critical')
   })
 
-  it('a thin ICR cushion adds risk; a comfortable one does not', () => {
-    const thin = computeRiskScore(makeSummary({ min_icr: 110 }))   // below 145 ⇒ penalty
-    const comfy = computeRiskScore(makeSummary({ min_icr: 200 }))  // above 145 ⇒ none
-    expect(thin).toBeGreaterThan(comfy)
-    expect(comfy).toBe(0)
+  it('leverage scores 0 at or below 30% LTV and rises toward the mandate', () => {
+    const low = computeRiskScore100(monthsAt(100000, 30000), [], summary100(), baseGoal, 15, 200)
+    const high = computeRiskScore100(monthsAt(100000, 70000), [], summary100(), baseGoal, 15, 200)
+    expect(low.components.leverage).toBe(0)
+    expect(high.components.leverage).toBeGreaterThan(low.components.leverage)
+    expect(high.components.leverage).toBeLessThanOrEqual(25)
+  })
+
+  it('affordability headroom scores 0 at >=2.5x the ICR floor and full weight at the floor', () => {
+    const comfy = computeRiskScore100(monthsAt(100000, 50000), [], summary100({ min_icr: 145 * 2.5 }), baseGoal, 15, 200)
+    const thin = computeRiskScore100(monthsAt(100000, 50000), [], summary100({ min_icr: 145 }), baseGoal, 15, 200)
+    expect(comfy.components.affordability).toBe(0)
+    expect(thin.components.affordability).toBeCloseTo(25, 0)
+  })
+
+  it('amortisation profile scales with the debt-weighted interest-only share of buy events', () => {
+    const allRepayment = [buyEv(100000, 25, false), buyEv(100000, 25, false)]
+    const allIO = [buyEv(100000, 25, true), buyEv(100000, 25, true)]
+    const r1 = computeRiskScore100(monthsAt(200000, 100000), allRepayment, summary100(), baseGoal, 15, 200)
+    const r2 = computeRiskScore100(monthsAt(200000, 100000), allIO, summary100(), baseGoal, 15, 200)
+    expect(r1.components.amortisation).toBe(0)
+    expect(r2.components.amortisation).toBeCloseTo(15, 0)
+  })
+
+  it('liquidity resilience scores 0 at >=3x the reserve floor and full weight at the floor', () => {
+    const goal: Goal = { ...baseGoal, min_cash_reserve_months: 3, capex_reserve_per_property: 1000 }
+    // floor = 3*200*1 + 1000*1 = 1600
+    const comfy = computeRiskScore100(monthsAt(100000, 50000, 1600 * 3), [], summary100(), goal, 15, 200)
+    const thin = computeRiskScore100(monthsAt(100000, 50000, 1600), [], summary100(), goal, 15, 200)
+    expect(comfy.components.liquidity).toBe(0)
+    expect(thin.components.liquidity).toBeCloseTo(15, 0)
+  })
+
+  it('execution intensity saturates near ~3.5 transactions/year', () => {
+    const none = computeRiskScore100(monthsAt(100000, 50000), [], summary100(), baseGoal, 15, 200)
+    const heavy = computeRiskScore100(monthsAt(100000, 50000), Array.from({ length: 53 }, () => buyEv(50000)), summary100(), baseGoal, 15, 200)
+    expect(none.components.execution).toBe(0)
+    expect(heavy.components.execution).toBeCloseTo(10, 0)
+  })
+
+  it('operational scale saturates above ~15 ending properties', () => {
+    const small = computeRiskScore100(monthsAt(100000, 50000, 100000, 1), [], summary100(), baseGoal, 15, 200)
+    const large = computeRiskScore100(monthsAt(100000, 50000, 100000, 15), [], summary100(), baseGoal, 15, 200)
+    expect(small.components.scale).toBeLessThan(large.components.scale)
+    expect(large.components.scale).toBeCloseTo(10, 0)
+  })
+
+  it('a floor of 5 applies once any capital has been deployed — no leveraged plan is riskless', () => {
+    // Every component at its safest: low LTV, comfortable ICR, no IO, ample reserve, no
+    // transactions, small scale — total would otherwise round to 0.
+    const goal: Goal = { ...baseGoal, min_cash_reserve_months: 3, capex_reserve_per_property: 1000 }
+    const r = computeRiskScore100(monthsAt(100000, 20000, 100000, 1), [], summary100(), goal, 15, 200)
+    expect(r.total).toBeGreaterThanOrEqual(5)
+  })
+
+  it('bands map thresholds correctly: 0-25 Low, 26-50 Medium, 51-75 High, 76-100 Critical', () => {
+    const goal: Goal = { goal_type: 'count', max_ltv_pct: 200 } // generous ceiling, no breach path
+    const lowLtv = computeRiskScore100(monthsAt(100000, 20000), [], summary100({ min_icr: 400 }), goal, 15, 200)
+    expect(lowLtv.band).toBe('Low')
   })
 })
 
@@ -420,6 +499,62 @@ describe('rankPathways', () => {
     expect(ranked[0].id).toBe(1)            // still ranked first by time-to-goal
     expect(ranked[0].recommended).toBe(false)
     expect(ranked.find(r => r.id === 2)!.recommended).toBe(true)
+  })
+
+  // ─── §P2-8 Appendix B.2: ranking modes ──────────────────────────────────────
+
+  it('fastest mode (default) is unchanged from the pre-mode behaviour', () => {
+    const rows = [
+      base({ id: 1, months_to_goal: 48, risk_score: 80 }),  // fastest, riskiest
+      base({ id: 2, months_to_goal: 60, risk_score: 10 }),  // slower, safest
+    ]
+    const ranked = rankPathways(rows, 'fastest')
+    expect(ranked.find(r => r.id === 1)!.recommended).toBe(true)
+    expect(ranked.find(r => r.id === 1)!.recommended_reason).toBeUndefined()
+  })
+
+  it('balanced mode picks the safest plan within 1.25x the fastest reaching plan', () => {
+    const rows = [
+      base({ id: 1, months_to_goal: 48, risk_score: 80 }),  // fastest (reference)
+      base({ id: 2, months_to_goal: 55, risk_score: 10 }),  // within 1.25x of 48 (=60), far safer
+      base({ id: 3, months_to_goal: 90, risk_score: 1 }),   // safest overall but outside 1.25x window
+    ]
+    const ranked = rankPathways(rows, 'balanced')
+    expect(ranked.find(r => r.id === 2)!.recommended).toBe(true)
+    expect(ranked.find(r => r.id === 2)!.recommended_reason).toMatch(/safest plan within reach/i)
+  })
+
+  it('safest mode picks the minimum-risk plan among those that reach goal', () => {
+    const rows = [
+      base({ id: 1, months_to_goal: 48, risk_score: 80 }),
+      base({ id: 2, months_to_goal: 200, risk_score: 5 }),  // much slower, but safest
+    ]
+    const ranked = rankPathways(rows, 'safest')
+    expect(ranked.find(r => r.id === 2)!.recommended).toBe(true)
+    expect(ranked.find(r => r.id === 2)!.recommended_reason).toMatch(/safest plan reaching goal/i)
+  })
+
+  it('safest mode falls back to the least-risky feasible plan, tie-broken by smallest shortfall, when none reach goal', () => {
+    const rows = [
+      base({ id: 1, reaches_goal: 0, months_to_goal: null, risk_score: 10, shortfall: 500 }),
+      base({ id: 2, reaches_goal: 0, months_to_goal: null, risk_score: 10, shortfall: 50 }),  // same risk, closer to target
+      base({ id: 3, reaches_goal: 0, months_to_goal: null, risk_score: 40, shortfall: 0 }),
+    ]
+    const ranked = rankPathways(rows, 'safest')
+    expect(ranked.find(r => r.id === 2)!.recommended).toBe(true)
+    expect(ranked.find(r => r.id === 2)!.recommended_reason).toMatch(/closest safe plan/i)
+  })
+
+  it('never recommends an infeasible pathway in balanced or safest mode either', () => {
+    const rows = [
+      base({ id: 1, feasible: 0, months_to_goal: 24, risk_score: 1 }),   // fastest+safest but infeasible
+      base({ id: 2, feasible: 1, months_to_goal: 60, risk_score: 50 }),
+    ]
+    for (const mode of ['fastest', 'balanced', 'safest'] as const) {
+      const ranked = rankPathways(rows, mode)
+      expect(ranked.find(r => r.id === 1)!.recommended).toBe(false)
+      expect(ranked.find(r => r.id === 2)!.recommended).toBe(true)
+    }
   })
 })
 
