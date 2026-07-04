@@ -322,7 +322,12 @@ function buildCashGatedEvents(
   interestOnly: boolean,
   startingCash: number,
   assumptionsJson: string,
-  settings?: AssumptionSettings
+  settings?: AssumptionSettings,
+  // Hybrid-template support (§P2-8d): resume an already-decided event list under a new
+  // strategy from a given month, rather than starting the decision search from scratch.
+  // Both default to today's exact from-scratch behaviour for every existing caller.
+  seedDecisions: ScenarioEvent[] = [],
+  startMonth = 0
 ): { decisions: ScenarioEvent[]; icrBlocked: { candidateIcrPct: number; icrFloor: number } | null } {
   const totalMonths = projYears * 12
   const config = { base_date: baseDate, projection_years: projYears, tax, starting_cash: startingCash, assumptions_json: assumptionsJson }
@@ -375,13 +380,13 @@ function buildCashGatedEvents(
     return { buyCost, icrOk: candidateIcrPct >= icrFloor, ltvOk, candidateIcrPct }
   }
 
-  const decisions: ScenarioEvent[] = []
+  const decisions: ScenarioEvent[] = [...seedDecisions]
   // Captures the first month where a buy was blocked purely by the lender ICR test — cash and
   // LTV would otherwise have permitted the purchase — so generatePathways() can report the real
   // reason instead of analyzeBinding()'s realized-portfolio view, which is blind to a candidate
   // deal that was rejected before it ever became an event.
   let icrBlocked: { candidateIcrPct: number; icrFloor: number } | null = null
-  let lastMonth = 0
+  let lastMonth = startMonth
   // Earliest month a NEW buy may be decided — advanced past a pending buy's own completion
   // month (§P1-6, 2nd review) so overlapping in-flight purchases can't each pass the LTV/reserve
   // gates against a stale pre-completion snapshot. Scoped to buys only; refinances/payoffs
@@ -521,34 +526,42 @@ function checkConstraints(months: MonthSnapshot[], goal: Goal, monthlyExp: numbe
 
 // ─── Goal-reached checker ─────────────────────────────────────────────────────
 
+// "Reached" requires the goal to hold at the *end* of the horizon, not merely to have been
+// touched once and drifted back below it — a plan whose income spikes to target for one month
+// and settles back down hasn't actually reached financial independence at that level. Scans
+// backward from the final month; monthIndex is the first month of the streak that runs
+// uninterrupted through to the end. No-op for count/net_worth (monotonic in this engine's
+// pathway generation — first-crossing and last-month-value already coincide); the real fix is
+// for income/retirement_date, whose post-tax cashflow can dip below target later (rate
+// repricing, or a hybrid's phase-switch cost) after an earlier transient crossing.
 function checkGoalReached(months: MonthSnapshot[], goal: Goal): { reached: boolean; monthIndex: number | null } {
-  for (let i = 0; i < months.length; i++) {
+  if (months.length === 0) return { reached: false, monthIndex: null }
+
+  const hit = (i: number): boolean => {
     const m = months[i]
     // Income/retirement goals judged on post-tax cash — the real FI number.
     const postTaxMonthly = m.monthly_cashflow_posttax ?? m.monthly_cashflow
-    let hit = false
     switch (goal.goal_type) {
       case 'income':
-        hit = goal.target_monthly_income != null && postTaxMonthly >= goal.target_monthly_income
-        break
+        return goal.target_monthly_income != null && postTaxMonthly >= goal.target_monthly_income
       case 'count':
-        hit = goal.target_property_count != null && m.property_count >= goal.target_property_count
-        break
+        return goal.target_property_count != null && m.property_count >= goal.target_property_count
       case 'net_worth':
-        hit = goal.target_equity != null && m.total_equity >= goal.target_equity
-        break
+        return goal.target_equity != null && m.total_equity >= goal.target_equity
       case 'mortgage_free':
-        hit = m.total_debt === 0 &&
+        return m.total_debt === 0 &&
           (goal.target_date == null || m.date.slice(0, 7) <= goal.target_date.slice(0, 7))
-        break
       case 'retirement_date':
-        hit = postTaxMonthly >= 0 &&
+        return postTaxMonthly >= 0 &&
           (goal.target_date == null || m.date.slice(0, 7) <= goal.target_date.slice(0, 7))
-        break
     }
-    if (hit) return { reached: true, monthIndex: i }
   }
-  return { reached: false, monthIndex: null }
+
+  const last = months.length - 1
+  if (!hit(last)) return { reached: false, monthIndex: null }
+  let i = last
+  while (i > 0 && hit(i - 1)) i--
+  return { reached: true, monthIndex: i }
 }
 
 // ─── Ranking: risk score + binding constraint (C3 / §P2-8 Appendix B) ─────────
@@ -596,7 +609,16 @@ export function computeRiskScore100(
   goal: Goal,
   projectionYears: number,
   monthlyExp: number,
-  tax?: TaxSettings
+  tax?: TaxSettings,
+  // Hybrid-template support (§P2-8d): when supplied, lets the amortisation component notice a
+  // remortgage that converts a property from interest-only to repayment (e.g. io_then_repay's
+  // switch event) — `propertySeriesIds` is property_series's own property_id list in its existing
+  // order (pre-existing properties first, then simulated buys in completion order);
+  // `existingPropertyCount` is how many of those are pre-existing (not bought this simulation).
+  // Omitted by every ordinary single-phase template call — falls back to today's exact
+  // buy-events-only behaviour.
+  existingPropertyCount?: number,
+  propertySeriesIds?: number[]
 ): RiskScore100 {
   // Leverage: peak LTV vs the goal's own mandate (or a lender-realistic default ceiling when
   // the goal sets none) — 0 at <=30% LTV, full weight at the mandate.
@@ -622,15 +644,44 @@ export function computeRiskScore100(
   // themselves (no per-property IO tracking survives into property_series) — origination loan
   // amounts, not amortised terminal balances, so this slightly overstates true terminal IO
   // share (repayment loans pay down further over time). A defensible, documented approximation.
+  //
+  // When propertySeriesIds/existingPropertyCount are supplied, a single forward pass over the
+  // (already date-sorted) events also re-classifies any loan a later remortgage converts to
+  // repayment (§P2-8d io_then_repay) — without this, a converted loan would still count toward
+  // the IO share it no longer carries, hiding the hybrid's entire risk advantage.
   let ioLoanAmount = 0
   let totalLoanAmount = 0
-  for (const ev of events) {
-    if (ev.event_type !== 'buy_property') continue
-    const p = JSON.parse(ev.parameters_json)
-    const price = p.purchase_price ?? 0
-    const loan = price * (1 - (p.deposit_percent ?? 25) / 100)
-    totalLoanAmount += loan
-    if (p.interest_only) ioLoanAmount += loan
+  if (propertySeriesIds != null && existingPropertyCount != null) {
+    const loans = new Map<number, { loanAmount: number; isIO: boolean }>()
+    let buyIndex = 0
+    for (const ev of events) {
+      if (ev.event_type === 'buy_property') {
+        const p = JSON.parse(ev.parameters_json)
+        const price = p.purchase_price ?? 0
+        const loanAmount = price * (1 - (p.deposit_percent ?? 25) / 100)
+        const propertyId = propertySeriesIds[existingPropertyCount + buyIndex]
+        buyIndex++
+        if (propertyId != null) loans.set(propertyId, { loanAmount, isIO: !!p.interest_only })
+      } else if (ev.event_type === 'remortgage') {
+        const p = JSON.parse(ev.parameters_json)
+        const targetId = p.sim_property_id
+        const existing = targetId != null ? loans.get(targetId) : undefined
+        if (existing) existing.isIO = !!p.interest_only
+      }
+    }
+    for (const { loanAmount, isIO } of loans.values()) {
+      totalLoanAmount += loanAmount
+      if (isIO) ioLoanAmount += loanAmount
+    }
+  } else {
+    for (const ev of events) {
+      if (ev.event_type !== 'buy_property') continue
+      const p = JSON.parse(ev.parameters_json)
+      const price = p.purchase_price ?? 0
+      const loan = price * (1 - (p.deposit_percent ?? 25) / 100)
+      totalLoanAmount += loan
+      if (p.interest_only) ioLoanAmount += loan
+    }
   }
   const amortisation = totalLoanAmount > 0 ? (ioLoanAmount / totalLoanAmount) * 15 : 0
 
@@ -902,7 +953,7 @@ export function runTemplate(
   const feasible = checkConstraints(results.months, goal, monthlyExp, tax) && results.summary.min_cumulative_cashflow >= 0
   const { reached, monthIndex } = checkGoalReached(results.months, goal)
 
-  const risk100 = computeRiskScore100(results.months, allEvents, results.summary, goal, projectionYears, monthlyExp, tax)
+  const risk100 = computeRiskScore100(results.months, allEvents, results.summary, goal, projectionYears, monthlyExp, tax, initialState.size, results.property_series.map(ps => ps.property_id))
 
   // No purchase was ever made, and the reason was the candidate deal itself failing the
   // lender ICR stress test (not cash/LTV) — analyzeBinding() only sees the realized,
@@ -940,6 +991,126 @@ export function runTemplate(
   }
 }
 
+// ─── Hybrid strategy templates (§P2-8d / Appendix D.2) ────────────────────────
+// Named, explainable two-phase strategies — not a black-box optimiser — composed entirely from
+// the existing single-phase decision loops with one stated switch rule each, per the appendix.
+
+export interface HybridTemplate {
+  template_name: string
+  label: string
+  phase1TemplateName: string   // must exist in TEMPLATES
+  phase2: 'repay_switch' | 'degear'
+}
+
+export const HYBRID_TEMPLATES: HybridTemplate[] = [
+  // "Fast Build, Then Lock In": build fast on interest-only, then convert every outstanding IO
+  // loan to repayment once the goal is met — answers §13's own "IO early, switch to repayment
+  // at goal" example directly.
+  { template_name: 'io_then_repay',    label: 'Fast Build, Then Lock In', phase1TemplateName: 'max_cashflow',  phase2: 'repay_switch' },
+  // "Recycle, Then De-Risk": BRRR-recycle equity to build, then spend the back half of the plan
+  // de-levering — the strategy an experienced BRRR operator actually describes, which neither
+  // BRRR (never de-levers) nor Low-Risk Hold (never recycles) captures alone.
+  { template_name: 'brrr_then_degear', label: 'Recycle, Then De-Risk',    phase1TemplateName: 'brrr_recycler', phase2: 'degear' },
+]
+
+// Runs one hybrid: phase 1 is its base template's own decision loop, forced to stop at the goal
+// month (regardless of that template's own stopAtGoal setting) so the switch has a clean cutoff;
+// phase 2 either inserts repayment-conversion events (repay_switch) or resumes the same decision
+// search under de_gear from that month (degear). Returns null when phase 1 never reaches goal
+// (no switch point exists — the hybrid would just duplicate its base template) or when phase 2
+// has nothing to add (the hybrid would be identical to phase 1 alone) — both per the appendix's
+// degeneration/dedup rules, so the frontier chart and ranking never see a duplicate pathway.
+export function runHybridTemplate(
+  h: HybridTemplate,
+  goal: Goal,
+  initialState: Map<number, PropertyState>,
+  assumptions: PropertyAssumptions,
+  projectionYears: number,
+  tax?: TaxSettings,
+  settings?: AssumptionSettings
+): GeneratedPathway | null {
+  const phase1Template = TEMPLATES.find(t => t.template_name === h.phase1TemplateName)
+  if (!phase1Template) return null
+
+  const baseDate = new Date().toISOString().slice(0, 10)
+  const monthlyExp = assumptions.monthly_expenses ?? 200
+  const startingCash = goal.starting_cash ?? reserveFloor(goal, monthlyExp, initialState.size)
+  const assumptionsJson = JSON.stringify({
+    property_growth_pct: settings?.default_property_growth_pct ?? 3.0,
+    rent_growth_pct: settings?.default_rent_growth_pct ?? 2.5,
+    expense_inflation_pct: settings?.default_expense_inflation_pct ?? 2.5,
+    void_months_per_year: settings?.default_void_months_per_year ?? 1,
+    mortgage_reprice_years: goal.mortgage_reprice_years ?? 5,
+    mortgage_reprice_uplift_bps: goal.mortgage_reprice_uplift_bps ?? 200,
+    erc_pct: goal.erc_pct ?? 3,
+    capex_cycle_years: settings?.capex_cycle_years ?? 10,
+    capex_cost_per_property: positiveOr(settings?.capex_cost_per_property, 3000),
+    arrears_pct: settings?.arrears_pct ?? 1.5,
+  })
+  const config = { base_date: baseDate, projection_years: projectionYears, tax, starting_cash: startingCash, assumptions_json: assumptionsJson }
+  const loanEvents = goal.director_loan_annual
+    ? buildDirectorLoanEvents(baseDate, projectionYears, goal.director_loan_annual, goal.director_loan_start_date)
+    : []
+
+  // Phase 1: the base strategy, stopped at goal so the switch has a clean cutoff.
+  const { decisions: phase1Decisions } = buildCashGatedEvents(
+    phase1Template.strategy, baseDate, projectionYears, assumptions, initialState, loanEvents, tax, goal,
+    /* stopAtGoal */ true, phase1Template.interestOnly, startingCash, assumptionsJson, settings
+  )
+  const phase1Events = [...phase1Decisions, ...loanEvents].sort((a, b) => a.date.localeCompare(b.date))
+  const phase1Results = buildProjection(cloneState(initialState), phase1Events, config) as ProjectionResult
+  const { reached: phase1Reached, monthIndex: m } = checkGoalReached(phase1Results.months, withMargin(goal))
+  if (!phase1Reached || m == null) return null   // Degeneration: no switch point exists.
+
+  let finalDecisions: ScenarioEvent[]
+  if (h.phase2 === 'repay_switch') {
+    const switchDate = phase1Results.months[m].date
+    const switchEvents: ScenarioEvent[] = []
+    for (let idx = initialState.size; idx < phase1Results.property_series.length; idx++) {
+      const ps = phase1Results.property_series[idx]
+      const pm = ps.months.find(mo => mo.date === switchDate)
+      if (pm && pm.debt > 0) {
+        switchEvents.push(remortgageEvent(switchDate, ps.property_id, pm.debt, assumptions, settings))
+      }
+    }
+    if (switchEvents.length === 0) return null   // Dedup: nothing to convert, identical to phase 1.
+    finalDecisions = [...phase1Decisions, ...switchEvents]
+  } else {
+    const { decisions: phase2Decisions } = buildCashGatedEvents(
+      'de_gear', baseDate, projectionYears, assumptions, initialState, loanEvents, tax, goal,
+      /* stopAtGoal */ false, /* interestOnly */ false, startingCash, assumptionsJson, settings,
+      phase1Decisions, m
+    )
+    if (phase2Decisions.length === phase1Decisions.length) return null   // Dedup: phase 2 added nothing.
+    finalDecisions = phase2Decisions
+  }
+
+  const allEvents = [...finalDecisions, ...loanEvents].sort((a, b) => a.date.localeCompare(b.date))
+  const results = buildProjection(cloneState(initialState), allEvents, config) as ProjectionResult
+  const feasible = checkConstraints(results.months, goal, monthlyExp, tax) && results.summary.min_cumulative_cashflow >= 0
+  const { reached, monthIndex } = checkGoalReached(results.months, goal)
+  const risk100 = computeRiskScore100(results.months, allEvents, results.summary, goal, projectionYears, monthlyExp, tax, initialState.size, results.property_series.map(ps => ps.property_id))
+  const binding = analyzeBinding(goal, results.months, results.summary, reached, depositPlusCosts(assumptions), monthlyExp, tax)
+  const shortfall = reached ? 0 : computeShortfall(goal, results)
+
+  return {
+    template_name: h.template_name,
+    label: h.label,
+    events: allEvents,
+    results,
+    feasible,
+    reaches_goal: reached,
+    months_to_goal: monthIndex,
+    risk_score: risk100.total,
+    risk_band: risk100.band,
+    risk_breakdown: risk100.components,
+    shortfall,
+    binding_constraint: binding.key,
+    binding_detail: binding.detail,
+    assumptions_json: assumptionsJson,
+  }
+}
+
 export function generatePathways(
   goal: Goal,
   initialState: Map<number, PropertyState>,
@@ -949,7 +1120,11 @@ export function generatePathways(
   tax?: TaxSettings,             // global tax settings → post-tax goal solving
   settings?: AssumptionSettings  // global assumption defaults (growth/void/inflation/ICR stress)
 ): GeneratedPathway[] {
-  return TEMPLATES.map(t => runTemplate(t, goal, initialState, assumptions, projectionYears, tax, settings))
+  const basePathways = TEMPLATES.map(t => runTemplate(t, goal, initialState, assumptions, projectionYears, tax, settings))
+  const hybridPathways = HYBRID_TEMPLATES
+    .map(h => runHybridTemplate(h, goal, initialState, assumptions, projectionYears, tax, settings))
+    .filter((p): p is GeneratedPathway => p != null)
+  return [...basePathways, ...hybridPathways]
 }
 
 // Goal-specific distance from target when a pathway doesn't reach it — the Safest ranking

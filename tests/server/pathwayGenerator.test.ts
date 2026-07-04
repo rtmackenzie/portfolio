@@ -4,10 +4,12 @@ import {
   computeRiskScore100,
   analyzeBinding,
   rankPathways,
+  runHybridTemplate,
+  HYBRID_TEMPLATES,
   type RankablePathway,
   type Goal,
 } from '../../server/services/pathwayGenerator.ts'
-import { buildProjection, type PropertyState } from '../../server/services/scenarioEngine.ts'
+import { buildProjection, type PropertyState, type ScenarioEvent } from '../../server/services/scenarioEngine.ts'
 import { DEFAULT_TAX_SETTINGS } from '../../server/services/tax.ts'
 
 const TAX_PERSONAL = { ...DEFAULT_TAX_SETTINGS, ownership: 'personal' as const, personal_marginal_rate_pct: 40 }
@@ -869,5 +871,83 @@ describe('generatePathways — 0 for min_icr/capex reserve/fees means "use defau
     for (const b of buys) expect(b.arrangement_fee).toBe(999)
     const capexCostPerProperty = JSON.parse(hold.assumptions_json).capex_cost_per_property
     expect(capexCostPerProperty).toBe(3000)
+  })
+})
+
+describe('computeRiskScore100 — amortisation re-classification (§P2-8d)', () => {
+  const baseGoal: Goal = { goal_type: 'count', target_property_count: 6, max_ltv_pct: 75, min_icr: 145 }
+
+  // One IO buy (existing property id 1 is pre-existing; this buy becomes synthetic id 2, per
+  // completion-order), then a remortgage converting it to repayment (interest_only omitted,
+  // matching the engine's own default-false rule).
+  const buy: ScenarioEvent = {
+    event_type: 'buy_property', property_id: null, date: '2027-01-01',
+    parameters_json: JSON.stringify({ purchase_price: 200000, deposit_percent: 25, interest_only: true }),
+  }
+  const convertToRepay: ScenarioEvent = {
+    event_type: 'remortgage', property_id: null, date: '2030-01-01',
+    parameters_json: JSON.stringify({ sim_property_id: 2, new_balance: 140000 }),
+  }
+
+  it('drops the amortisation score to 0 once propertySeriesIds/existingPropertyCount reveal the conversion', () => {
+    const withFix = computeRiskScore100(
+      [makeMonth()], [buy, convertToRepay], makeSummary(), baseGoal, 15, 200, undefined,
+      1, [1, 2]
+    )
+    expect(withFix.components.amortisation).toBe(0)
+  })
+
+  it('without the new params, falls back to the old buy-events-only behaviour (still counts it as IO)', () => {
+    const withoutFix = computeRiskScore100([makeMonth()], [buy, convertToRepay], makeSummary(), baseGoal, 15, 200, undefined)
+    expect(withoutFix.components.amortisation).toBeGreaterThan(0)
+  })
+})
+
+describe('Hybrid strategy templates (§P2-8d / Appendix D.2)', () => {
+  const goal: Goal = { goal_type: 'count', target_property_count: 4, max_ltv_pct: 75 }
+
+  it('io_then_repay matches max_cashflow\'s months_to_goal, ends with 0% IO share, and scores strictly lower', () => {
+    const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, 25, 1)
+    const maxCf = ps.find(p => p.template_name === 'max_cashflow')!
+    const hybrid = ps.find(p => p.template_name === 'io_then_repay')
+    expect(maxCf.reaches_goal).toBe(true)
+    expect(hybrid).toBeDefined()
+    expect(hybrid!.months_to_goal).toBe(maxCf.months_to_goal)
+    expect(hybrid!.risk_breakdown.amortisation).toBe(0)
+    expect(hybrid!.risk_score).toBeLessThan(maxCf.risk_score!)
+  })
+
+  it('brrr_then_degear matches brrr_recycler\'s months_to_goal and scores lower', () => {
+    const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, 25, 1)
+    const brrr = ps.find(p => p.template_name === 'brrr_recycler')!
+    const hybrid = ps.find(p => p.template_name === 'brrr_then_degear')
+    expect(brrr.reaches_goal).toBe(true)
+    expect(hybrid).toBeDefined()
+    expect(hybrid!.months_to_goal).toBe(brrr.months_to_goal)
+    expect(hybrid!.risk_score).toBeLessThan(brrr.risk_score!)
+  })
+
+  it('never returns a hybrid row when its base strategy never reaches goal (degeneration)', () => {
+    const distantGoal: Goal = { goal_type: 'count', target_property_count: 50 }
+    const ps = generatePathways(distantGoal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    expect(ps.find(p => p.template_name === 'io_then_repay')).toBeUndefined()
+    expect(ps.find(p => p.template_name === 'brrr_then_degear')).toBeUndefined()
+  })
+
+  it('drops brrr_then_degear when phase 2 has nothing to add (dedup)', () => {
+    const tightGoal: Goal = { goal_type: 'count', target_property_count: 5, max_ltv_pct: 75 }
+    const h = HYBRID_TEMPLATES.find(t => t.template_name === 'brrr_then_degear')!
+    const hybrid = runHybridTemplate(h, tightGoal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS)
+    expect(hybrid).toBeNull()
+  })
+
+  it('cost honesty: the switch month shows the ERC/fee and higher repayment cost, not a free conversion', () => {
+    const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, 25, 1)
+    const maxCf = ps.find(p => p.template_name === 'max_cashflow')!
+    const hybrid = ps.find(p => p.template_name === 'io_then_repay')!
+    const switchIdx = hybrid.months_to_goal!
+    const hybridCf = hybrid.results.months[switchIdx].monthly_cashflow
+    const maxCfCf = maxCf.results.months[switchIdx].monthly_cashflow
+    expect(hybridCf).toBeLessThan(maxCfCf)
   })
 })
