@@ -823,15 +823,41 @@ export function rankPathways<T extends RankablePathway>(
 
 // ─── Main export ──────────────────────────────────────────────────────────────
 
-export function generatePathways(
+export interface StrategyTemplate {
+  template_name: string
+  label: string
+  strategy: Strategy
+  stopAtGoal: boolean
+  interestOnly: boolean
+}
+
+// Efficient frontier: four genuinely distinct strategies.
+//  • Target & Hold  — repayment, stop at goal (fewest units, debt amortises, then holds)
+//  • Maximise Cashflow — interest-only, grow (most income / fastest, highest rate risk)
+//  • Low-Risk Hold — repayment + payoffs, grow (lowest debt, most resilient; de-gears —
+//    previously mislabelled "Mortgage Recycler" §P2-11)
+//  • BRRR — repayment + cash-out remortgages once a property's LTV falls below 65%,
+//    grow (never de-levers; the genuine equity-recycling strategy §P2-11)
+export const TEMPLATES: StrategyTemplate[] = [
+  { template_name: 'target_hold',    label: 'Target & Hold',     strategy: 'steady',   stopAtGoal: true,  interestOnly: false },
+  { template_name: 'max_cashflow',   label: 'Maximise Cashflow', strategy: 'steady',   stopAtGoal: false, interestOnly: true  },
+  { template_name: 'low_risk_hold',  label: 'Low-Risk Hold',     strategy: 'de_gear',  stopAtGoal: false, interestOnly: false },
+  { template_name: 'brrr_recycler',  label: 'BRRR',              strategy: 'brrr',     stopAtGoal: false, interestOnly: false },
+]
+
+// Runs a single strategy template end-to-end: cash-gated event generation, projection,
+// feasibility/goal/risk/binding-constraint analysis. Extracted from generatePathways() so
+// nearestFix.ts can re-invoke exactly one template (with a perturbed goal/assumptions) per
+// probe, rather than regenerating all four templates for every lever tried (§P2-8c).
+export function runTemplate(
+  t: StrategyTemplate,
   goal: Goal,
   initialState: Map<number, PropertyState>,
   assumptions: PropertyAssumptions,
   projectionYears: number,
-  _activeMortgageCount: number,  // retained for API stability; recycler now reads live debt
-  tax?: TaxSettings,             // global tax settings → post-tax goal solving
-  settings?: AssumptionSettings  // global assumption defaults (growth/void/inflation/ICR stress)
-): GeneratedPathway[] {
+  tax?: TaxSettings,
+  settings?: AssumptionSettings
+): GeneratedPathway {
   const baseDate = new Date().toISOString().slice(0, 10)
   const monthlyExp = assumptions.monthly_expenses ?? 200
 
@@ -868,66 +894,62 @@ export function generatePathways(
     ? buildDirectorLoanEvents(baseDate, projectionYears, goal.director_loan_annual, goal.director_loan_start_date)
     : []
 
-  // Efficient frontier: four genuinely distinct strategies.
-  //  • Target & Hold  — repayment, stop at goal (fewest units, debt amortises, then holds)
-  //  • Maximise Cashflow — interest-only, grow (most income / fastest, highest rate risk)
-  //  • Low-Risk Hold — repayment + payoffs, grow (lowest debt, most resilient; de-gears —
-  //    previously mislabelled "Mortgage Recycler" §P2-11)
-  //  • BRRR — repayment + cash-out remortgages once a property's LTV falls below 65%,
-  //    grow (never de-levers; the genuine equity-recycling strategy §P2-11)
-  const templates: Array<{ template_name: string; label: string; strategy: Strategy; stopAtGoal: boolean; interestOnly: boolean }> = [
-    { template_name: 'target_hold',    label: 'Target & Hold',     strategy: 'steady',   stopAtGoal: true,  interestOnly: false },
-    { template_name: 'max_cashflow',   label: 'Maximise Cashflow', strategy: 'steady',   stopAtGoal: false, interestOnly: true  },
-    { template_name: 'low_risk_hold',  label: 'Low-Risk Hold',     strategy: 'de_gear',  stopAtGoal: false, interestOnly: false },
-    { template_name: 'brrr_recycler',  label: 'BRRR',              strategy: 'brrr',     stopAtGoal: false, interestOnly: false },
-  ]
+  // Cash-gated decisions (buys/payoffs), then merge loan events for the final run
+  const { decisions, icrBlocked } = buildCashGatedEvents(t.strategy, baseDate, projectionYears, assumptions, initialState, loanEvents, tax, goal, t.stopAtGoal, t.interestOnly, startingCash, assumptionsJson, settings)
+  const allEvents = [...decisions, ...loanEvents].sort((a, b) => a.date.localeCompare(b.date))
 
-  return templates.map(t => {
-    // Cash-gated decisions (buys/payoffs), then merge loan events for the final run
-    const { decisions, icrBlocked } = buildCashGatedEvents(t.strategy, baseDate, projectionYears, assumptions, initialState, loanEvents, tax, goal, t.stopAtGoal, t.interestOnly, startingCash, assumptionsJson, settings)
-    const allEvents = [...decisions, ...loanEvents].sort((a, b) => a.date.localeCompare(b.date))
+  const results = buildProjection(cloneState(initialState), allEvents, config) as ProjectionResult
+  const feasible = checkConstraints(results.months, goal, monthlyExp, tax) && results.summary.min_cumulative_cashflow >= 0
+  const { reached, monthIndex } = checkGoalReached(results.months, goal)
 
-    const results = buildProjection(cloneState(initialState), allEvents, config) as ProjectionResult
-    const feasible = checkConstraints(results.months, goal, monthlyExp, tax) && results.summary.min_cumulative_cashflow >= 0
-    const { reached, monthIndex } = checkGoalReached(results.months, goal)
+  const risk100 = computeRiskScore100(results.months, allEvents, results.summary, goal, projectionYears, monthlyExp, tax)
 
-    const risk100 = computeRiskScore100(results.months, allEvents, results.summary, goal, projectionYears, monthlyExp, tax)
+  // No purchase was ever made, and the reason was the candidate deal itself failing the
+  // lender ICR stress test (not cash/LTV) — analyzeBinding() only sees the realized,
+  // unchanged portfolio in that case and would otherwise misreport "deposit capital" as the
+  // limiter, when the deal was never financeable to begin with.
+  let binding_constraint: string
+  let binding_detail: string
+  if (decisions.length === 0 && icrBlocked != null) {
+    binding_constraint = 'icr'
+    binding_detail = `Limited by lender affordability — this candidate deal's stressed ICR (${icrBlocked.candidateIcrPct.toFixed(0)}%) never clears your ${icrBlocked.icrFloor.toFixed(0)}% lender floor. Try a higher-yielding deal, a bigger deposit, or relax the goal's Min Lender ICR.`
+  } else {
+    const binding = analyzeBinding(goal, results.months, results.summary, reached, depositPlusCosts(assumptions), monthlyExp, tax)
+    binding_constraint = binding.key
+    binding_detail = binding.detail
+  }
+  if (t.interestOnly) binding_detail = `Interest-only — rate-exposed, debt not amortised. ${binding_detail}`
 
-    // No purchase was ever made, and the reason was the candidate deal itself failing the
-    // lender ICR stress test (not cash/LTV) — analyzeBinding() only sees the realized,
-    // unchanged portfolio in that case and would otherwise misreport "deposit capital" as the
-    // limiter, when the deal was never financeable to begin with.
-    let binding_constraint: string
-    let binding_detail: string
-    if (decisions.length === 0 && icrBlocked != null) {
-      binding_constraint = 'icr'
-      binding_detail = `Limited by lender affordability — this candidate deal's stressed ICR (${icrBlocked.candidateIcrPct.toFixed(0)}%) never clears your ${icrBlocked.icrFloor.toFixed(0)}% lender floor. Try a higher-yielding deal, a bigger deposit, or relax the goal's Min Lender ICR.`
-    } else {
-      const binding = analyzeBinding(goal, results.months, results.summary, reached, depositPlusCosts(assumptions), monthlyExp, tax)
-      binding_constraint = binding.key
-      binding_detail = binding.detail
-    }
-    if (t.interestOnly) binding_detail = `Interest-only — rate-exposed, debt not amortised. ${binding_detail}`
+  const shortfall = reached ? 0 : computeShortfall(goal, results)
 
-    const shortfall = reached ? 0 : computeShortfall(goal, results)
+  return {
+    template_name: t.template_name,
+    label: t.label,
+    events: allEvents,
+    results,
+    feasible,
+    reaches_goal: reached,
+    months_to_goal: monthIndex,
+    risk_score: risk100.total,
+    risk_band: risk100.band,
+    risk_breakdown: risk100.components,
+    shortfall,
+    binding_constraint,
+    binding_detail,
+    assumptions_json: assumptionsJson,
+  }
+}
 
-    return {
-      template_name: t.template_name,
-      label: t.label,
-      events: allEvents,
-      results,
-      feasible,
-      reaches_goal: reached,
-      months_to_goal: monthIndex,
-      risk_score: risk100.total,
-      risk_band: risk100.band,
-      risk_breakdown: risk100.components,
-      shortfall,
-      binding_constraint,
-      binding_detail,
-      assumptions_json: assumptionsJson,
-    }
-  })
+export function generatePathways(
+  goal: Goal,
+  initialState: Map<number, PropertyState>,
+  assumptions: PropertyAssumptions,
+  projectionYears: number,
+  _activeMortgageCount: number,  // retained for API stability; recycler now reads live debt
+  tax?: TaxSettings,             // global tax settings → post-tax goal solving
+  settings?: AssumptionSettings  // global assumption defaults (growth/void/inflation/ICR stress)
+): GeneratedPathway[] {
+  return TEMPLATES.map(t => runTemplate(t, goal, initialState, assumptions, projectionYears, tax, settings))
 }
 
 // Goal-specific distance from target when a pathway doesn't reach it — the Safest ranking

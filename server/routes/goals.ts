@@ -2,7 +2,8 @@ import { Router } from 'express'
 import { queryAll, queryOne, execute, transaction } from '../db/database.ts'
 import { logActivity } from '../services/activityLogger.ts'
 import { loadPortfolioState } from '../services/scenarioEngine.ts'
-import { generatePathways, rankPathways, positiveOr, type Goal, type PropertyAssumptions, type RankablePathway, type RankingMode } from '../services/pathwayGenerator.ts'
+import { generatePathways, rankPathways, positiveOr, TEMPLATES, type Goal, type PropertyAssumptions, type RankablePathway, type RankingMode } from '../services/pathwayGenerator.ts'
+import { computeNearestFixes } from '../services/nearestFix.ts'
 import { loadTaxSettings, loadAssumptionSettings } from '../services/settings.ts'
 import { computeGoalWarnings } from '../services/goalValidation.ts'
 
@@ -112,7 +113,7 @@ router.get('/:id/pathways', (req, res) => {
   try {
     const id = Number(req.params.id)
     const goal = queryOne<{ ranking_mode: RankingMode }>('SELECT ranking_mode FROM goals WHERE id=?', [id])
-    const rows = queryAll<{ summary_json: string | null; assumptions_json: string | null; risk_breakdown_json: string | null } & Record<string, unknown>>(
+    const rows = queryAll<{ summary_json: string | null; assumptions_json: string | null; risk_breakdown_json: string | null; nearest_fix_json: string | null } & Record<string, unknown>>(
       `SELECT gp.*, s.name as scenario_name
        FROM goal_pathways gp
        LEFT JOIN scenarios s ON s.id = gp.scenario_id
@@ -125,9 +126,11 @@ router.get('/:id/pathways', (req, res) => {
       summary: r.summary_json ? JSON.parse(r.summary_json as string) : null,
       assumptions: r.assumptions_json ? JSON.parse(r.assumptions_json as string) : null,
       risk_breakdown: r.risk_breakdown_json ? JSON.parse(r.risk_breakdown_json as string) : null,
+      nearest_fixes: r.nearest_fix_json ? JSON.parse(r.nearest_fix_json as string) : null,
       summary_json: undefined,
       assumptions_json: undefined,
       risk_breakdown_json: undefined,
+      nearest_fix_json: undefined,
     }))
 
     // Rank by time-to-goal + risk under the goal's chosen ranking mode (§P2-8 Appendix B.2);
@@ -169,15 +172,26 @@ router.post('/:id/pathways/generate', (req, res) => {
 
     const { initialState, propertyLabels, activeMortgageCount } = loadPortfolioState()
 
+    const tax = loadTaxSettings()
     const pathways = generatePathways(
       goal as Parameters<typeof generatePathways>[0],
       initialState,
       assumptions,
       projectionYears,
       activeMortgageCount,
-      loadTaxSettings(),
+      tax,
       assumptionSettings
     )
+
+    // Nearest-feasible hints (§P2-8c): computed once here, where the full generation context
+    // (initial state, assumptions, tax/settings) is in scope — not recomputed on read.
+    const fixesByTemplate = new Map<string, ReturnType<typeof computeNearestFixes>>()
+    for (const pw of pathways) {
+      if (pw.reaches_goal) continue
+      const t = TEMPLATES.find(tpl => tpl.template_name === pw.template_name)
+      if (!t) continue
+      fixesByTemplate.set(pw.template_name, computeNearestFixes(pw, t, goal as Parameters<typeof generatePathways>[0], initialState, assumptions, projectionYears, tax, assumptionSettings))
+    }
 
     const created = transaction(() => {
       const results: unknown[] = []
@@ -223,16 +237,17 @@ router.post('/:id/pathways/generate', (req, res) => {
         )
 
         // Create pathway record
+        const nearestFixes = fixesByTemplate.get(pw.template_name) ?? []
         const pathwayResult = execute(
-          `INSERT INTO goal_pathways (goal_id, scenario_id, template_name, label, feasible, reaches_goal, months_to_goal, summary_json, assumptions_json, risk_score, risk_breakdown_json, shortfall, binding_constraint, binding_detail)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO goal_pathways (goal_id, scenario_id, template_name, label, feasible, reaches_goal, months_to_goal, summary_json, assumptions_json, risk_score, risk_breakdown_json, shortfall, binding_constraint, binding_detail, nearest_fix_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id, scenarioId, pw.template_name, pw.label,
             pw.feasible ? 1 : 0, pw.reaches_goal ? 1 : 0,
             pw.months_to_goal, JSON.stringify(pw.results.summary),
             JSON.stringify({ ...assumptions, projection_years: projectionYears }),
             pw.risk_score, JSON.stringify(pw.risk_breakdown), pw.shortfall,
-            pw.binding_constraint, pw.binding_detail,
+            pw.binding_constraint, pw.binding_detail, JSON.stringify(nearestFixes),
           ]
         )
 
@@ -255,6 +270,7 @@ router.post('/:id/pathways/generate', (req, res) => {
           shortfall: pw.shortfall,
           binding_constraint: pw.binding_constraint,
           binding_detail: pw.binding_detail,
+          nearest_fixes: nearestFixes,
           created_at: new Date().toISOString(),
         })
       }

@@ -294,6 +294,13 @@ export interface RiskComponents {
 
 export type PathwayRiskBand = 'Low' | 'Medium' | 'High' | 'Critical'
 
+export interface NearestFix {
+  lever: string
+  from: number
+  to: number
+  label: string
+}
+
 export interface ScenarioSummary {
   start_equity: number
   end_equity: number
@@ -340,6 +347,7 @@ export interface GoalPathway {
   shortfall?: number | null
   binding_constraint?: string | null
   binding_detail?: string | null
+  nearest_fixes?: NearestFix[] | null
   rank?: number
   recommended?: boolean
   recommended_reason?: string

@@ -670,6 +670,16 @@ function PathwaysPanel({ goal }: { goal: Goal }) {
                 </div>
               )}
 
+              {pw.nearest_fixes && pw.nearest_fixes.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {pw.nearest_fixes.map(f => (
+                    <span key={f.lever} className="text-[10px] px-2 py-1 rounded-md bg-primary/10 text-primary border border-primary/20">
+                      {f.label}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               {pw.scenario_id && (
                 <Link
                   to={`/scenarios?id=${pw.scenario_id}`}
