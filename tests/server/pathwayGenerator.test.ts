@@ -274,6 +274,62 @@ describe('generatePathways — BRRR/buy generation respects the goal LTV mandate
   })
 })
 
+describe('generatePathways — Medium-Risk Hold variant + configurable de-gear mortgage cap', () => {
+  const goal = { goal_type: 'count' as const, target_property_count: 8, director_loan_annual: 200000 }
+
+  // Peak number of properties simultaneously carrying a mortgage (debt > 0) across the projection.
+  function maxConcurrentMortgages(pathway: ReturnType<typeof generatePathways>[number]): number {
+    const byDate = new Map<string, number>()
+    for (const ps of pathway.results.property_series) {
+      for (const m of ps.months) {
+        if (m.debt > 0) byDate.set(m.date, (byDate.get(m.date) ?? 0) + 1)
+      }
+    }
+    let max = 0
+    for (const c of byDate.values()) max = Math.max(max, c)
+    return max
+  }
+
+  it('Low-Risk Hold still caps concurrent mortgages at 2 (regression, default settings)', () => {
+    const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const low = ps.find(p => p.template_name === 'low_risk_hold')!
+    expect(maxConcurrentMortgages(low)).toBeLessThanOrEqual(2)
+  })
+
+  it('Medium-Risk Hold exists and holds up to 3 concurrent mortgages by default', () => {
+    const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const med = ps.find(p => p.template_name === 'medium_risk_hold')
+    expect(med).toBeDefined()
+    const peak = maxConcurrentMortgages(med!)
+    expect(peak).toBeLessThanOrEqual(3)
+    expect(peak).toBeGreaterThan(2)   // the raised cap is genuinely exercised, not just permitted
+  })
+
+  it('the cap reads Settings, not a hardcoded literal', () => {
+    // Medium cap raised to 5 → holds up to 5; Low cap dropped to 1 → holds at most 1.
+    const medHigh = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1, undefined, { medium_risk_hold_max_mortgages: 5 } as any)
+      .find(p => p.template_name === 'medium_risk_hold')!
+    expect(maxConcurrentMortgages(medHigh)).toBeGreaterThan(3)
+
+    const lowOne = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1, undefined, { low_risk_hold_max_mortgages: 1 } as any)
+      .find(p => p.template_name === 'low_risk_hold')!
+    expect(maxConcurrentMortgages(lowOne)).toBeLessThanOrEqual(1)
+  })
+
+  it('a cap of 0 falls back to the engine default (positiveOr guard, §P0-3), not "never buy"', () => {
+    const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1, undefined, { low_risk_hold_max_mortgages: 0 } as any)
+    const low = ps.find(p => p.template_name === 'low_risk_hold')!
+    expect(maxConcurrentMortgages(low)).toBe(2)
+  })
+
+  it('sits in the middle of the frontier — more ending debt than Low-Risk Hold, less than Maximise Cashflow', () => {
+    const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const endDebt = (name: string) => ps.find(p => p.template_name === name)!.results.months.at(-1)!.total_debt
+    expect(endDebt('medium_risk_hold')).toBeGreaterThan(endDebt('low_risk_hold'))
+    expect(endDebt('medium_risk_hold')).toBeLessThan(endDebt('max_cashflow'))
+  })
+})
+
 describe('generatePathways — director loans drive the schedule', () => {
   const baseGoal = {
     goal_type: 'count' as const,

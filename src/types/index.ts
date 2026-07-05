@@ -517,6 +517,8 @@ export interface AssumptionSettings {
   arrears_pct: number
   default_completion_lag_months: number
   default_onboarding_void_months: number
+  low_risk_hold_max_mortgages: number
+  medium_risk_hold_max_mortgages: number
 }
 
 export type Settings = TaxSettings & AssumptionSettings & { warnings?: PrudenceWarning[] }

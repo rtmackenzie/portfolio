@@ -221,7 +221,7 @@ function remortgageEvent(
 // Greedy forward insertion: re-project after every decision so each subsequent
 // choice sees the updated cash balance (deposits/payoffs drawn, loans added).
 
-type Strategy = 'steady' | 'accelerated' | 'de_gear' | 'brrr'
+type Strategy = 'steady' | 'accelerated' | 'de_gear' | 'de_gear_medium' | 'brrr'
 
 function depositPlusCosts(a: PropertyAssumptions): number {
   const price = a.purchase_price
@@ -413,9 +413,16 @@ function buildCashGatedEvents(
 
       const propCount = proj.months[i].property_count
 
-      if (strategy === 'de_gear') {
+      if (strategy === 'de_gear' || strategy === 'de_gear_medium') {
+        // Concurrent-mortgage cap: buy while below it, then pay the smallest down. Configurable
+        // per hold variant via Settings (0/unset ⇒ engine default, §P0-3 positiveOr guard). The
+        // hybrid brrr_then_degear's phase 2 uses plain 'de_gear', so it inherits the Low-Risk Hold
+        // cap — "de-gearing" means the same thing everywhere it's used.
+        const deGearCap = strategy === 'de_gear_medium'
+          ? positiveOr(settings?.medium_risk_hold_max_mortgages, 3)
+          : positiveOr(settings?.low_risk_hold_max_mortgages, 2)
         const balances = activeBalancesAt(proj, i)
-        if (balances.length < 2) {
+        if (balances.length < deGearCap) {
           const { buyCost, icrOk, ltvOk, candidateIcrPct } = buyGateAt(i, proj.months[i].total_value, proj.months[i].total_debt)
           if (i >= nextBuyEligibleMonth && icrOk && ltvOk && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) { decided = buyEvent(proj.months[i].date, indexedAssumptions(a, propertyGrowthPct, rentGrowthPct, i), interestOnly, settings); decidedMonth = i; break }
           if (!icrOk && ltvOk && icrBlocked === null && cash - buyCost >= reserveFloor(goal, monthlyExp, propCount + 1)) icrBlocked = { candidateIcrPct, icrFloor }
@@ -882,17 +889,20 @@ export interface StrategyTemplate {
   interestOnly: boolean
 }
 
-// Efficient frontier: four genuinely distinct strategies.
+// Efficient frontier: genuinely distinct strategies.
 //  • Target & Hold  — repayment, stop at goal (fewest units, debt amortises, then holds)
 //  • Maximise Cashflow — interest-only, grow (most income / fastest, highest rate risk)
 //  • Low-Risk Hold — repayment + payoffs, grow (lowest debt, most resilient; de-gears —
 //    previously mislabelled "Mortgage Recycler" §P2-11)
+//  • Medium-Risk Hold — same de-gearing mechanic as Low-Risk Hold but a higher concurrent-mortgage
+//    cap (Settings-configurable; default 3 vs 2), a middle ground with more leverage/growth
 //  • BRRR — repayment + cash-out remortgages once a property's LTV falls below 65%,
 //    grow (never de-levers; the genuine equity-recycling strategy §P2-11)
 export const TEMPLATES: StrategyTemplate[] = [
   { template_name: 'target_hold',    label: 'Target & Hold',     strategy: 'steady',   stopAtGoal: true,  interestOnly: false },
   { template_name: 'max_cashflow',   label: 'Maximise Cashflow', strategy: 'steady',   stopAtGoal: false, interestOnly: true  },
   { template_name: 'low_risk_hold',  label: 'Low-Risk Hold',     strategy: 'de_gear',  stopAtGoal: false, interestOnly: false },
+  { template_name: 'medium_risk_hold', label: 'Medium-Risk Hold', strategy: 'de_gear_medium', stopAtGoal: false, interestOnly: false },
   { template_name: 'brrr_recycler',  label: 'BRRR',              strategy: 'brrr',     stopAtGoal: false, interestOnly: false },
 ]
 

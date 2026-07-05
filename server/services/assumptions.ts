@@ -20,6 +20,8 @@ export interface AssumptionSettings {
   arrears_pct: number                     // e.g. 1.5 (rent arrears/bad debt, distinct from void)
   default_completion_lag_months: number   // e.g. 2 (offer-to-completion delay; §P1-6 transaction-timing)
   default_onboarding_void_months: number  // e.g. 1 (no-rent re-letting/works period post-completion; §P1-6 transaction-timing)
+  low_risk_hold_max_mortgages: number     // e.g. 2 (concurrent mortgages the Low-Risk Hold strategy holds before de-gearing)
+  medium_risk_hold_max_mortgages: number  // e.g. 3 (same, for the Medium-Risk Hold variant)
 }
 
 export const DEFAULT_ASSUMPTION_SETTINGS: AssumptionSettings = {
@@ -39,4 +41,6 @@ export const DEFAULT_ASSUMPTION_SETTINGS: AssumptionSettings = {
   arrears_pct: 1.5,
   default_completion_lag_months: 2,
   default_onboarding_void_months: 1,
+  low_risk_hold_max_mortgages: 2,
+  medium_risk_hold_max_mortgages: 3,
 }

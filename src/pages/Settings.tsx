@@ -147,6 +147,9 @@ function AssumptionSettingsCard() {
         <div><label className={taxLabelCls}><Tip text="Offer-to-completion delay for a new purchase (conveyancing, valuation, chain) — the property doesn't enter the portfolio, and no capital is drawn, until this many months after the buy decision.">Completion lag (months)</Tip></label>{num('default_completion_lag_months', '1')}</div>
         <div><label className={taxLabelCls}><Tip text="No-rent onboarding period immediately after completion (re-letting, works) — the property is treated as vacant for this many months before rent begins.">Onboarding void (months)</Tip></label>{num('default_onboarding_void_months', '1')}</div>
         <div className="col-span-4 text-xs text-muted-foreground">Completion lag delays when a new purchase enters the portfolio at all; onboarding void then delays its first rent once it does.</div>
+        <div><label className={taxLabelCls}><Tip text="How many properties the Low-Risk Hold goal strategy will hold on a mortgage at once before paying the smallest one down. Lower = de-gears sooner, less leverage. Default 2.">Low-Risk Hold max mortgages</Tip></label>{num('low_risk_hold_max_mortgages', '1')}</div>
+        <div><label className={taxLabelCls}><Tip text="Same, for the Medium-Risk Hold variant. Default 3 — carries one more mortgage than Low-Risk Hold before de-gearing.">Medium-Risk Hold max mortgages</Tip></label>{num('medium_risk_hold_max_mortgages', '1')}</div>
+        <div className="col-span-4 text-xs text-muted-foreground">The two de-gearing hold strategies buy until they reach this many concurrent mortgages, then pay the smallest down before buying again. Higher = more leverage, faster growth, higher risk.</div>
       </div>
     </div>
   )

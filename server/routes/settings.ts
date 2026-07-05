@@ -43,6 +43,8 @@ router.put('/', (req, res) => {
       arrears_pct: d.arrears_pct ?? current.arrears_pct,
       default_completion_lag_months: d.default_completion_lag_months ?? current.default_completion_lag_months,
       default_onboarding_void_months: d.default_onboarding_void_months ?? current.default_onboarding_void_months,
+      low_risk_hold_max_mortgages: d.low_risk_hold_max_mortgages ?? current.low_risk_hold_max_mortgages,
+      medium_risk_hold_max_mortgages: d.medium_risk_hold_max_mortgages ?? current.medium_risk_hold_max_mortgages,
     }
     if (next.ownership !== 'personal' && next.ownership !== 'ltd') {
       next.ownership = DEFAULT_TAX_SETTINGS.ownership

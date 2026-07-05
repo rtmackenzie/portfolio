@@ -26,6 +26,8 @@ interface SettingsRow {
   arrears_pct: number
   default_completion_lag_months: number
   default_onboarding_void_months: number
+  low_risk_hold_max_mortgages: number
+  medium_risk_hold_max_mortgages: number
 }
 
 export type Settings = TaxSettings & AssumptionSettings
@@ -60,6 +62,8 @@ function rowToAssumptions(r: SettingsRow): AssumptionSettings {
     arrears_pct: r.arrears_pct,
     default_completion_lag_months: r.default_completion_lag_months,
     default_onboarding_void_months: r.default_onboarding_void_months,
+    low_risk_hold_max_mortgages: r.low_risk_hold_max_mortgages,
+    medium_risk_hold_max_mortgages: r.medium_risk_hold_max_mortgages,
   }
 }
 
@@ -92,6 +96,7 @@ export function updateSettings(s: Settings): Settings {
        icr_stress_uplift_bps=?, icr_stress_floor_pct=?,
        capex_cycle_years=?, capex_cost_per_property=?, arrears_pct=?,
        default_completion_lag_months=?, default_onboarding_void_months=?,
+       low_risk_hold_max_mortgages=?, medium_risk_hold_max_mortgages=?,
        updated_at=datetime('now')
      WHERE id = 1`,
     [s.ownership, s.personal_marginal_rate_pct, s.s24_credit_rate_pct,
@@ -101,7 +106,8 @@ export function updateSettings(s: Settings): Settings {
      s.default_rent_growth_pct, s.default_expense_inflation_pct, s.default_void_months_per_year,
      s.icr_stress_uplift_bps, s.icr_stress_floor_pct,
      s.capex_cycle_years, s.capex_cost_per_property, s.arrears_pct,
-     s.default_completion_lag_months, s.default_onboarding_void_months]
+     s.default_completion_lag_months, s.default_onboarding_void_months,
+     s.low_risk_hold_max_mortgages, s.medium_risk_hold_max_mortgages]
   )
   return getSettings()
 }
