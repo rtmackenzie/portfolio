@@ -185,6 +185,9 @@ footer .wrap{display:block}
     <a href="#appendix-b"><span class="n">B</span><span>Risk-Adjusted Ranking</span></a>
     <a href="#appendix-c"><span class="n">C</span><span>IRR Fallback Method</span></a>
     <a href="#appendix-d"><span class="n">D</span><span>Nearest-Feasible &amp; Hybrids</span></a>
+    <a href="#appendix-e"><span class="n">E</span><span>P0 Acceptance Review</span></a>
+    <a href="#appendix-f"><span class="n">F</span><span>P1 Acceptance Review</span></a>
+    <a href="#appendix-g"><span class="n">G</span><span>P2 Acceptance Review</span></a>
   </nav>
 
   <main class="content" id="top">
@@ -764,6 +767,156 @@ investor_flow[last] += end_equity + ending_cash_pot   // as-if-liquidated termin
 
   <div class="callout"><h4>Why this earns an appendix</h4>
   Both features look like UI garnish and are not. The hint feature's entire value rests on a discipline — <em>every number shown was re-simulated, never extrapolated</em> — that survives only if the probe architecture makes extrapolation impossible by construction. The hybrid feature's value rests on the scoring correction shipping <em>with</em> it: a hybrid scored as risky as pure IO is worse than no hybrid, because it teaches the user the risk model cannot be trusted. The committee's requirement is therefore not two features but two <em>invariants</em> — verified hints, correctly re-scored hybrids — and the acceptance tests above are written so that neither can ship without its invariant.</div>
+</div></section>
+
+<section id="appendix-e"><div class="wrap">
+  <h2><span class="sec-num">E</span>Appendix E — P0 Acceptance Review (Gatekeeper Sign-Off)</h2>
+  <p class="lead">An independent acceptance audit of the three P0 remediations, conducted by the Design Authority acting as final gatekeeper before the items are accepted into production. Each item was verified against the production source, its end-to-end wiring (engine → route → type → UI), and its regression tests — not against the implementing engineer's claims. The P0-relevant suites were re-run at audit time: <strong>82 / 82 green</strong> (<code>pathwayGenerator.test.ts</code> + <code>goalValidation.test.ts</code>).</p>
+
+  <div class="verdict" style="background:var(--good-soft);border-left-color:var(--good)">
+    <div class="dot">🟢</div>
+    <div>
+      <h3 style="color:var(--good)">All three P0 items accepted into production</h3>
+      <p>Implementation is correct at source, wired through to the UI where user-facing, and protected by meaningful regression tests rather than placeholder assertions. One non-blocking completeness recommendation is logged below; it is not a condition of acceptance.</p>
+    </div>
+  </div>
+
+  <table>
+    <thead><tr><th>Item</th><th>Requirement (§)</th><th class="num">Verdict</th><th>Verification basis</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>P0-1</strong> Index candidate deal price/rent to growth</td>
+        <td>§6.1</td>
+        <td class="num"><span class="pill p-ok">✓ Accepted</span></td>
+        <td><code>indexedAssumptions()</code> grows price at property-growth and rent at rent-growth per purchase month, applied at <em>both</em> the buy gate (cost, ICR and LTV all see the aged deal) and the persisted <code>buy_property</code> event — no gate-vs-reality divergence. Growth rates are drawn from the same source the projection ages against. Tests assert late buys cost/rent more, rise monotonically tracking 3%/2.5%, and respond to a custom growth rate.</td>
+      </tr>
+      <tr>
+        <td><strong>P0-2</strong> Mandate-aware BRRR refinance cap</td>
+        <td>§6.2</td>
+        <td class="num"><span class="pill p-ok">✓ Accepted</span></td>
+        <td>Refinance target capped at <code>min(75%, goal.max_ltv_pct)</code>; the buy gate given the same aggregate-LTV awareness. The strongest test asserts the <em>realized</em> aggregate portfolio LTV never exceeds the mandate end-to-end — directly closing the §5.4 66.8%-vs-60% breach.</td>
+      </tr>
+      <tr>
+        <td><strong>P0-3</strong> Validation guardrails / <code>min_icr = 0</code> footgun</td>
+        <td>§9</td>
+        <td class="num"><span class="pill p-ok">✓ Accepted</span></td>
+        <td><code>positiveOr()</code> makes a stored <code>0</code> cascade to the real default rather than silently disabling the gate — applied to <code>min_icr</code> (generation, feasibility <em>and</em> binding-constraint analysis), fees and capex. A goal with <code>min_icr: 0</code> still rejects a sub-floor deal, verified behaviourally, not just cosmetically. The advisory prudence-warning layer is wired through the goal/settings routes and rendered on both the Goals and Settings pages.</td>
+      </tr>
+    </tbody>
+    <caption>Verdicts reflect the P0 line items as scoped in §14. Per-loan origination LTV (a 25%-deposit purchase is a 75% origination loan even under a tighter mandate) remains the §12 "Partly" item and is explicitly out of P0 scope — noted so it is not mistaken for a regression.</caption>
+  </table>
+
+  <div class="callout warn"><h4>One non-blocking recommendation (P0-3)</h4>
+  §9 also flagged <strong>arrears (0.5%)</strong> and <strong>refix uplift (+100bps)</strong> as operator-softened optimistic values, and the prudence-warning layer does not yet warn on those two. The P0 line item names only <code>min_icr</code> / fees / capex for the 0⇒default fix, and those two were Medium-rated "optimistic" rather than the High-rated "validation defect" <code>min_icr</code> was — so extending the warning layer to cover them is a completeness nicety for a future hardening pass, not a P0 gap. It does not hold up the gate.</div>
+
+  <div class="callout good"><h4>Gate decision</h4>
+  <strong>🟢 All three P0 items pass — accepted into production.</strong> The frozen-nominal-deal optimism bias (§6.1), the mandate-blind BRRR generator (§6.2), and the silently-disable-able lender gate (§9) are each closed at source, wired end-to-end, and held by regression tests that assert real behaviour. This clears the three conditions §15 attached to the 🟡 verdict for professional/adviser use.</div>
+
+  <p style="margin-top:18px;color:var(--ink-mute);font-size:13px">Signed, the Design Authority (Lead Software Architect) — acting as final gatekeeper for production acceptance. Audit conducted against the live codebase; all findings reproduced from source, wiring and passing tests at audit time.</p>
+</div></section>
+
+<section id="appendix-f"><div class="wrap">
+  <h2><span class="sec-num">F</span>Appendix F — P1 Acceptance Review (Gatekeeper Sign-Off)</h2>
+  <p class="lead">An independent acceptance audit of the four P1 remediations (items 4, 5, 5b, 6), conducted by the Design Authority as final gatekeeper. Each item was verified against the production source, its end-to-end wiring (engine → route → type → UI), and its regression tests — not against the implementing engineer's claims. The P1-relevant suites were re-run at audit time: <strong>134 / 134 green</strong> (<code>returnMetrics</code> · <code>downturn</code> · <code>monteCarlo</code> · <code>concentration</code> · <code>scenarioEngine</code>).</p>
+
+  <div class="verdict" style="background:var(--good-soft);border-left-color:var(--good)">
+    <div class="dot">🟢</div>
+    <div>
+      <h3 style="color:var(--good)">All four P1 items accepted into production</h3>
+      <p>Implementation is faithful to the appendices — including the methodology-grade detail of C and the statistical-integrity detail of A.2 — wired through to the UI, and protected by meaningful invariant and regression tests. One documented scope observation is logged below; it is a recorded operator decision, not a defect.</p>
+    </div>
+  </div>
+
+  <table>
+    <thead><tr><th>Item</th><th>Design (§)</th><th class="num">Verdict</th><th>Verification basis</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>P1-4</strong> IRR fallback methodology</td>
+        <td>Appendix C</td>
+        <td class="num"><span class="pill p-ok">✓ Accepted</span></td>
+        <td>Closed as the <em>methodology decision</em> C insisted on, not a hack. <code>buildInvestorFlows()</code> rebuilds the series from the investor's chair (capital + director-loan contributions negative, retained profit rolled into an as-if-liquidated terminal value), so a root exists by construction. The three-tier ladder is exact: capital-account → MIRR (finance rate = configured mortgage rate) → annualised equity multiple. The engine gained the "one small addition" — genuine per-month capital/loan arrays. Every figure carries its <code>irr_basis</code> and a convention-stating tooltip. <strong>Both</strong> mandated guardrails ship as tests: the cross-check invariant (capital-account IRR equals the retired diff construction to within rounding, front-loaded) and the consistency invariant (applied only when the series is front-loaded).</td>
+      </tr>
+      <tr>
+        <td><strong>P1-5</strong> Downturn standing case</td>
+        <td>Appendix A.1</td>
+        <td class="num"><span class="pill p-ok">✓ Accepted</span></td>
+        <td>Versioned engine policy, not user knobs: <code>DOWNTURN_2026_V1</code> with the exact transform (−8% growth yrs 1–2, 0% rent, 2mo void, 3% arrears, +300bps refix). The board's recommended option (a) — a piecewise <code>growth_schedule</code> in <code>assumptions_json</code> — is what shipped; the <code>/calculate</code> route runs central + transformed and persists both. The KPI the committee "reads first" — reserve-survival months under downturn — is surfaced.</td>
+      </tr>
+      <tr>
+        <td><strong>P1-5b</strong> Monte-Carlo band + concentration</td>
+        <td>Appendix A.2</td>
+        <td class="num"><span class="pill p-ok">✓ Accepted</span></td>
+        <td>The two things A.2 stressed hardest are both correct. <strong>Determinism:</strong> a seeded <code>mulberry32</code> with the seed persisted, backed by a same-seed-reproduces-bands test. <strong>Sampling unit:</strong> parameters drawn <em>once per run</em> (persistent regime risk), not per-month i.i.d. — the "single most important decision" — with the precise calibrations (Cholesky-correlated normals, shifted-lognormal void/arrears, discrete refix). <code>goal_probability</code> headline and P10–P90 fan present; the credibility-critical label is verbatim ("model uncertainty under stated distributions, not a probability of outcome"). Concentration warnings compute on the held portfolio (town + type) with the honest simulated-purchase limitation documented.</td>
+      </tr>
+      <tr>
+        <td><strong>P1-6</strong> Transaction-timing &amp; onboarding model</td>
+        <td>§7</td>
+        <td class="num"><span class="pill p-ok">✓ Accepted</span></td>
+        <td>Both halves present: a completion-lag deferral (<code>pendingBuys</code> queue — capital and rent begin at decision-month + lag, modelling 8–12 week conveyancing) and an onboarding void (<code>void_ends_month</code> — no rent during the re-let/works period). Both resolve through the standard settings cascade (<code>default_completion_lag_months</code> / <code>default_onboarding_void_months</code>); migration 017 present.</td>
+      </tr>
+    </tbody>
+    <caption>Verdicts reflect the P1 line items as scoped in §14 and their governing appendices.</caption>
+  </table>
+
+  <div class="callout warn"><h4>One documented scope observation (P1-5 / P1-5b)</h4>
+  Appendix A.1's execution model specified that <em>both</em> <code>runScenario()</code> and <code>generatePathways()</code> run the downturn/Monte-Carlo twice. As shipped, both features are scoped to <strong>What-If Scenarios only</strong>, not the Goals pathway generator — a deliberate reduction "per operator direction," recorded in roadmap row 5b. This is accepted as a recorded scope decision rather than an incompleteness, but the gate record is explicit: a professional working purely in the <strong>Goals</strong> engine sees neither downturn nor Monte-Carlo output there, only in Scenarios. If Goals becomes a primary adviser decision surface, closing that gap is a reasonable future-pass candidate.</div>
+
+  <div class="callout good"><h4>Gate decision</h4>
+  <strong>🟢 All four P1 items pass — accepted into production.</strong> The blank-IRR credibility hole (§6.3), the single-deterministic-path false precision (§12), and the instant-completion / rent-from-day-one optimism (§7) are each closed at source, wired end-to-end, and held by invariant and regression tests. This clears the two conditions §15 attached to P1 for presenting outputs as ranges rather than points.</div>
+
+  <p style="margin-top:18px;color:var(--ink-mute);font-size:13px">Signed, the Design Authority (Lead Software Architect) — acting as final gatekeeper for production acceptance. Audit conducted against the live codebase; all findings reproduced from source, wiring and passing tests at audit time.</p>
+</div></section>
+
+<section id="appendix-g"><div class="wrap">
+  <h2><span class="sec-num">G</span>Appendix G — P2 Acceptance Review (Gatekeeper Sign-Off)</h2>
+  <p class="lead">An independent acceptance audit of the P2 goal-engine work (item 8, delivered as tickets 8a–8d), conducted by the Design Authority as final gatekeeper. Each item was verified against the production source, its end-to-end wiring (engine → route → type → UI), and its regression tests — not against the implementing engineer's claims. The P2-relevant suites were re-run at audit time: <strong>78 / 78 green</strong> (<code>pathwayGenerator</code> · <code>nearestFix</code>). <strong>Item 7 (s455/DLA, SDLT/LTT switch, EPC-C costs) is deferred by operator decision and is explicitly out of scope for this gate</strong> — it does not affect acceptance of items 8a–8d.</p>
+
+  <div class="verdict" style="background:var(--good-soft);border-left-color:var(--good)">
+    <div class="dot">🟢</div>
+    <div>
+      <h3 style="color:var(--good)">All four 8-series P2 items accepted into production</h3>
+      <p>The goal engine moves from "presents the trade-off" to "helps decide it" as §13 demanded — with legible risk, user-owned ranking, verified fix-hints and explainable hybrids, each held by invariant tests. Item 7 remains deferred and does not block.</p>
+    </div>
+  </div>
+
+  <table>
+    <thead><tr><th>Item</th><th>Design (§)</th><th class="num">Verdict</th><th>Verification basis</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>8a</strong> Risk-score rescale</td>
+        <td>Appendix B.1</td>
+        <td class="num"><span class="pill p-ok">✓ Accepted</span></td>
+        <td><code>computeRiskScore100()</code> is a bounded 0–100 composite: six components each clamped to their own weight (25/25/15/15/10/10), a floor of 5 once capital is deployed, an LTV-mandate breach forcing ≥90, and labelled bands. The per-component breakdown is persisted (<code>risk_breakdown_json</code>, migration 018) and shown on the pathway cards — the "a bare number invites arguments; a breakdown ends them" requirement. The old accumulator's "leveraged plan scores 0" defect is closed.</td>
+      </tr>
+      <tr>
+        <td><strong>8b</strong> Risk-adjusted ranking view</td>
+        <td>Appendix B.2</td>
+        <td class="num"><span class="pill p-ok">✓ Accepted</span></td>
+        <td>Lexicographic <code>Fastest / Balanced / Safest</code> modes (not a hidden weighted utility), persisted per goal (<code>ranking_mode</code>, migration 018) via a three-button toggle, with the recommended badge annotated by a provenance string ("Recommended — safest plan reaching goal"). The risk-vs-speed frontier scatter (<code>RiskFrontierChart</code>) highlights the Pareto-efficient set and greys infeasible plans — the Consumer-Duty auditability standard the board set.</td>
+      </tr>
+      <tr>
+        <td><strong>8c</strong> Nearest-feasible hints</td>
+        <td>Appendix D.1</td>
+        <td class="num"><span class="pill p-ok">✓ Accepted</span></td>
+        <td><code>computeNearestFixes()</code> reports the smallest single-lever change that flips a goal-missing plan, keyed off the diagnosed binding constraint. The load-bearing discipline holds: <strong>every hint is re-simulated, never extrapolated</strong> — a closed-form seed only accelerates a real bracket-and-bisect search, the returned value is the verified one, and the invariant "no hint on a reaching pathway" is enforced inside the function. Persisted (<code>nearest_fix_json</code>, migration 019), shown as hint chips. The round-trip test asserts the hint's value actually flips <code>reaches_goal</code> and that 1% below does not.</td>
+      </tr>
+      <tr>
+        <td><strong>8d</strong> Hybrid strategy templates</td>
+        <td>Appendix D.2</td>
+        <td class="num"><span class="pill p-ok">✓ Accepted</span></td>
+        <td><code>io_then_repay</code> and <code>brrr_then_degear</code> compose the existing single-phase loops with one stated switch rule each — no black-box search. The degeneration rule (phase 1 never reaches goal → no row) and both dedup rules (nothing to convert / phase 2 adds nothing → no row) prevent duplicate frontier points. Critically, the <strong>mandatory amortisation re-classification shipped with the feature</strong>: <code>computeRiskScore100()</code> re-classifies a loan a hybrid converts mid-plan, so the dominance test — <code>io_then_repay</code> matches its base plan's time-to-goal, ends 0% interest-only, and scores <em>strictly lower</em> — actually passes rather than the hybrid's whole advantage being invisible.</td>
+      </tr>
+    </tbody>
+    <caption>Item 7 (P2) is deferred by operator decision and is not assessed here; its absence does not affect acceptance of 8a–8d.</caption>
+  </table>
+
+  <div class="callout"><h4>The gate caught a defect during acceptance — and it was closed before sign-off</h4>
+  Acceptance testing of 8d surfaced a latent defect in the <em>shared</em> goal-reached definition: <code>checkGoalReached()</code> flagged a plan as reaching goal on the <em>first</em> month a target was touched, so a hybrid whose post-tax income spiked to the target for one month and settled back below it was marked "reaches goal" and ranked top. The definition was corrected to require the goal to hold at the <em>end</em> of the horizon (a backward scan from the final month), which is the honest meaning of a financial-independence target. The fix is upstream of every template and ranking mode, is now in place, and the full suite passes with it. This is recorded not as a blemish but as evidence the acceptance criteria were genuinely enforced.</div>
+
+  <div class="callout good"><h4>Gate decision</h4>
+  <strong>🟢 All four 8-series P2 items pass — accepted into production.</strong> Item 7 is deferred by operator decision and does not block. With Appendices E, F and G, every P0 and P1 item and the P2 goal-engine work are formally accepted; the platform has cleared everything §15 made conditional, leaving only the deliberately-deferred item 7 — consistent with the unconditional sign-off the second review anticipated for a third pass.</div>
+
+  <p style="margin-top:18px;color:var(--ink-mute);font-size:13px">Signed, the Design Authority (Lead Software Architect) — acting as final gatekeeper for production acceptance. Audit conducted against the live codebase; all findings reproduced from source, wiring and passing tests at audit time.</p>
 </div></section>
 
   </main>
