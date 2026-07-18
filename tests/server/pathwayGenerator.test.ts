@@ -880,7 +880,7 @@ describe('generatePathways — lender ICR buy gate (P0 #4)', () => {
   })
 })
 
-describe('generatePathways — 0 for min_icr/capex reserve/fees means "use default", not "disable" (§P0-3)', () => {
+describe('generatePathways — 0 for min_icr/capex reserve means "use default", not "disable" (§P0-3)', () => {
   const goal = { goal_type: 'count' as const, target_property_count: 6, director_loan_annual: 200000 }
 
   it('capex_reserve_per_property: 0 still enforces the default £1,000/property reserve floor', () => {
@@ -891,24 +891,6 @@ describe('generatePathways — 0 for min_icr/capex reserve/fees means "use defau
     expect(dates(zeroReserve)).toEqual(dates(defaultReserve))
   })
 
-  it('a candidate deal with arrangement_fee: 0 still reflects the £999 default fee in the resulting buy event', () => {
-    const zeroFee = { ...ASSUMPTIONS, arrangement_fee: 0 }
-    const ps = generatePathways(goal, startingPortfolio(), zeroFee, PROJECTION_YEARS, 1)
-    const hold = ps.find(p => p.template_name === 'target_hold')!
-    const buys = hold.events.filter(e => e.event_type === 'buy_property').map(e => JSON.parse(e.parameters_json))
-    expect(buys.length).toBeGreaterThan(0)
-    for (const b of buys) expect(b.arrangement_fee).toBe(999)
-  })
-
-  it('a candidate deal with legal_fees: 0 still reflects the £2,000 default in the resulting buy event', () => {
-    const zeroFee = { ...ASSUMPTIONS, legal_fees: 0 }
-    const ps = generatePathways(goal, startingPortfolio(), zeroFee, PROJECTION_YEARS, 1)
-    const hold = ps.find(p => p.template_name === 'target_hold')!
-    const buys = hold.events.filter(e => e.event_type === 'buy_property').map(e => JSON.parse(e.parameters_json))
-    expect(buys.length).toBeGreaterThan(0)
-    for (const b of buys) expect(b.legal_fees).toBe(2000)
-  })
-
   it('erc_pct: 0 is unaffected (legitimate, deliberate "no ERC" — regression)', () => {
     // erc_pct is not in scope for the 0-guardrail: 0 genuinely means "disable ERC" and is
     // asserted elsewhere (Low-Risk Hold ERC test) — this just confirms positiveOr wasn't
@@ -917,16 +899,59 @@ describe('generatePathways — 0 for min_icr/capex reserve/fees means "use defau
     expect(ps.length).toBeGreaterThan(0)
   })
 
-  it('an operator-zeroed global default_arrangement_fee/capex_cost_per_property still falls through to the engine literal', () => {
-    const zeroedSettings = { default_arrangement_fee: 0, capex_cost_per_property: 0 } as any
+  it('an operator-zeroed global capex_cost_per_property still falls through to the engine literal', () => {
+    const zeroedSettings = { capex_cost_per_property: 0 } as any
+    const ps = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1, undefined, zeroedSettings)
+    const hold = ps.find(p => p.template_name === 'target_hold')!
+    const capexCostPerProperty = JSON.parse(hold.assumptions_json).capex_cost_per_property
+    expect(capexCostPerProperty).toBe(3000)
+  })
+})
+
+describe('generatePathways — an explicit 0 for a fee field is respected as a genuine zero, not overridden (fee fields are real costs, not safety gates)', () => {
+  const goal = { goal_type: 'count' as const, target_property_count: 6, director_loan_annual: 200000 }
+
+  it('a candidate deal with arrangement_fee: 0 keeps £0 in the resulting buy event (e.g. a fee-free mortgage product)', () => {
+    const zeroFee = { ...ASSUMPTIONS, arrangement_fee: 0 }
+    const ps = generatePathways(goal, startingPortfolio(), zeroFee, PROJECTION_YEARS, 1)
+    const hold = ps.find(p => p.template_name === 'target_hold')!
+    const buys = hold.events.filter(e => e.event_type === 'buy_property').map(e => JSON.parse(e.parameters_json))
+    expect(buys.length).toBeGreaterThan(0)
+    for (const b of buys) expect(b.arrangement_fee).toBe(0)
+  })
+
+  it('a candidate deal with legal_fees: 0 keeps £0 in the resulting buy event', () => {
+    const zeroFee = { ...ASSUMPTIONS, legal_fees: 0 }
+    const ps = generatePathways(goal, startingPortfolio(), zeroFee, PROJECTION_YEARS, 1)
+    const hold = ps.find(p => p.template_name === 'target_hold')!
+    const buys = hold.events.filter(e => e.event_type === 'buy_property').map(e => JSON.parse(e.parameters_json))
+    expect(buys.length).toBeGreaterThan(0)
+    for (const b of buys) expect(b.legal_fees).toBe(0)
+  })
+
+  it('an unset per-goal arrangement_fee on a BRRR refinance still falls through to a genuinely-zeroed global Settings default', () => {
+    // Distinguishes "unset" (falls through) from "deliberately zero" (respected) at the Settings
+    // layer too — an operator who sets the global default_arrangement_fee to £0 in Settings means
+    // it, and it must not silently become £999. The refinance path (unlike a plain buy, which is
+    // pre-resolved by the caller before assumptions reach generatePathways) consults `settings`
+    // directly inside pathwayGenerator, so it's the one place this Settings-layer fallback is
+    // actually exercised.
+    const zeroedSettings = { default_arrangement_fee: 0, default_valuation_fee: 300 } as any
     const noFeeInAssumptions = { ...ASSUMPTIONS, arrangement_fee: undefined }
     const ps = generatePathways(goal, startingPortfolio(), noFeeInAssumptions, PROJECTION_YEARS, 1, undefined, zeroedSettings)
+    const brrr = ps.find(p => p.template_name === 'brrr_recycler')!
+    const remortgages = brrr.events.filter(e => e.event_type === 'remortgage').map(e => JSON.parse(e.parameters_json))
+    expect(remortgages.length).toBeGreaterThan(0)
+    for (const r of remortgages) expect(r.arrangement_fee).toBe(0)
+  })
+
+  it('an unset per-goal arrangement_fee with no Settings override still falls through to the £999 engine literal', () => {
+    const noFeeInAssumptions = { ...ASSUMPTIONS, arrangement_fee: undefined }
+    const ps = generatePathways(goal, startingPortfolio(), noFeeInAssumptions, PROJECTION_YEARS, 1)
     const hold = ps.find(p => p.template_name === 'target_hold')!
     const buys = hold.events.filter(e => e.event_type === 'buy_property').map(e => JSON.parse(e.parameters_json))
     expect(buys.length).toBeGreaterThan(0)
     for (const b of buys) expect(b.arrangement_fee).toBe(999)
-    const capexCostPerProperty = JSON.parse(hold.assumptions_json).capex_cost_per_property
-    expect(capexCostPerProperty).toBe(3000)
   })
 })
 

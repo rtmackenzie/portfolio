@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { queryAll, queryOne, execute, transaction } from '../db/database.ts'
 import { logActivity } from '../services/activityLogger.ts'
 import { loadPortfolioState } from '../services/scenarioEngine.ts'
-import { generatePathways, rankPathways, positiveOr, TEMPLATES, type Goal, type PropertyAssumptions, type RankablePathway, type RankingMode } from '../services/pathwayGenerator.ts'
+import { generatePathways, rankPathways, numberOr, TEMPLATES, type Goal, type PropertyAssumptions, type RankablePathway, type RankingMode } from '../services/pathwayGenerator.ts'
 import { computeNearestFixes } from '../services/nearestFix.ts'
 import { loadTaxSettings, loadAssumptionSettings } from '../services/settings.ts'
 import { computeGoalWarnings } from '../services/goalValidation.ts'
@@ -164,9 +164,9 @@ router.post('/:id/pathways/generate', (req, res) => {
       deposit_percent:     body.deposit_percent ?? assumptionSettings.default_deposit_percent,
       mortgage_rate:       body.mortgage_rate ?? assumptionSettings.default_mortgage_rate_pct,
       mortgage_term_years: body.mortgage_term_years ?? 25,
-      legal_fees:          positiveOr(body.legal_fees, positiveOr(assumptionSettings.default_legal_fees, 2000)),
-      arrangement_fee:     positiveOr(body.arrangement_fee, positiveOr(assumptionSettings.default_arrangement_fee, 999)),
-      valuation_fee:       positiveOr(body.valuation_fee, positiveOr(assumptionSettings.default_valuation_fee, 300)),
+      legal_fees:          numberOr(body.legal_fees, numberOr(assumptionSettings.default_legal_fees, 2000)),
+      arrangement_fee:     numberOr(body.arrangement_fee, numberOr(assumptionSettings.default_arrangement_fee, 999)),
+      valuation_fee:       numberOr(body.valuation_fee, numberOr(assumptionSettings.default_valuation_fee, 300)),
     }
     const projectionYears = body.projection_years ?? 15
 

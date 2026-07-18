@@ -151,6 +151,13 @@ export function positiveOr(value: number | null | undefined, fallback: number): 
   return value != null && value > 0 ? value : fallback
 }
 
+// Cost fields (transaction fees) CAN legitimately be zero — a fee-free mortgage product, bundled
+// conveyancing, a cash purchase. Only "unset" (null/undefined) should cascade to the fallback;
+// an explicit 0 is a real, deliberate value and must be respected as-is.
+export function numberOr(value: number | null | undefined, fallback: number): number {
+  return value != null ? value : fallback
+}
+
 // ─── Event builder ────────────────────────────────────────────────────────────
 
 function buyEvent(date: string, a: PropertyAssumptions, interestOnly = false, settings?: AssumptionSettings): ScenarioEvent {
@@ -166,9 +173,9 @@ function buyEvent(date: string, a: PropertyAssumptions, interestOnly = false, se
       mortgage_rate:      a.mortgage_rate ?? 5.5,
       mortgage_term_years: a.mortgage_term_years ?? 25,
       interest_only:      interestOnly,
-      legal_fees:         positiveOr(a.legal_fees, 2000),
-      arrangement_fee:    positiveOr(a.arrangement_fee, 999),
-      valuation_fee:      positiveOr(a.valuation_fee, 300),
+      legal_fees:         numberOr(a.legal_fees, 2000),
+      arrangement_fee:    numberOr(a.arrangement_fee, 999),
+      valuation_fee:      numberOr(a.valuation_fee, 300),
       // Transaction-timing model (§P1-6, 2nd review): completion lag + onboarding void.
       completion_lag_months:   a.completion_lag_months   ?? settings?.default_completion_lag_months   ?? 2,
       onboarding_void_months:  a.onboarding_void_months  ?? settings?.default_onboarding_void_months  ?? 1,
@@ -209,8 +216,8 @@ function remortgageEvent(
       new_rate:            a.mortgage_rate ?? settings?.default_mortgage_rate_pct ?? 5.5,
       new_term_years:      a.mortgage_term_years ?? 25,
       new_balance:         Math.round(newBalance),
-      arrangement_fee:     positiveOr(a.arrangement_fee, positiveOr(settings?.default_arrangement_fee, 999)),
-      valuation_fee:       positiveOr(a.valuation_fee, positiveOr(settings?.default_valuation_fee, 300)),
+      arrangement_fee:     numberOr(a.arrangement_fee, numberOr(settings?.default_arrangement_fee, 999)),
+      valuation_fee:       numberOr(a.valuation_fee, numberOr(settings?.default_valuation_fee, 300)),
     }),
   }
 }
@@ -226,7 +233,7 @@ type Strategy = 'steady' | 'accelerated' | 'de_gear' | 'de_gear_medium' | 'brrr'
 function depositPlusCosts(a: PropertyAssumptions): number {
   const price = a.purchase_price
   const deposit = price * ((a.deposit_percent ?? 25) / 100)
-  const { total: txCosts } = calcTransactionCosts(price, positiveOr(a.legal_fees, 2000), 0, positiveOr(a.arrangement_fee, 999), positiveOr(a.valuation_fee, 300))
+  const { total: txCosts } = calcTransactionCosts(price, numberOr(a.legal_fees, 2000), 0, numberOr(a.arrangement_fee, 999), numberOr(a.valuation_fee, 300))
   return deposit + txCosts
 }
 
@@ -444,8 +451,8 @@ function buildCashGatedEvents(
           const targetLtvPct = Math.min(BRRR_TARGET_LTV_PCT, goal.max_ltv_pct ?? BRRR_TARGET_LTV_PCT)
           const newBalance = target.value * (targetLtvPct / 100)
           const ercCost = target.isEarlyExit ? target.debt * ercPct / 100 : 0
-          const arrangementFee = positiveOr(a.arrangement_fee, positiveOr(settings?.default_arrangement_fee, 999))
-          const valuationFee = positiveOr(a.valuation_fee, positiveOr(settings?.default_valuation_fee, 300))
+          const arrangementFee = numberOr(a.arrangement_fee, numberOr(settings?.default_arrangement_fee, 999))
+          const valuationFee = numberOr(a.valuation_fee, numberOr(settings?.default_valuation_fee, 300))
           const netRelease = (newBalance - target.debt) - ercCost - arrangementFee - valuationFee
           if (netRelease > 0) {
             decided = remortgageEvent(proj.months[i].date, target.property_id, newBalance, a, settings)

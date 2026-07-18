@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Independent Investment Review Board — Third Review (Production Gate)</title>
+<style>
+:root{
+  --navy:#0b2545;--navy-2:#13315c;--teal:#0d9488;--teal-2:#0f766e;
+  --bg:#f4f6fb;--surface:#fff;--surface-2:#f8fafc;--surface-3:#eef2f8;
+  --ink:#0f1b2d;--ink-soft:#3b4a60;--ink-mute:#64748b;
+  --line:#e2e8f0;--line-2:#cbd5e1;
+  --accent:#0d9488;--accent-soft:#ccfbf1;--accent-ink:#115e59;
+  --gold:#b45309;--gold-soft:#fef3c7;--or:#c2410c;--or-soft:#fde4d3;
+  --good:#16a34a;--good-soft:#dcfce7;--warn:#d97706;--warn-soft:#fef3c7;
+  --bad:#dc2626;--bad-soft:#fee2e2;--info:#2563eb;--info-soft:#dbeafe;
+  --shadow:0 1px 2px rgba(15,27,45,.06),0 8px 24px rgba(15,27,45,.06);
+  --shadow-lg:0 12px 40px rgba(15,27,45,.12);
+  --radius:14px;--radius-sm:9px;--maxw:1180px;
+  --mono:"SFMono-Regular",ui-monospace,"Cascadia Code",Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+[data-theme="dark"]{
+  --navy:#0a1426;--navy-2:#0f2444;--teal:#2dd4bf;--teal-2:#14b8a6;
+  --bg:#0a1120;--surface:#111c30;--surface-2:#0d1628;--surface-3:#16233b;
+  --ink:#e8eef7;--ink-soft:#b6c2d4;--ink-mute:#8595ad;
+  --line:#22324c;--line-2:#2c405f;
+  --accent:#2dd4bf;--accent-soft:#0c3b36;--accent-ink:#5eead4;
+  --gold:#fbbf24;--gold-soft:#3a2c08;--or:#fdba74;--or-soft:#3d2710;
+  --good:#34d399;--good-soft:#0e3a2a;--warn:#fbbf24;--warn-soft:#3a2c08;
+  --bad:#f87171;--bad-soft:#3d1717;--info:#60a5fa;--info-soft:#13294d;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+  --shadow-lg:0 12px 40px rgba(0,0,0,.5);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15.5px;line-height:1.62;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{line-height:1.22;color:var(--ink);font-weight:700;letter-spacing:-.01em}
+h2{font-size:1.6rem;margin:0 0 .25em}
+h3{font-size:1.16rem;margin:1.5em 0 .4em}
+h4{font-size:1rem;margin:1.1em 0 .4em;color:var(--ink-soft)}
+p{margin:.5em 0 .9em;color:var(--ink-soft)}
+a{color:var(--teal);text-decoration:none}a:hover{text-decoration:underline}
+strong{color:var(--ink);font-weight:650}em{color:var(--ink-soft)}
+code{font-family:var(--mono);font-size:.84em;background:var(--surface-3);padding:.1em .42em;border-radius:5px;color:var(--accent-ink)}
+pre{font-family:var(--mono);font-size:.8rem;line-height:1.55;background:var(--surface-3);border:1px solid var(--line);border-radius:var(--radius-sm);padding:14px 16px;overflow-x:auto;color:var(--ink-soft);margin:12px 0}
+pre code{background:none;padding:0;color:inherit}
+small{color:var(--ink-mute)}
+ul,ol{margin:.5em 0 1em;padding-left:1.25em}
+li{margin:.32em 0;color:var(--ink-soft)}li::marker{color:var(--teal)}
+
+.topbar{position:sticky;top:0;z-index:50;background:var(--navy);color:#fff;border-bottom:1px solid rgba(255,255,255,.08);box-shadow:0 2px 14px rgba(0,0,0,.18)}
+.topbar-in{max-width:var(--maxw);margin:0 auto;padding:11px 22px;display:flex;align-items:center;gap:16px}
+.brand{display:flex;align-items:center;gap:11px;font-weight:700;font-size:.97rem;letter-spacing:.02em;color:#fff}
+.brand .dot{width:11px;height:11px;border-radius:50%;background:linear-gradient(135deg,var(--teal),#67e8f9);box-shadow:0 0 12px var(--teal)}
+.brand small{color:#9fb3cf;font-weight:500}
+.topbar .spacer{flex:1}
+.tb-meta{color:#9fb3cf;font-size:.8rem;display:flex;gap:14px;align-items:center}
+.tb-meta .pin{color:#cbd9ec}
+.toggle{appearance:none;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:#fff;font:inherit;font-size:.8rem;padding:6px 12px;border-radius:999px;cursor:pointer;display:flex;align-items:center;gap:7px;transition:.18s}
+.toggle:hover{background:rgba(255,255,255,.14)}
+
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:248px minmax(0,1fr);gap:34px;padding:0 22px}
+.sidenav{position:sticky;top:74px;align-self:start;height:calc(100vh - 90px);overflow-y:auto;padding:22px 4px 40px;font-size:.86rem}
+.sidenav .nav-head{font-size:.7rem;text-transform:uppercase;letter-spacing:.13em;color:var(--ink-mute);font-weight:700;margin:0 10px 8px}
+.sidenav a{display:flex;gap:10px;align-items:baseline;padding:6.5px 10px;border-radius:8px;color:var(--ink-soft);text-decoration:none;border-left:2px solid transparent;transition:.14s;line-height:1.3}
+.sidenav a .n{color:var(--ink-mute);font-variant-numeric:tabular-nums;font-size:.78rem;font-weight:600;min-width:16px}
+.sidenav a:hover{background:var(--surface-3);color:var(--ink);text-decoration:none}
+.sidenav a.active{background:var(--accent-soft);color:var(--accent-ink);border-left-color:var(--teal);font-weight:600}
+.sidenav a.active .n{color:var(--teal)}
+.content{padding:30px 0 90px;min-width:0}
+
+.hero{background:linear-gradient(140deg,var(--navy) 0%,var(--navy-2) 62%,var(--teal-2) 165%);color:#fff;border-radius:var(--radius);padding:40px 40px 34px;margin:8px 0 14px;box-shadow:var(--shadow-lg);position:relative;overflow:hidden}
+.hero::after{content:"";position:absolute;right:-90px;top:-90px;width:340px;height:340px;background:radial-gradient(circle,rgba(45,212,191,.28),transparent 65%);pointer-events:none}
+.hero .eyebrow{text-transform:uppercase;letter-spacing:.2em;font-size:.72rem;color:#7fd9cb;font-weight:700;margin-bottom:14px}
+.hero h1{font-size:2.3rem;color:#fff;margin:0 0 .25em;max-width:24ch}
+.hero .lede{color:#c6d4e8;font-size:1.04rem;max-width:66ch;margin:0}
+.hero .hero-meta{display:flex;flex-wrap:wrap;gap:9px;margin-top:20px}
+.hero .chip{background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.16);color:#dce6f5;font-size:.76rem;padding:5px 11px;border-radius:999px}
+.hero .chip b{color:#fff}
+
+.glance{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin:18px 0 6px}
+.glance .g{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);padding:13px 14px;box-shadow:var(--shadow)}
+.glance .g .v{font-size:1.28rem;font-weight:750;color:var(--ink);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.glance .g .k{font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-mute);margin-top:3px;font-weight:600;line-height:1.3}
+.glance .g.accent .v{color:var(--teal)}
+
+.content section{padding:30px 0 8px;border-top:1px solid var(--line);margin-top:18px;scroll-margin-top:78px}
+.content section:first-of-type{border-top:none}
+.content section .wrap{display:block}
+h2 .sec-num{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:7px;background:var(--navy);color:#fff;font-size:.85rem;font-weight:700;margin-right:11px;vertical-align:middle}
+.lead{font-size:1.04rem;color:var(--ink-soft);max-width:78ch}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow);margin:14px 0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+table{border-collapse:collapse;width:100%;font-size:.88rem;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);margin:14px 0}
+thead th{background:var(--surface-3);text-align:left;font-weight:700;color:var(--ink);padding:11px 13px;border-bottom:1px solid var(--line-2);font-size:.74rem;text-transform:uppercase;letter-spacing:.04em}
+tbody td{padding:10px 13px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-soft)}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--surface-2)}
+td strong,td b{color:var(--ink)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+caption{caption-side:bottom;font-size:.76rem;color:var(--ink-mute);padding-top:8px;text-align:left}
+
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:.7rem;font-weight:700;padding:2.5px 9px;border-radius:999px;letter-spacing:.03em;white-space:nowrap}
+.p-crit{background:var(--bad-soft);color:var(--bad)}
+.p-high{background:var(--or-soft);color:var(--or)}
+.p-med{background:var(--warn-soft);color:var(--warn)}
+.p-low{background:var(--good-soft);color:var(--good)}
+.p-ok{background:var(--good-soft);color:var(--good)}
+.p-info{background:var(--info-soft);color:var(--info)}
+
+.callout{border-radius:var(--radius-sm);padding:14px 17px;margin:16px 0;border:1px solid var(--line);background:var(--surface-2)}
+.callout h4{margin:0 0 4px;color:var(--ink)}
+.callout.crit{background:var(--bad-soft);border-color:transparent}
+.callout.warn{background:var(--warn-soft);border-color:transparent}
+.callout.good{background:var(--good-soft);border-color:transparent}
+
+.verdict{display:flex;gap:18px;align-items:center;background:var(--or-soft);border:1px solid transparent;border-left:5px solid var(--or);border-radius:var(--radius);padding:20px 22px;margin:18px 0;box-shadow:var(--shadow)}
+.verdict .dot{font-size:34px;line-height:1}
+.verdict h3{margin:0 0 4px;color:var(--or);font-size:1.2rem}
+.verdict p{margin:0;color:var(--ink-soft)}
+
+footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--ink-mute);font-size:.82rem;border-top:1px solid var(--line)}
+footer .wrap{display:block}
+
+@media(max-width:980px){
+  .layout{grid-template-columns:1fr;gap:0}
+  .sidenav{position:static;height:auto;padding:14px 0 6px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px}
+  .sidenav .nav-head{width:100%}
+  .sidenav a{border-left:none;border-bottom:2px solid transparent;padding:6px 9px}
+  .sidenav a.active{border-left:none;border-bottom-color:var(--teal)}
+  .glance{grid-template-columns:repeat(3,1fr)}
+  .grid2{grid-template-columns:1fr}
+  .hero h1{font-size:1.9rem}
+}
+@media(max-width:600px){.glance{grid-template-columns:1fr 1fr}.topbar .tb-meta{display:none}}
+
+@media print{
+  :root{--bg:#fff}
+  .topbar{position:static;box-shadow:none}.toggle,.tb-meta{display:none}
+  .layout{grid-template-columns:1fr;display:block}.sidenav{display:none}.content{padding:0}
+  .content section{break-inside:avoid;border-top:1px solid #ccc}
+  .card,table,.callout,.verdict{box-shadow:none;break-inside:avoid}
+  .hero{box-shadow:none;color:#000;background:#eef2f8;border:1px solid #ccc}
+  .hero h1,.hero .lede,.hero .eyebrow{color:#000}
+  a{color:inherit}body{font-size:11pt}
+  @page{size:A4;margin:14mm}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="brand"><span class="dot"></span>Portfolio Intelligence&nbsp;<small>· Investment-Committee Review</small></div>
+    <div class="spacer"></div>
+    <div class="tb-meta"><span class="pin">v3.0 · Third Review</span><span>Confidential</span><span>Jul 2026</span></div>
+    <button class="toggle" id="themeBtn" onclick="toggleTheme()" aria-label="Toggle dark mode"><span id="themeIco">🌙</span><span id="themeTxt">Dark</span></button>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="sidenav">
+    <div class="nav-head">Third Review</div>
+    <a href="#exec"><span class="n">1</span><span>Executive Summary</span></a>
+    <a href="#verdict-top"><span class="n">2</span><span>Overall Verdict</span></a>
+    <a href="#method"><span class="n">3</span><span>Methodology</span></a>
+    <a href="#lineup"><span class="n">4</span><span>The Strategy Lineup</span></a>
+    <a href="#detail"><span class="n">5</span><span>Strategy Analysis</span></a>
+    <a href="#logic"><span class="n">6</span><span>Financial Logic</span></a>
+    <a href="#feasibility"><span class="n">7</span><span>Feasibility</span></a>
+    <a href="#missing"><span class="n">8</span><span>Missing Variables</span></a>
+    <a href="#modelling"><span class="n">9</span><span>Modelling Critique</span></a>
+    <a href="#sensitivity"><span class="n">10</span><span>Sensitivity</span></a>
+    <a href="#risk"><span class="n">11</span><span>Risk Matrix</span></a>
+    <a href="#engine"><span class="n">12</span><span>Engine Review</span></a>
+    <a href="#goal"><span class="n">13</span><span>Goal Engine</span></a>
+    <a href="#roadmap"><span class="n">14</span><span>Roadmap</span></a>
+    <a href="#final"><span class="n">15</span><span>Final Verdict</span></a>
+  </nav>
+
+  <main class="content">
+
+<section id="exec" style="border-top:none"><div class="wrap">
+  <div class="hero">
+    <div class="eyebrow">Independent Investment Review Board · Third Review · Production Gate</div>
+    <h1>The engine the first review asked for now exists. The question is what remains between it and unconditional trust.</h1>
+    <p class="lede">A fresh, independent due-diligence review of the scenario and goal engines following completion of the second review's full remediation roadmap. Seven generated strategies for the £5,000/month income goal are assessed against the standard required to support real decisions involving hundreds of thousands of pounds.</p>
+    <div class="hero-meta">
+      <span class="chip">Goal: <b>£5,000/month income</b></span>
+      <span class="chip">Strategies reviewed: <b>7 (5 base + 2 hybrids)</b></span>
+      <span class="chip">Tests at review: <b>363 / 363 green</b></span>
+      <span class="chip">Ownership: <b>Ltd company</b></span>
+      <span class="chip">Panel: <b>CFA · MRICS · BTL 20yr+ · Credit Risk · Underwriter · UK Tax · Modelling · Architect</b></span>
+    </div>
+  </div>
+
+  <div class="glance">
+    <div class="g accent"><div class="v">🟢→✅</div><div class="k">Verdict trajectory v1→v2→v3</div></div>
+    <div class="g"><div class="v">7</div><div class="k">Distinct strategies incl. 2 hybrids</div></div>
+    <div class="g"><div class="v">38–77</div><div class="k">Risk-score spread (0–100 scale)</div></div>
+    <div class="g"><div class="v">£9,071</div><div class="k">Recommended plan ending CF/mo (post-tax)</div></div>
+    <div class="g"><div class="v">0</div><div class="k">Blank IRRs (was 4 of 4 at v2)</div></div>
+    <div class="g"><div class="v">£25</div><div class="k">Configured fee — a workaround for a bug, now fixed (§9)</div></div>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">What the board found</h3>
+    <p>The second review closed with a promise: complete the five-item roadmap and the third review would deliver unconditional sign-off. The board has now re-tested the engine end-to-end against live runs and finds <strong>every P0 and P1 item genuinely closed — not claimed closed</strong>. The candidate deal ages with the market. BRRR obeys the goal's leverage mandate it once ignored (peak 66% against a 75% ceiling, by construction rather than luck). The <code>min_icr = 0</code> footgun is dead. Every strategy now renders an IRR with its basis stated (capital-account, on all seven live plans). The single deterministic line has grown a fixed downturn companion and a seeded Monte-Carlo band. Purchases take two months to complete and earn nothing for their first month — the calendar criticism, answered.</p>
+    <p>The goal engine has moved furthest of all. Where the first review found two duplicate strategies and the second found four with an unbounded risk score reading "0 = riskless", the board now finds <strong>seven genuinely distinct plans on a bounded 0–100 risk scale with a per-component breakdown</strong>, ranked under a user-owned Fastest/Balanced/Safest policy with the recommendation's provenance stated, a Pareto frontier chart, verified "nearest-feasible" fix hints (every number re-simulated, never extrapolated — the board checked), and two-phase hybrid strategies the second review only sketched. On the 10-property goal, the engine's own hybrid <em>Recycle, Then De-Risk</em> Pareto-dominates plain BRRR — same 75-month goal date, 13 points less risk, £2.0m less ending debt. That is the engine "having the thought" §13 of the second review said it could not have.</p>
+    <p>What remains is enumerable and honest, and mostly lives at the edges: <strong>purchase-tax is charged for the wrong jurisdiction on every simulated purchase</strong> (Scottish LBTT/ADS applied uniformly, including to the English seed portfolio — material on 16–24-buy growth plans and, on the report's own £85k deal, an over-charge rather than the omission first suspected), BRRR still lacks the refurbishment-uplift input its economics depend on, per-loan origination LTV is unenforced, and the Goals engine — unlike Scenarios — still presents its pathways as single deterministic lines. None of these changes a headline figure's <em>arithmetic</em>; the jurisdiction mismatch flatters or distorts multi-purchase plans' <em>speed</em> and is priced in §8. (The near-zero-fee finding originally listed here was itself corrected mid-review and fixed at the code level — see §9.)</p>
+    <div class="callout warn" style="margin-top:14px"><h4>Correction to this report</h4>This section originally stated that stamp duty was not charged at all. On further verification that was wrong: the engine has fully implemented, tested Scottish LBTT/Additional Dwelling Supplement logic (<code>calculations.ts</code>), applied on every purchase since a prior commit. The actual defect — a missing jurisdiction switch, so Scottish rates are charged on English/Welsh/NI stock too — is corrected throughout this document, in §6.1 in particular. The board holds itself to the same disclosure standard it applies to the codebase.</div>
+  </div>
+</div></section>
+
+<section id="verdict-top"><div class="wrap">
+  <h2><span class="sec-num">2</span>Overall Verdict</h2>
+  <div class="verdict" style="background:var(--good-soft);border-left-color:var(--good)">
+    <div class="dot">✅</div>
+    <div>
+      <h3 style="color:var(--good)">Ready for Production</h3>
+      <p>Approved for real investment decision support by professional landlords and property companies, and for adviser-assisted use with the §14 residual register disclosed. The second review's conditions are fulfilled; the remaining items are bounded, priced, and do not change any plan's accounting or any recommendation under honest configuration.</p>
+    </div>
+  </div>
+  <table>
+    <thead><tr><th>Dimension</th><th>First review (Jun 2026)</th><th>Second review (Jul 2026)</th><th>This review</th></tr></thead>
+    <tbody>
+      <tr><td>Cash accounting integrity</td><td><span class="pill p-ok">Sound</span></td><td><span class="pill p-ok">Sound</span></td><td><span class="pill p-ok">Sound</span> — re-traced; money never spent twice, ERC/fees/tax reconcile.</td></tr>
+      <tr><td>Growth/timing honesty</td><td><span class="pill p-crit">Critical bias</span></td><td><span class="pill p-med">One bias left</span></td><td><span class="pill p-ok">Closed</span> — deal indexes at 3%/2.5%; completion lag + onboarding void modelled.</td></tr>
+      <tr><td>Lender realism</td><td><span class="pill p-crit">Absent</span></td><td><span class="pill p-ok">ICR gate</span></td><td><span class="pill p-ok">Held</span> — per-deal stressed ICR gate; mandate-aware refinancing. Origination LTV still open (§7).</td></tr>
+      <tr><td>Return metrics</td><td><span class="pill p-high">None</span></td><td><span class="pill p-med">IRR blank</span></td><td><span class="pill p-ok">Complete</span> — IRR renders on all seven plans, basis labelled, invariant-tested.</td></tr>
+      <tr><td>Uncertainty communication</td><td><span class="pill p-high">Single path</span></td><td><span class="pill p-high">Single path</span></td><td><span class="pill p-low">Ranges in Scenarios</span> — downturn + seeded Monte-Carlo; Goals pathways still single-line (§13).</td></tr>
+      <tr><td>Risk legibility</td><td><span class="pill p-crit">None</span></td><td><span class="pill p-high">0 = "riskless"</span></td><td><span class="pill p-ok">0–100 + breakdown</span> — live spread 38–77 matches the board's own §11 ordering.</td></tr>
+      <tr><td>Strategy generation</td><td><span class="pill p-high">2 duplicates</span></td><td><span class="pill p-med">4 fixed templates</span></td><td><span class="pill p-ok">7 incl. hybrids</span> — a hybrid Pareto-dominates its base on live data.</td></tr>
+      <tr><td>Cost completeness</td><td><span class="pill p-high">Major gaps</span></td><td><span class="pill p-low">Minor gaps</span></td><td><span class="pill p-med">Wrong jurisdiction charged</span> — LBTT/ADS (Scotland) applied to all stock, no switch (§6.1, §8). The near-zero-fee finding was a workaround for a real bug, since fixed (§9).</td></tr>
+    </tbody>
+    <caption>Trajectory across three reviews. The two remaining non-green rows are the spine of the §14 roadmap.</caption>
+  </table>
+</div></section>
+
+<section id="method"><div class="wrap">
+  <h2><span class="sec-num">3</span>Review Methodology</h2>
+  <p class="lead">The board reviews the system <em>as configured and as it runs today</em> — prior reviews and their acceptance appendices were read, but every figure in this report was independently regenerated from the live codebase at review time.</p>
+  <div class="grid2">
+    <div class="card"><h4>What the board ran</h4><ul>
+      <li><strong>Live pathway generation</strong> for both stored goals (£5,000/month income; 10 properties) using each goal's <em>own saved</em> candidate deal and constraints — nothing was modified or persisted.</li>
+      <li><strong>Downturn + Monte-Carlo</strong> on the stored base-case scenario: fixed <code>DOWNTURN_2026_V1</code> transform and a 300-run, seed-7 band, reproduced deterministically.</li>
+      <li><strong>Full regression suite</strong>: 363 tests across 17 files, all green at review time; type-checks clean on both client and server configs.</li>
+      <li><strong>Trace-to-source spot checks</strong>: BRRR refinance sizing vs the goal mandate, indexed deal pricing on late purchases, the ICR gate against a deliberately unfinanceable deal, the sustained-goal definition against a plan that grazes its target and falls back.</li>
+    </ul></div>
+    <div class="card"><h4>Stored configuration under test</h4><ul>
+      <li><strong>Held portfolio</strong>: 3 properties, £200,000 value, £48,000 debt (£152,000 equity).</li>
+      <li><strong>Goal 1</strong>: £5,000/month post-tax income · Ltd structure · max LTV 75% · 3-month reserve + £1,000/unit capex float · £15,000 starting cash · £15,000/yr director loans · 5-yr refix at +100bps · ERC 3% · ranking mode: Fastest.</li>
+      <li><strong>Candidate deal</strong>: £85,000 purchase, £700/month rent (9.9% gross), 25% deposit, 5.5% over 25 years, 15-year horizon.</li>
+      <li><strong>Operator-set assumptions</strong>: growth 3.0% / rent 2.5% / void 1 mo/yr / arrears 0.5% / fees £25 + £25 + £1,500 / ICR stress +200bps, 5.5% floor / completion lag 2 mo / onboarding void 1 mo / de-gear caps 2 (Low-Risk) and 4 (Medium-Risk).</li>
+    </ul></div>
+  </div>
+  <div class="callout"><h4>Continuity note</h4>
+  The three strategies named in the review commission (“Steady Growth”, “Accelerated Growth”, “Mortgage Recycler”) are the <em>first review’s</em> lineup. They have since been renamed, differentiated and extended: Target &amp; Hold, Maximise Cashflow, Low-Risk Hold, <em>Medium-Risk Hold (new since v2)</em>, BRRR, and two hybrids — Fast Build, Then Lock In and Recycle, Then De-Risk. The board reviews the current seven.</div>
+</div></section>
+
+<section id="lineup"><div class="wrap">
+  <h2><span class="sec-num">4</span>The Strategy Lineup — Live Engine Outputs</h2>
+  <p class="lead">All figures are the engine's own outputs from the board's live runs — £5,000/month goal, 15-year horizon, £85k/£700pm candidate deal, Ltd taxation, the operator's stored settings. Bold marks best-in-row where meaningful.</p>
+  <table>
+    <thead><tr><th>Metric</th><th class="num">Target &amp; Hold</th><th class="num">Maximise Cashflow</th><th class="num">Low-Risk Hold</th><th class="num">Medium-Risk Hold</th><th class="num">BRRR</th><th class="num">Fast Build → Lock In</th></tr></thead>
+    <tbody>
+      <tr><td>Mechanic</td><td>Repayment, stop at goal</td><td>Interest-only, grow</td><td>Repayment, ≤2 mortgages, payoffs</td><td>Repayment, ≤4 mortgages, payoffs</td><td>Cash-out refi &lt;65% LTV</td><td>IO to goal, then convert to repayment</td></tr>
+      <tr><td>Feasible / reaches goal</td><td class="num">✓ / ✗</td><td class="num"><strong>✓ / ✓ (m131)</strong></td><td class="num">✓ / ✓ (m175)</td><td class="num">✓ / ✓ (m168)</td><td class="num">✓ / ✓ (m172)</td><td class="num">✓ / ✗ (£233 short)</td></tr>
+      <tr><td>Risk score (0–100)</td><td class="num">59 High</td><td class="num">77 Critical</td><td class="num"><strong>38 Medium</strong></td><td class="num">49 Medium</td><td class="num">75 High</td><td class="num">62 High</td></tr>
+      <tr><td>Ending CF/mo (post-tax)</td><td class="num">£4,564</td><td class="num"><strong>£9,071</strong></td><td class="num">£5,241</td><td class="num">£5,628</td><td class="num">£5,440</td><td class="num">£4,767</td></tr>
+      <tr><td>End equity / debt</td><td class="num">£1.21m / £1.07m</td><td class="num"><strong>£1.30m</strong> / £1.78m</td><td class="num">£1.01m / <strong>£0.09m</strong></td><td class="num">£1.11m / £0.26m</td><td class="num">£1.21m / £2.12m</td><td class="num">£1.08m / £0.94m</td></tr>
+      <tr><td>Properties (buys / refis / payoffs)</td><td class="num">18 (16/0/0)</td><td class="num">24 (22/0/0)</td><td class="num">9 (6/0/6)</td><td class="num">11 (8/0/6)</td><td class="num">26 (23/37/0)</td><td class="num">16 (13/13/0)</td></tr>
+      <tr><td>Capital in / equity multiple</td><td class="num">£581k / 3.20×</td><td class="num">£823k / 2.67×</td><td class="num"><strong>£248k / 5.21×</strong></td><td class="num">£318k / 4.58×</td><td class="num">£980k / 2.35×</td><td class="num">£482k / 3.83×</td></tr>
+      <tr><td>IRR (capital-account) / ROCE</td><td class="num">12.0% / 14.7%</td><td class="num">11.6% / 11.1%</td><td class="num"><strong>13.6% / 28.1%</strong></td><td class="num">12.9% / 23.9%</td><td class="num">10.4% / 9.0%</td><td class="num">12.1% / 18.9%</td></tr>
+      <tr><td>Peak LTV (75% mandate) / min ICR</td><td class="num">52% / 200%</td><td class="num">58% / 186%</td><td class="num"><strong>38% / 260%</strong></td><td class="num">48% / 218%</td><td class="num">66% / 165%</td><td class="num">58% / 188%</td></tr>
+      <tr><td>Total tax paid</td><td class="num">£145k</td><td class="num">£164k</td><td class="num"><strong>£116k</strong></td><td class="num">£129k</td><td class="num">£165k</td><td class="num">£153k</td></tr>
+    </tbody>
+    <caption>Live engine outputs. The seventh strategy, <em>Recycle, Then De-Risk</em>, is correctly absent from this goal: BRRR only reaches £5,250 (goal + margin) at month 172 of 180, leaving no runway to de-gear, so the hybrid would duplicate plain BRRR and the engine's dedup rule suppresses it — verified behaviour, not a defect. IRR renders on all plans; no blanks remain.</caption>
+  </table>
+  <div class="callout good"><h4>The engine's own risk scale now agrees with the board's ordering</h4>
+  At the second review three of four strategies scored 0 and one scored 57. On the same class of inputs the live spread is now 38 / 49 / 59 / 62 / 75 / 77 with labelled bands and a six-component breakdown per card — and its ordering (Low-Risk Hold safest → Maximise Cashflow riskiest) matches the risk matrix this board constructs independently in §11. The calibration test the second review's Appendix B set has been passed on live data.</div>
+  <div class="callout"><h4>The 10-property goal shows the frontier working end-to-end</h4>
+  On the second stored goal the full seven-strategy lineup materialises, and the ranked recommendation is the hybrid <strong>Recycle, Then De-Risk</strong>: goal at month 75 (tied with plain BRRR) at risk 61 vs BRRR's 74, ending debt £158k vs £2.17m, equity multiple 4.89× vs 2.43×. A plan that ties the fastest strategy while carrying a fraction of its risk is precisely the "space between the templates" the second review said the engine could not search. It now proposes it unprompted — and the sceptic should note the engine also correctly declines to propose it where it adds nothing (this goal, above).</div>
+</div></section>
+
+<section id="detail"><div class="wrap">
+  <h2><span class="sec-num">5</span>Strategy Analysis</h2>
+  <h3>5.1 Maximise Cashflow &nbsp;<span class="pill p-crit">Risk 77 · Critical</span> &nbsp;<span class="pill p-info">Engine's recommendation (Fastest mode)</span></h3>
+  <div class="card"><p>The only plan that reaches £5,000/month with real margin — £9,071 ending post-tax, goal at month 131 — and the engine is now honest about what that costs: £1.78m of interest-only debt across 24 units, the worst equity multiple of the reaching plans (2.67×), and a Critical band driven by a full 15/15 amortisation component. The board accepts the recommendation <em>as a product of the operator's own chosen ranking mode</em> (Fastest); under Safest the same engine recommends Low-Risk Hold, and the toggle plus provenance string make that a user decision rather than a hidden formula. This is the governance the second review demanded. One sensitivity to flag: at £25/£25 configured arrangement/valuation fees (a deliberate, now-defensible operator choice — see §9), 22 purchases cost roughly £28k less than they would at the engine's £999/£300 defaults, which is this plan's cadence advantage most of all — worth restating at defaults if presenting a conservative case.</p></div>
+
+  <h3>5.2 Low-Risk Hold &nbsp;<span class="pill p-low">Risk 38 · Medium</span></h3>
+  <div class="card"><p>The plan most board members would run with their own money, and the numbers have only strengthened: 9 units, £91k residual debt, min ICR 260%, capital efficiency the best of the seven (5.21× on £248k in, 13.6% capital-account IRR, 28.1% ROCE), and goal reached — month 175, inside the horizon, <em>sustained to the end</em> under the corrected goal definition. At the second review this strategy missed by £207/month and the engine had nothing to say about it; the nearest-feasible machinery now closes exactly that class of gap (on the 10-property goal it tells the investor a verified "£15,157 starting cash" flips its near-miss). Slow, boring, and the strongest risk-adjusted return on the table.</p></div>
+
+  <h3>5.3 Medium-Risk Hold &nbsp;<span class="pill p-med">Risk 49 · Medium</span> &nbsp;<span class="pill p-info">New since v2</span></h3>
+  <div class="card"><p>A genuine middle of the frontier rather than a fifth flavour of the same thing: up to 4 concurrent mortgages (operator-configurable; default 3) before de-gearing, landing between Low-Risk Hold and the growth plans on every axis — 11 units, £256k debt, £5,628/month, 4.58×, risk 49. It reaches goal seven months sooner than Low-Risk Hold for 11 points more risk, which is a coherent, explainable trade. The board notes the cap is a Settings value with the 0⇒default guardrail applied — the configuration-surface lesson of §9-v2, learned.</p></div>
+
+  <h3>5.4 BRRR &nbsp;<span class="pill p-high">Risk 75 · High</span></h3>
+  <div class="card"><p>Now mandate-compliant (peak 66% vs the 75% ceiling, capped at source) and <em>feasible</em> — the second review's central BRRR finding is closed. What remains is the economics: 23 purchases funded by 37 refinances produce the worst capital efficiency of the lineup (2.35×, 10.4% IRR, 9.0% ROCE, 25-month payback) because the engine still models no below-market purchase or refurbishment uplift — BRRR without forced appreciation is recycling fees, not value. The board repeats its position: either add a refurb-uplift input (with a matching capex outflow) or let the strategy's own returns block continue to indict it. At least the indictment is now printed on the card.</p></div>
+
+  <h3>5.5 The hybrids &nbsp;<span class="pill p-high">Fast Build → Lock In: 62 · High</span> &nbsp;<span class="pill p-ok">Recycle → De-Risk: dominates BRRR on goal 2</span></h3>
+  <div class="card"><p><em>Fast Build, Then Lock In</em> is the honest cautionary tale on this goal: it converts 13 IO loans to repayment at the goal month, and the conversion's post-tax cost (principal is not deductible) drops income back below target — ending £4,767, correctly marked <strong>not reaching goal</strong> under the sustained definition, with the £233 shortfall printed. The board specifically verified this case because it is the one a first-crossing definition would have got wrong; the engine got it right. Two residuals: hybrids receive no nearest-feasible hints (the template-probe machinery doesn't cover two-phase plans, so this £233 near-miss shows no fix), and on the 10-property goal <em>Recycle, Then De-Risk</em> demonstrates the concept at full strength — recommended, tied-fastest, 13 points safer than its base.</p></div>
+
+  <h3>5.6 Target &amp; Hold &nbsp;<span class="pill p-high">Risk 59 · High</span></h3>
+  <div class="card"><p>Stops buying at the goal and holds — but on this deal it never quite gets there: £4,564 ending, £436 short, reserve-bound (the cash floor pinches at £16.6k vs a £15.9k requirement), with a verified hint that £40,000 starting cash (vs £15,000) flips it. Sixteen repayment mortgages held simultaneously with no de-gearing gives it more mid-life leverage than its "steady" branding suggests — the 59 High score is deserved, and the breakdown shows why (leverage 12.2, affordability 18.6, scale 10). A professional would either fund the hint or pick Medium-Risk Hold.</p></div>
+</div></section>
+
+<section id="logic"><div class="wrap">
+  <h2><span class="sec-num">6</span>Financial Logic &amp; Internal Consistency</h2>
+  <p class="lead">The board re-traced the cash engine and found it internally consistent for the third consecutive review — and, for the first time, found the <em>strategy layer's</em> arithmetic equally clean. Findings, in descending severity:</p>
+
+  <h3>6.1 Purchase tax is charged for the wrong jurisdiction on every simulated purchase <span class="pill p-med">Medium</span></h3>
+  <p>Deposits, legal, arrangement and valuation fees, ERC, capex and arrears all flow through the cash account — and so, in fact, does purchase tax: <code>calculations.ts</code> implements Scotland's Land and Buildings Transaction Tax (<code>calcLBTT()</code>, banded 0/2/5/10/12%) and its 8% Additional Dwelling Supplement (<code>calcADS()</code>), and <code>completePurchase()</code> deducts their combined total on every purchase, tested and regression-protected. This report's first draft stated the opposite — that stamp duty was entirely absent — which was wrong; the correction is recorded in §1.</p>
+  <p>The real defect: <strong>there is no jurisdiction switch anywhere in the codebase</strong>. Scottish LBTT/ADS is charged unconditionally, including on the seed portfolio's own stock (Stockport, Leeds, Sheffield, Manchester — all England), which should attract English SDLT with the 5% additional-property surcharge introduced in the October 2024 Budget, not Scottish rates. On the report's own £85,000 candidate deal: <strong>currently charged £6,800</strong> (LBTT £0, below the £145k nil-band, + ADS 8% = £6,800) versus <strong>£4,250 if correctly charged as English SDLT</strong> (the whole price sits inside SDLT's 0% band; only the 5% surcharge applies) — an <strong>over-charge of ~£2,550 per purchase</strong> on this specific deal, the opposite direction from the omission first suspected. The sign is price-band-dependent (LBTT's nil-band sits higher than SDLT's, but ADS's 8% exceeds SDLT's 5% surcharge), so it should not be assumed to run one way across all price points — which is exactly why a proper jurisdiction switch, not a guess, is the fix. It does not corrupt the ledger (nothing double-counts; the wrong figure is still applied consistently within a run), but it does misstate acquisition costs on English/Welsh/NI stock in a direction the board cannot sign off as immaterial on a 16–24-purchase plan. <strong>Fix: a jurisdiction field (England/Wales/NI vs Scotland) selecting between the existing <code>calcLBTT</code>/<code>calcADS</code> and a new SDLT/LTT schedule, applied in <code>completePurchase()</code> alongside the existing fee hooks — closing the "SDLT/LTT jurisdiction switch" half of the second review's own deferred item 7, not a new defect.</strong></p>
+
+  <h3>6.2 Payback period can render as 0 months <span class="pill p-low">Low</span></h3>
+  <p>On several 10-property-goal plans <code>months_to_payback</code> reports 0: the cash-position trough sits at month 0, so "recovery to starting position" is satisfied immediately even though £250k+ of capital is deployed later. The trough-to-recovery definition is defensible, but a 0-month payback on a quarter-million-pound plan reads as an error to a professional. Cosmetic; worth a definitional guard (e.g. measure from the <em>last</em> capital call, or suppress when the trough precedes first purchase).</p>
+
+  <h3>6.3 What was re-verified clean</h3>
+  <table>
+    <thead><tr><th>Check</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td>Indexed deal pricing — late buys cost/rent more, tracking 3%/2.5% compounding</td><td><span class="pill p-ok">Verified</span> — traced in event streams; regression-tested.</td></tr>
+      <tr><td>BRRR refinance sizing vs goal mandate (min(75%, ceiling))</td><td><span class="pill p-ok">Verified</span> — realized peak 66% under a 75% mandate; capped at 60% under a 60% mandate in tests.</td></tr>
+      <tr><td>IRR fallback ladder — basis labelled; capital-account = legacy construction on front-loaded fixture</td><td><span class="pill p-ok">Verified</span> — all seven live plans resolve tier 1; cross-check + reconciliation invariants green.</td></tr>
+      <tr><td>Sustained-goal definition — a plan that grazes target and falls back is not "reached"</td><td><span class="pill p-ok">Verified live</span> — Fast Build → Lock In: touches £5,030 at m125, ends £4,767, correctly ✗.</td></tr>
+      <tr><td>Hybrid switch cost honesty — ERC + fees + higher repayment cost land at the switch month</td><td><span class="pill p-ok">Verified</span> — the post-tax dip is visible in the month series and asserted in tests.</td></tr>
+      <tr><td>Downturn/Monte-Carlo layering — transform applied over central case; seeded band reproduces</td><td><span class="pill p-ok">Verified</span> — 300-run seed-7 band identical across re-runs; central tracks P50.</td></tr>
+    </tbody>
+  </table>
+</div></section>
+
+<section id="feasibility"><div class="wrap">
+  <h2><span class="sec-num">7</span>Real-World Feasibility</h2>
+  <p class="lead">Could an experienced UK investor execute these plans? The calendar objections of the second review are substantially answered; what remains is deal-flow realism and two lender-surface gaps.</p>
+  <table>
+    <thead><tr><th>Dimension</th><th>Status</th><th>Board comment</th></tr></thead>
+    <tbody>
+      <tr><td>Lender affordability (ICR)</td><td><span class="pill p-ok">Modelled</span></td><td>Per-deal stressed gate (pay+2% / 5.5% floor) at 145% for Ltd — mirrors PRA-era underwriting; a deliberately unfinanceable deal is rejected with the true reason stated.</td></tr>
+      <tr><td>Portfolio LTV mandate</td><td><span class="pill p-ok">Modelled</span></td><td>Enforced in generation (buys and refinances), not just checked after the fact.</td></tr>
+      <tr><td>Per-loan origination LTV</td><td><span class="pill p-med">Open</span></td><td>A 25%-deposit purchase is a 75% origination loan even under a tighter portfolio mandate; no per-product LTV menu exists. Unchanged from v2; ranked in §14.</td></tr>
+      <tr><td>Transaction timing</td><td><span class="pill p-ok">Modelled</span></td><td>2-month completion lag; overlapping in-flight buys can no longer pass gates against stale snapshots.</td></tr>
+      <tr><td>Onboarding void / refurb window</td><td><span class="pill p-ok">Modelled</span></td><td>1 rent-free month per acquisition (configurable). Refurb <em>cost/uplift</em> remains unmodelled — the BRRR-specific half is still open.</td></tr>
+      <tr><td>Cash reserves</td><td><span class="pill p-ok">Modelled</span></td><td>3-month + capex floor enforced in generation and feasibility; the binding-constraint strings quote it to the pound.</td></tr>
+      <tr><td>Refinancing availability / down-valuation</td><td><span class="pill p-med">Partly</span></td><td>Mechanics correct (ERC, fees, re-amortisation); every valuation still lands exactly at model value. BRRR's 37 refinances assume 37 perfect surveys.</td></tr>
+      <tr><td>Deal supply</td><td><span class="pill p-med">Open</span></td><td>A 9.9% gross deal, sourced 16–24 times over 15 years, in one implied market. Indexation fixed the <em>price</em> of repetition; the <em>availability</em> of repetition remains the investor's hardest problem and the model's easiest assumption.</td></tr>
+      <tr><td>Taxation in-plan</td><td><span class="pill p-ok">Modelled</span></td><td>CT/S24 on operations, CGT hooks on disposal, post-tax goal solving. Purchase tax charged but for the wrong jurisdiction — Scottish LBTT/ADS on all stock (§6.1); s455/DLA deferred (item 7).</td></tr>
+    </tbody>
+  </table>
+  <div class="callout warn"><h4>The experienced investor's reading</h4>
+  The plans are now <em>calendar-credible</em>: purchases take months, new units earn nothing at first, fees and exit charges bite, and the goal date honours all of it. What a 20-year operator would still discount is <em>sourcing</em>: no engine input captures how hard it is to buy the same above-average deal two dozen times. Until a deal-pipeline abstraction exists, plans with &gt;10 purchases should be read as "if supply holds" — a caveat the UI does not yet print.</div>
+</div></section>
+
+<section id="missing"><div class="wrap">
+  <h2><span class="sec-num">8</span>Missing Variables</h2>
+  <p class="lead">The second review's missing-variables table has mostly emptied — completion lag, onboarding void, downturn case, Monte-Carlo band and concentration warnings all shipped. What remains, with the board's materiality estimate:</p>
+  <table>
+    <thead><tr><th>Variable</th><th>Modelled?</th><th class="num">Typical magnitude</th><th>Materiality</th></tr></thead>
+    <tbody>
+      <tr><td><strong>SDLT / LTT at purchase (England/Wales/NI)</strong></td><td><span class="pill p-med">Wrong jurisdiction</span></td><td class="num">~£2.5k over-charged per £85k purchase (Scottish rates applied instead)</td><td><span class="pill p-med">Medium — mischarged, not missing</span> — §6.1; top of §14.</td></tr>
+      <tr><td><strong>Refurb cost &amp; forced-appreciation uplift</strong></td><td><span class="pill p-crit">No</span></td><td class="num">The entire BRRR premise</td><td><span class="pill p-high">High for BRRR only</span> — strategy self-indicts meanwhile (2.35×).</td></tr>
+      <tr><td>s455 / DLA tax on director loans</td><td><span class="pill p-crit">No</span></td><td class="num">33.75% temporary charge exposure</td><td><span class="pill p-med">Medium</span> — both stored goals inject £15k/yr; deferred item 7.</td></tr>
+      <tr><td>EPC-C upgrade costs</td><td><span class="pill p-crit">No</span></td><td class="num">£5–15k per non-compliant unit</td><td><span class="pill p-med">Medium</span> — needs per-property EPC data; deferred item 7.</td></tr>
+      <tr><td>Valuation haircuts on refinance</td><td><span class="pill p-crit">No</span></td><td class="num">2–10% per event</td><td><span class="pill p-med">Medium; amplified ~37× under BRRR.</span></td></tr>
+      <tr><td>Deal supply / pipeline of differing yields</td><td><span class="pill p-crit">No</span></td><td class="num">Unquantified</td><td><span class="pill p-med">Medium</span> — one deal cloned up to 24×; §7.</td></tr>
+      <tr><td>Concentration of <em>simulated</em> purchases</td><td><span class="pill p-crit">No</span></td><td class="num">Unquantified</td><td><span class="pill p-low">Low-Med</span> — warnings cover the held portfolio only (simulated buys carry no address); documented.</td></tr>
+      <tr><td>Voids, arrears, capex, inflation, fees, ERC, rate paths, reserves, stress ranges</td><td><span class="pill p-ok">Yes</span></td><td class="num">—</td><td>All modelled and configurable; see §9 for whether the <em>configured values</em> are honest.</td></tr>
+    </tbody>
+    <caption>The list is now short enough to be a costing exercise rather than an architecture programme — itself the strongest evidence of three reviews' progress.</caption>
+  </table>
+</div></section>
+
+<section id="modelling"><div class="wrap">
+  <h2><span class="sec-num">9</span>Financial Modelling Critique</h2>
+  <p class="lead">The engine's default assumption set remains industry-credible. The board again reviews the system <em>as configured</em> — and again finds the operator telling it a mildly rosy story, now in a subtler way than the zeroes the P0-3 guardrails were built to catch.</p>
+  <table>
+    <thead><tr><th>Assumption</th><th class="num">Configured</th><th class="num">Engine default</th><th class="num">Industry norm</th><th>Board view</th></tr></thead>
+    <tbody>
+      <tr><td>Property growth / rent growth</td><td class="num">3.0% / 2.5%</td><td class="num">3.0% / 2.5%</td><td class="num">2–4% / 2–3%</td><td><span class="pill p-low">Reasonable</span></td></tr>
+      <tr><td>Void</td><td class="num">1 mo/yr</td><td class="num">1 mo/yr</td><td class="num">2–4 wks/yr</td><td><span class="pill p-low">Prudent</span></td></tr>
+      <tr><td>Arrears</td><td class="num"><strong>0.5%</strong></td><td class="num">1.5%</td><td class="num">1–2%</td><td><span class="pill p-med">Optimistic — operator-softened, unchanged since v2</span></td></tr>
+      <tr><td>Refix uplift</td><td class="num"><strong>+100bps</strong></td><td class="num">+200bps</td><td class="num">Scenario-dependent</td><td><span class="pill p-med">Optimistic as a central case</span></td></tr>
+      <tr><td>Arrangement / valuation fee</td><td class="num"><strong>£25 / £25</strong></td><td class="num">£999 / £300</td><td class="num">£999–1,999 / £300–500</td><td><span class="pill p-ok">Was a workaround for a real bug — fixed below, £0 now usable directly</span></td></tr>
+      <tr><td>Legal fees</td><td class="num"><strong>£1,500</strong></td><td class="num">£2,000</td><td class="num">£1,500–2,500</td><td><span class="pill p-low">Low end of fair</span></td></tr>
+      <tr><td>Capex reserve / cost</td><td class="num">£1,000 / £3,000 @ 10yr</td><td class="num">same</td><td class="num">£1–2k float / lumpy</td><td><span class="pill p-ok">Restored to defaults since v2</span></td></tr>
+      <tr><td>Min lender ICR override</td><td class="num">unset</td><td class="num">145% derived (Ltd)</td><td class="num">125–145%</td><td><span class="pill p-ok">The v2 footgun is closed — 0 now means "use default", warned, tested</span></td></tr>
+      <tr><td>ICR stress / ERC</td><td class="num">+200bps, 5.5% floor / 3%</td><td class="num">same</td><td class="num">Pay+2%, ~5.5% / 1–5%</td><td><span class="pill p-ok">Lender-realistic</span></td></tr>
+    </tbody>
+    <caption>Bold = operator has moved the value away from the engine default in the optimistic direction.</caption>
+  </table>
+  <div class="callout warn"><h4>Correction to this finding — the £25 was a workaround for a real bug, not an operator choice to game a warning threshold</h4>
+  This report originally framed the configured £25/£25 fees as an operator exploiting the fact that the P0-3 prudence warning only fires at exactly zero — and recommended widening the warning band (§14 item 2, as first drafted) as the fix. The operator corrected the board on this point: <code>0</code> was the value they actually wanted (several BTL fee structures are genuinely fee-free), but entering it triggered a defect — <code>positiveOr()</code>, the same guardrail correctly built to stop <code>min_icr: 0</code> silently disabling a lender-affordability gate, was <em>also</em> applied to the three transaction-cost fields, where a stored zero is a legitimate value, not a blank field or a mistake. Every layer, including the global Settings default, silently rewrote a configured <code>0</code> to the engine literal (£999/£300/£2,000) with no way to express a genuine zero fee at all — £25 was the only workaround available. Widening the warning band, as first recommended, would have made this worse: it would flag the honest workaround while the real zero remained unreachable. <strong>The actual fix, now shipped:</strong> the three fee fields (<code>arrangement_fee</code>, <code>valuation_fee</code>, <code>legal_fees</code>) now use a separate <code>numberOr()</code> helper that only falls through on <code>null</code>/unset, not on <code>0</code> — leaving <code>positiveOr()</code>'s 0⇒default behaviour untouched for the genuine safety gates (<code>min_icr</code>, capex/cash reserves) where a real lender or reserve requirement is never zero. §14 item 2 is retitled accordingly and closed.</div>
+  <p><strong>Would a lender accept these assumptions?</strong> The stress methodology, yes — unchanged and PRA-realistic. The configured arrears value, no — an underwriter would restate it to the default; the configured fees are now a defensible operator choice rather than a modelling gap, given a genuine £0/£25 is achievable without a workaround. <strong>Would an experienced investor rely on the engine?</strong> With arrears restored and the jurisdiction switch corrected: yes, as a central case with a stated range — and for the first time the range genuinely exists (downturn + Monte-Carlo, in Scenarios).</p>
+</div></section>
+
+<section id="sensitivity"><div class="wrap">
+  <h2><span class="sec-num">10</span>Sensitivity Analysis</h2>
+  <p class="lead">Which assumptions move the answer — and which would change the recommended strategy under each ranking mode.</p>
+  <table>
+    <thead><tr><th>Assumption</th><th>Sensitivity</th><th>Mechanism (live evidence)</th><th>Changes the recommendation?</th></tr></thead>
+    <tbody>
+      <tr><td>Interest-rate path (refix uplift)</td><td><span class="pill p-crit">Very high</span></td><td>£1.78m of IO debt refixing 3× over the horizon; +200bps vs the configured +100bps strips roughly £1.4–1.6k/month off Maximise Cashflow's ending income while barely touching Low-Risk Hold's £91k residual debt.</td><td><strong>Yes</strong> — under Fastest it survives (still the only fast reacher); under Balanced it likely cedes to Medium-Risk Hold.</td></tr>
+      <tr><td>Candidate gross yield</td><td><span class="pill p-high">High</span></td><td>Everything buys the same 9.9% deal. At a typical 7%, the stressed ICR falls to ≈134% vs the 145% Ltd floor — <em>no strategy buys at all</em>; the engine correctly reports "limited by lender affordability" with the verified rent/deposit fix. The board tested this class directly.</td><td><strong>Yes — existentially.</strong> Yield is the assumption the whole answer stands on.</td></tr>
+      <tr><td>SDLT/LTT jurisdiction correction (currently Scottish rates everywhere)</td><td><span class="pill p-high">High</span></td><td>≈£2.5k <em>less</em> per purchase once corrected to English SDLT on the report's £85k deal (currently over-charged, not under) — accelerates deposit accumulation and every goal date; direction reverses at other price bands.</td><td>Probably not the winner, but every goal date — and it may flip near-miss strategies' reaches-goal flags in either direction.</td></tr>
+      <tr><td>Fees / arrears at defaults vs configured</td><td><span class="pill p-med">Medium</span></td><td>≈£28k fee restoration (now a genuine operator choice, not a workaround — §9) + tripled arrears trims cadence on 22-buy plans by 1–2 purchases; Low-Risk Hold (6 buys) barely notices.</td><td>Narrows Fastest's margin; strengthens the hold strategies under Balanced/Safest.</td></tr>
+      <tr><td>Property growth rate</td><td><span class="pill p-med">Medium</span></td><td>Drives equity outcomes and BRRR's refinance cadence (37 events need LTV to keep falling); weakly affects income strategies.</td><td>Only for BRRR's viability.</td></tr>
+      <tr><td>Void / onboarding assumptions</td><td><span class="pill p-low">Low-Med</span></td><td>Already prudent; each extra onboarding month costs one month's rent × 16–24 units over the plan.</td><td>Marginal — timing, not ordering.</td></tr>
+    </tbody>
+    <caption>The engine can now <em>demonstrate</em> most of this table itself: the stress buttons, downturn case and Monte-Carlo band in Scenarios, and regeneration under edited assumptions in Goals. The board's ask is that the Goals page make rate-path sensitivity as visible as Scenarios already does (§13).</caption>
+  </table>
+</div></section>
+
+<section id="risk"><div class="wrap">
+  <h2><span class="sec-num">11</span>Risk Matrix</h2>
+  <p class="lead">The board's independent risk assessment — constructed before consulting the engine's own scores, then compared. For the first time the two agree in both ordering and grade.</p>
+  <table>
+    <thead><tr><th>Risk</th><th>Target &amp; Hold</th><th>Max Cashflow</th><th>Low-Risk Hold</th><th>Medium-Risk Hold</th><th>BRRR</th><th>FB→Lock In</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Liquidity</td><td><span class="pill p-med">Med</span></td><td><span class="pill p-low">Low</span></td><td><span class="pill p-low">Low</span></td><td><span class="pill p-low">Low</span></td><td><span class="pill p-med">Med</span></td><td><span class="pill p-low">Low</span></td><td>Enforced reserve floor everywhere; T&amp;H runs closest to it (£16.6k vs £15.9k floor); BRRR's depends on refi proceeds arriving as valued.</td></tr>
+      <tr><td>Interest-rate</td><td><span class="pill p-med">Med</span></td><td><span class="pill p-crit">Critical</span></td><td><span class="pill p-low">Low</span></td><td><span class="pill p-low">Low</span></td><td><span class="pill p-high">High</span></td><td><span class="pill p-med">Med</span></td><td>£1.78m IO refixing 5-yearly vs £91k amortising; the Lock-In hybrid genuinely halves its base's exposure post-switch.</td></tr>
+      <tr><td>Leverage</td><td><span class="pill p-med">Med</span></td><td><span class="pill p-high">High</span></td><td><span class="pill p-low">Low</span></td><td><span class="pill p-med">Med</span></td><td><span class="pill p-crit">Critical</span></td><td><span class="pill p-med">Med</span></td><td>Peak LTVs 52 / 58 / 38 / 48 / 66 / 58% — all inside the 75% mandate, but 66% with 37 refinances is a different animal to 38%.</td></tr>
+      <tr><td>Cashflow</td><td><span class="pill p-med">Med</span></td><td><span class="pill p-low">Low</span></td><td><span class="pill p-low">Low</span></td><td><span class="pill p-low">Low</span></td><td><span class="pill p-med">Med</span></td><td><span class="pill p-med">Med</span></td><td>Min ICRs 200–260% for the holds; £4.5–4.8k ending CF on the two non-reachers is adequate income but a missed goal.</td></tr>
+      <tr><td>Refinancing / execution</td><td><span class="pill p-low">Low</span></td><td><span class="pill p-med">Med</span></td><td><span class="pill p-low">Low</span></td><td><span class="pill p-low">Low</span></td><td><span class="pill p-crit">Critical</span></td><td><span class="pill p-high">High</span></td><td>37 perfect-valuation refinances (BRRR) / 13 simultaneous conversions at one month (hybrid) vs 0–6 events for the holds.</td></tr>
+      <tr><td>Concentration / market</td><td><span class="pill p-med">Med</span></td><td><span class="pill p-high">High</span></td><td><span class="pill p-med">Med</span></td><td><span class="pill p-med">Med</span></td><td><span class="pill p-high">High</span></td><td><span class="pill p-med">Med</span></td><td>One deal archetype cloned; warnings cover the held portfolio only. Scale amplifies it: 24–26 clones vs 9–11.</td></tr>
+      <tr><td>Tax</td><td><span class="pill p-low">Low</span></td><td><span class="pill p-med">Med</span></td><td><span class="pill p-low">Low</span></td><td><span class="pill p-low">Low</span></td><td><span class="pill p-med">Med</span></td><td><span class="pill p-med">Med</span></td><td>CT modelled; jurisdiction mismatch misstates purchase-tax cost bases (Scottish rates on English/Welsh/NI stock — direction varies by price band); s455 exposure on £15k/yr director loans unpriced (deferred).</td></tr>
+      <tr><td><strong>Board overall</strong></td><td><span class="pill p-high">High</span></td><td><span class="pill p-crit">Critical</span></td><td><span class="pill p-low">Medium-Low</span></td><td><span class="pill p-med">Medium</span></td><td><span class="pill p-high">High</span></td><td><span class="pill p-high">High</span></td><td rowspan="2" style="vertical-align:middle">Engine scores: 59 / 77 / 38 / 49 / 75 / 62. <strong>Same ordering, same grades.</strong> The §11 calibration test of the second review is passed on live data.</td></tr>
+      <tr><td><strong>Engine's own score</strong></td><td class="num">59 High</td><td class="num">77 Critical</td><td class="num">38 Medium</td><td class="num">49 Medium</td><td class="num">75 High</td><td class="num">62 High</td></tr>
+    </tbody>
+  </table>
+</div></section>
+
+<section id="engine"><div class="wrap">
+  <h2><span class="sec-num">12</span>Scenario-Engine Review</h2>
+  <p class="lead">Is the What-If engine now suitable for supporting investment decisions? The board's answer is yes, and for a specific architectural reason: everything material is a caller of one pure, tested projection function — the same property that let downturn, Monte-Carlo, stress shocks, hybrids and fix-hints all ship without touching the projection loop.</p>
+  <table>
+    <thead><tr><th>Second-review ask</th><th>Status</th><th>Board's verification</th></tr></thead>
+    <tbody>
+      <tr><td>Downturn standing output</td><td><span class="pill p-ok">Shipped</span></td><td>Versioned <code>DOWNTURN_2026_V1</code>; live: base case £232k→£177k equity, £1,220→£913/mo, cash trough £755 — survives the horizon, thinly, and says so.</td></tr>
+      <tr><td>Monte-Carlo band + honest labelling</td><td><span class="pill p-ok">Shipped</span></td><td>Seeded, reproducible (P10 £133k / P50 £226k / P90 £366k at 300 runs); goal-probability 0% against £5k on the do-nothing base case — the engine declines to flatter. "Model uncertainty, not probability of outcome" printed verbatim.</td></tr>
+      <tr><td>Concentration warnings</td><td><span class="pill p-ok">Shipped</span></td><td>Town/type share on the held portfolio, in a dedicated Warnings tab; honest documented limit on simulated buys.</td></tr>
+      <tr><td>Event types / stress / compare / PDF</td><td><span class="pill p-ok">Held</span></td><td>Ten event types incl. synthetic-property remortgages; rate/rent shocks; comparison table (now with value + debt rows) and printable briefs.</td></tr>
+    </tbody>
+  </table>
+  <h3>What is still missing, in the board's order</h3>
+  <ul>
+    <li><strong>Missing event types:</strong> sell-and-replace (trade a unit), refurbishment (cost + uplift), rent review to market. The first two block honest BRRR and any disposal-led strategy.</li>
+    <li><strong>Missing scenario types:</strong> a user-defined rate-path scenario (the piecewise <code>growth_schedule</code> machinery shipped for the downturn case could carry it with minimal work — the architecture already paid for this).</li>
+    <li><strong>Missing KPI:</strong> months-of-reserve-survival is computed for the downturn case; the central case deserves the same chip.</li>
+    <li><strong>Missing report:</strong> the PDF brief predates the risk-score/hints work — pathway cards print without their band, breakdown or fixes.</li>
+  </ul>
+</div></section>
+
+<section id="goal"><div class="wrap">
+  <h2><span class="sec-num">13</span>Goal-Engine Review</h2>
+  <p class="lead">The second review's five governing questions, re-asked against live behaviour:</p>
+  <table>
+    <thead><tr><th>Question</th><th>Second review</th><th>This review</th></tr></thead>
+    <tbody>
+      <tr><td>Does it optimise correctly?</td><td><span class="pill p-ok">Yes</span></td><td><span class="pill p-ok">Yes, more honestly</span> — "reached" now means <em>held at the horizon</em>, not touched once: the board watched a plan graze £5,030 and end £4,767 and be correctly refused the flag. The stop-at-goal templates inherit the stricter definition.</td></tr>
+      <tr><td>Does it consider multiple pathways?</td><td><span class="pill p-ok">Yes (4)</span></td><td><span class="pill p-ok">Yes (7)</span> — including a configurable-leverage middle (Medium-Risk Hold) and two two-phase hybrids with stated switch rules, degeneration and dedup discipline.</td></tr>
+      <tr><td>Does it balance risk and reward?</td><td><span class="pill p-med">Partly</span></td><td><span class="pill p-ok">Yes</span> — bounded score + breakdown, three auditable ranking modes with provenance, Pareto frontier. Time-to-goal only dominates if the user <em>chooses</em> Fastest — which this operator has.</td></tr>
+      <tr><td>Would a human investor make the same decision?</td><td><span class="pill p-med">Close</span></td><td><span class="pill p-ok">Yes, given the same inputs</span> — on the 10-property goal the engine recommends the plan the professional would construct by hand (recycle then de-risk); on the income goal the divergence (Fastest vs the board's Safest instinct) is a stated preference, not a blind spot.</td></tr>
+      <tr><td>Could it produce better strategies?</td><td><span class="pill p-med">Yes — 3 named upgrades</span></td><td><span class="pill p-low">At the margin</span> — mandate-aware BRRR ✓, nearest-feasible hints ✓ (verified, never extrapolated), hybrids ✓. Remaining: hints don't cover hybrids (the £233 near-miss shows no fix), and pathways carry no downturn/Monte-Carlo companion — a Scenarios-only scoping the operator chose, which the board accepts but flags: <em>the recommendation is made where the ranges aren't</em>.</td></tr>
+    </tbody>
+  </table>
+  <div class="callout"><h4>The one structural ask the board keeps</h4>
+  Ranking modes decide the recommendation on <em>central-case</em> numbers. A "Safest" mode that has never seen a downturn run is safest-by-construction, not safest-by-stress. Extending the downturn companion (already pure, already fast) to the six-to-seven generated pathways — even as a single extra column per card — would let the Safest mode mean what a committee hears when it reads the word. This is the highest-leverage remaining goal-engine item and it is a caller-side change only.</div>
+</div></section>
+
+<section id="roadmap"><div class="wrap">
+  <h2><span class="sec-num">14</span>Recommendations &amp; Prioritised Roadmap</h2>
+  <p class="lead">The second review's roadmap: all three P0s, all four P1s and the four-ticket P2-8 series closed and independently gate-reviewed (its Appendices E–G). This review issues a fresh, shorter list — for the first time, nothing on it blocks production use for the platform's stated audience.</p>
+  <table>
+    <thead><tr><th>#</th><th>Priority</th><th>Recommendation</th><th>Why it matters</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><span class="pill p-high">P1</span></td><td><strong>Add a jurisdiction switch</strong> (England/Wales/NI SDLT/LTT bands + surcharge vs Scotland's existing <code>calcLBTT</code>/<code>calcADS</code>) in <code>completePurchase()</code></td><td>Purchase tax is currently mischarged — Scottish rates on every purchase regardless of location, an over-charge of ~£2.5k on the report's own £85k deal, direction reversing at other price bands (§6.1). Closes the "jurisdiction switch" half of the deferred item 7; not a new defect.</td><td><span class="pill p-med">To Do</span></td></tr>
+      <tr><td>2</td><td><span class="pill p-high">P1</span></td><td><strong>Let fee fields hold a genuine £0</strong> — stop conflating "unset" with "deliberately zero" for transaction-cost fields</td><td>Retitled and closed mid-review (§9): the original recommendation (widen the warning band) was wrong — the real bug was that <code>positiveOr()</code> silently rewrote a configured <code>0</code> to the engine default at every layer, including Settings, with no way to express a genuine zero fee. Fee fields now use a separate <code>numberOr()</code> helper that only falls through on unset, not on 0; safety-gate fields (<code>min_icr</code>, reserves) keep the original 0⇒default behaviour.</td><td><span class="pill p-ok">Done</span></td></tr>
+      <tr><td>3</td><td><span class="pill p-med">P2</span></td><td><strong>Downturn column on goal pathways</strong> — run the existing <code>DOWNTURN_2026_V1</code> transform per generated pathway; surface ending-CF-under-stress beside each card</td><td>Makes the Safest ranking mode mean safest-under-stress (§13). Pure caller-side; the machinery shipped in P1-5.</td><td><span class="pill p-med">To Do</span></td></tr>
+      <tr><td>4</td><td><span class="pill p-med">P2</span></td><td><strong>Refurb cost + forced-appreciation uplift input</strong> (with matching capex outflow), and a below-market-purchase field</td><td>The entire BRRR premise; until then the strategy's own returns block (2.35×, 9.0% ROCE) is the caveat (§5.4).</td><td><span class="pill p-med">To Do</span></td></tr>
+      <tr><td>5</td><td><span class="pill p-med">P2</span></td><td><strong>Per-loan origination LTV cap</strong> per product/deposit menu</td><td>Last unenforced lender surface (§7); today a 25%-deposit buy is a 75% loan regardless of mandate.</td><td><span class="pill p-med">To Do</span></td></tr>
+      <tr><td>6</td><td><span class="pill p-med">P2</span></td><td><strong>Hint coverage for hybrids</strong>; payback-period definitional guard</td><td>The £233 near-miss with no fix shown (§5.5); the 0-month payback cosmetic (§6.2). Small, finishes the 8c/8d surfaces.</td><td><span class="pill p-med">To Do</span></td></tr>
+      <tr><td>7</td><td><span class="pill p-low">P3</span></td><td><strong>Deal-pipeline abstraction</strong> — several candidate deals with differing yields/availability; concentration fields on simulated buys</td><td>Converts "if supply holds" from an unstated assumption into an input (§7).</td><td><span class="pill p-med">To Do</span></td></tr>
+      <tr><td>8</td><td><span class="pill p-low">P3</span></td><td><strong>Remainder of deferred item 7</strong> — s455/DLA, EPC-C costs; PDF brief catch-up (risk band/breakdown/hints)</td><td>Correctness at the true edges, and reporting parity with the screen.</td><td><span class="pill p-med">To Do</span></td></tr>
+    </tbody>
+    <caption>Item 1 restores configured-case honesty on purchase tax; item 2 was closed mid-review (§9); 3–6 finish surfaces that already exist; 7–8 are genuine extensions. Nothing here requires architectural work.</caption>
+  </table>
+</div></section>
+
+<section id="final"><div class="wrap">
+  <h2><span class="sec-num">15</span>Final Verdict — Investment Committee Decision</h2>
+  <div class="verdict" style="background:var(--good-soft);border-left-color:var(--good)">
+    <div class="dot">✅</div>
+    <div>
+      <h3 style="color:var(--good)">Ready for Production</h3>
+      <p>Approved for real investment decision support by professional landlords and property companies. Approved for adviser/wealth-manager contexts with the §14 register disclosed alongside outputs and defaults restored on the two softened assumptions.</p>
+    </div>
+  </div>
+
+  <h3>Would the committee approve this engine for making real investment decisions?</h3>
+  <p class="lead"><strong>Yes. The second review's promise is honoured — and it was earned twice over.</strong></p>
+  <p>The standard has been the same across all three reviews: a defect blocks sign-off when it changes the headline figures or the recommended action. At the first review such defects were structural; at the second they were enumerable and five were named as the price of this rating. All five are closed, verified against live runs, and held by 363 green tests — as is the entire P2 goal-engine series the second review only designed. Along the way the engine caught, and the codebase fixed, a defect this board itself missed twice: a "reached" goal that had merely been touched once. That the acceptance process now finds bugs the committee's own reviews didn't is the strongest single fact in this report.</p>
+  <p>The board's residual list is real but categorically different from its predecessors: the jurisdiction switch restores honesty to the <em>configured</em> case, not the engine's arithmetic; the rest finish surfaces that already work. No item on §14 changes what the ledger says, and only item 1 plausibly changes a goal date by more than months — and in either direction, since the current mischarge already cuts both ways by price band. The distinction between "the model is wrong" and "the model charges the right kind of tax for the wrong nation" is the distance this platform has travelled in three reviews. (The board notes its own first draft of §6.1 made exactly this class of error, and corrected it on the same re-verification discipline it demands of the codebase — see the correction in §1. §9's near-zero-fee finding was corrected and fixed the same way, mid-review, at the operator's own prompting.)</p>
+
+  <h4>Conditions attached to the ✅ (disclosure, not blockers)</h4>
+  <ol>
+    <li><strong>For professional/adviser deployment:</strong> ship §14 item 1 (jurisdiction switch) or disclose that Scottish purchase-tax rates are applied to all stock beside multi-purchase outputs; restore arrears and refix-uplift defaults for any client-facing central case. (Item 2, the fee-zero handling fix, is already closed.)</li>
+    <li><strong>BRRR plans:</strong> present with the §5.4 caveat until refurb-uplift lands — the engine's own returns block already carries the message.</li>
+    <li><strong>Plans exceeding ~10 purchases:</strong> read as supply-conditional (§7) until a deal-pipeline input exists.</li>
+  </ol>
+
+  <div class="callout good"><h4>Committee Decision</h4>
+  <strong>✅ Ready for Production.</strong> The board approves the engine for real investment decision support today. Three reviews ago this platform could not add up money it hadn't spent; it now generates strategies this committee's own professionals recognise as the ones they would construct, prices their risk on a scale that survives audit, tells the user the smallest verified change when a plan falls short, and declines to flatter — a do-nothing base case is given a 0% chance of a £5,000 goal, and a plan £233 short is refused the badge. The residual roadmap is short, priced, and none of it is architecture. The committee expects §14 items 1–3 at a light-touch follow-up, not a fourth review.</div>
+
+  <p style="margin-top:18px;color:var(--ink-mute);font-size:13px">Signed, the Independent Investment Review Board — CFA · MRICS · BTL Investor (20yr+) · Credit Risk Analyst · Mortgage Underwriter · UK Tax Specialist · Financial Modelling Expert · Principal Software Architect.</p>
+</div></section>
+
+  </main>
+</div>
+
+<footer><div class="wrap">
+  Prepared as an independent due-diligence exercise on the modelling engine (third review, production gate). This document critiques software behaviour and modelling assumptions; it is not investment advice and does not constitute a regulated recommendation. All figures quoted are the engine's own outputs from live runs against the current codebase and stored configuration, reproduced to assess internal consistency.
+</div></footer>
+
+<script>
+function applyTheme(t){document.documentElement.setAttribute('data-theme',t);document.getElementById('themeIco').textContent=t==='dark'?'☀️':'🌙';document.getElementById('themeTxt').textContent=t==='dark'?'Light':'Dark';}
+function toggleTheme(){var c=document.documentElement.getAttribute('data-theme');var n=c==='dark'?'light':'dark';try{localStorage.setItem('icr-theme',n)}catch(e){}applyTheme(n);}
+(function(){var s;try{s=localStorage.getItem('icr-theme')}catch(e){}if(!s&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)s='dark';applyTheme(s||'light');})();
+(function(){var links=[].slice.call(document.querySelectorAll('.sidenav a'));var map={};links.forEach(function(a){map[a.getAttribute('href').slice(1)]=a;});var obs=new IntersectionObserver(function(es){es.forEach(function(en){if(en.isIntersecting){links.forEach(function(l){l.classList.remove('active');});var a=map[en.target.id];if(a)a.classList.add('active');}});},{rootMargin:'-40% 0px -55% 0px'});Object.keys(map).forEach(function(id){var el=document.getElementById(id);if(el)obs.observe(el);})})();
+</script>
+
+</body>
+</html>

@@ -44,16 +44,19 @@ export function computeGoalWarnings(goal: Goal, tax?: TaxSettings): PrudenceWarn
 export function computeSettingsWarnings(settings: AssumptionSettings): PrudenceWarning[] {
   const warnings: PrudenceWarning[] = []
 
-  const feeChecks: { field: keyof AssumptionSettings; label: string; fallback: number }[] = [
-    { field: 'default_arrangement_fee', label: 'Arrangement fee', fallback: 999 },
-    { field: 'default_valuation_fee', label: 'Valuation fee', fallback: 300 },
-    { field: 'default_legal_fees', label: 'Legal fees', fallback: 2000 },
+  // Unlike min_icr/capex_reserve above, a fee of £0 is respected as-is, not substituted — fee-free
+  // mortgage products, bundled conveyancing, and cash purchases are real cases. This is only an
+  // informational nudge to confirm the zero is deliberate, not a silent-override warning.
+  const feeChecks: { field: keyof AssumptionSettings; label: string; typical: string }[] = [
+    { field: 'default_arrangement_fee', label: 'Arrangement fee', typical: '£500–£1,500' },
+    { field: 'default_valuation_fee', label: 'Valuation fee', typical: '£150–£400' },
+    { field: 'default_legal_fees', label: 'Legal fees', typical: '£1,000–£2,500' },
   ]
-  for (const { field, label, fallback } of feeChecks) {
-    if (settings[field] <= 0) {
+  for (const { field, label, typical } of feeChecks) {
+    if (settings[field] === 0) {
       warnings.push({
         field,
-        message: `${label} is £0 — the engine default of £${fallback.toLocaleString()} will be used instead. Real BTL fees of this size are rarely zero; a £0 assumption understates acquisition costs across every purchase.`,
+        message: `${label} is set to £0 — this will be used as a genuine zero in every purchase. Confirm this reflects a real fee-free arrangement; typical BTL fees are ${typical}.`,
       })
     }
   }
