@@ -391,7 +391,9 @@ export default function Scenarios() {
                     ])
                   )
                   chartData = results.months.map(m => {
-                    const row: Record<string, string | number | undefined> = { date: m.date }
+                    // Portfolio-wide counts, carried through so the tooltip can show them in this
+                    // view too even though the plotted series are per-property.
+                    const row: Record<string, string | number | undefined> = { date: m.date, property_count: m.property_count, mortgage_count: m.mortgage_count }
                     for (const ps of results.property_series!) {
                       const snap = propByDate.get(ps.property_id)?.get(m.date)
                       row[`prop_${ps.property_id}`] = snap?.[mKey]

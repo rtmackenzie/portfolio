@@ -110,6 +110,42 @@ export function ExpenseDonutChart({ data }: { data: { category: string; total: n
   )
 }
 
+// Projection tooltip: the default Recharts tooltip can only show plotted series, but portfolio
+// counts are context for reading the money lines rather than lines of their own (they share no
+// axis with £). So this reproduces the default's markup/styling and appends them as footer rows,
+// read off the hovered row's own data via payload[0].payload.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const ProjectionTooltip: any = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null
+  const row = payload[0]?.payload ?? {}
+  const counts: { label: string; value: number }[] = []
+  if (row.property_count != null) counts.push({ label: 'Properties', value: row.property_count })
+  if (row.mortgage_count != null) counts.push({ label: 'Mortgages', value: row.mortgage_count })
+  return (
+    <div style={{ ...tooltipStyle, padding: '8px 10px', lineHeight: 1.7 }}>
+      <div style={{ marginBottom: 2 }}>{formatMonthYear(label)}</div>
+      {payload.map((e: any) => (
+        <div key={e.dataKey} style={{ color: e.color }}>
+          {e.name} : {formatCurrency(e.value as number)}
+        </div>
+      ))}
+      {counts.length > 0 && (
+        <div style={{
+          color: 'var(--color-muted-foreground)',
+          borderTop: '1px solid var(--color-border)',
+          marginTop: 5, paddingTop: 4,
+        }}>
+          {counts.map(c => (
+            <div key={c.label}>
+              {c.label} : <span style={{ color: 'var(--color-foreground)', fontWeight: 600 }}>{c.value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function ScenarioAreaChart({ data, keys }: { data: ChartData[]; keys: { key: string; name: string; color: string; dash?: boolean }[] }) {
   const allValues = data.flatMap(d => keys.map(k => Number(d[k.key] ?? 0)))
   const rawMax = allValues.length > 0 ? Math.max(...allValues) : 100000
@@ -141,7 +177,7 @@ export function ScenarioAreaChart({ data, keys }: { data: ChartData[]; keys: { k
           domain={[yMin, yMax]}
           allowDataOverflow
         />
-        <Tooltip contentStyle={tooltipStyle} formatter={currencyFormatter} labelFormatter={monthLabelFormatter} />
+        <Tooltip content={<ProjectionTooltip />} />
         <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, color: 'var(--color-muted-foreground)' }} />
         {keys.map(k => (
           <Area key={k.key} type="monotone" dataKey={k.key} name={k.name} stroke={k.color} fill={k.dash ? 'none' : `url(#grad-${k.key})`} strokeWidth={2} strokeDasharray={k.dash ? '5 5' : undefined} />

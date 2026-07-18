@@ -537,6 +537,8 @@ export interface MonthSnapshot {
   cumulative_cashflow_posttax: number
   monthly_tax: number
   property_count: number
+  /** Properties carrying debt this month (mirrors the server's ScenarioMonth). */
+  mortgage_count: number
   monthly_cover_ratio: number
   monthly_icr: number
   total_rent: number

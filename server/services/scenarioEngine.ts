@@ -55,6 +55,7 @@ interface MonthSnapshot {
   cumulative_cashflow_posttax: number
   monthly_tax: number
   property_count: number
+  mortgage_count: number        // properties carrying debt this month — same "rounded balance > 0" test activeBalancesAt() applies
   monthly_cover_ratio: number   // rent ÷ actual mortgage payment — a cashflow-cover figure, not a lender test
   monthly_icr: number           // rent ÷ stressed interest-only payment, % — the real lender affordability test (P0 #4)
   total_rent: number            // gross rent this month, before mortgage/expenses (§P2-9 net-yield-on-cost)
@@ -446,6 +447,7 @@ export function buildProjection(
 
     let totalValue = 0
     let totalDebt = 0
+    let mortgageCount = 0
     let monthlyCashflow = 0
     let totalRent = 0
     let totalMortgage = 0
@@ -510,6 +512,9 @@ export function buildProjection(
 
       totalValue += currentValue
       totalDebt += currentDebt
+      // Counted on the rounded balance so this can never disagree with the per-property series
+      // below (which stores Math.round(currentDebt)) or with activeBalancesAt(), which reads it.
+      if (Math.round(currentDebt) > 0) mortgageCount++
 
       const rentGrowthFactor = compoundedGrowthFactor(state.acquired_month ?? 0, i, rentGrowthSchedule)
       const rent = state.is_vacant ? 0 : state.monthly_rent * voidFactor * arrearsFactor * rentGrowthFactor
@@ -557,6 +562,7 @@ export function buildProjection(
       cumulative_cashflow_posttax: Math.round(cumulativeCashflow - taxCumulative),
       monthly_tax: Math.round(monthlyTax),
       property_count: stateMap.size,
+      mortgage_count: mortgageCount,
       monthly_cover_ratio: coverRatio,
       monthly_icr: icr,
       total_rent: Math.round(totalRent),

@@ -42,6 +42,90 @@ const BASE_CONFIG = {
   assumptions_json: JSON.stringify({ void_months_per_year: 0, expense_inflation_pct: 0, rent_growth_pct: 0, arrears_pct: 0 }),
 }
 
+describe('buildProjection — mortgage_count', () => {
+  // Counts properties carrying debt, distinct from property_count. Surfaced in the projection
+  // chart's tooltip, and the figure activeBalancesAt()/the de-gear strategies reason about.
+  it('counts only the properties carrying debt', () => {
+    const { months } = buildProjection(
+      makeMap(
+        makeState({ id: 1, debt: 120000 }),
+        makeState({ id: 2, debt: 0, monthly_mortgage: 0 }),   // owned outright
+        makeState({ id: 3, debt: 80000 }),
+      ),
+      [],
+      BASE_CONFIG
+    )
+    expect(months[0].property_count).toBe(3)
+    expect(months[0].mortgage_count).toBe(2)
+  })
+
+  it('is 0 for an unencumbered portfolio', () => {
+    const { months } = buildProjection(
+      makeMap(makeState({ debt: 0, monthly_mortgage: 0 })), [], BASE_CONFIG
+    )
+    expect(months[0].property_count).toBe(1)
+    expect(months[0].mortgage_count).toBe(0)
+  })
+
+  it('a cash purchase raises property_count but not mortgage_count', () => {
+    const { months } = buildProjection(
+      makeMap(makeState({ debt: 0, monthly_mortgage: 0 })),
+      [makeEvent({
+        event_type: 'buy_property', date: '2026-02-01',
+        parameters_json: JSON.stringify({
+          purchase_price: 100000, monthly_rent: 700, monthly_expenses: 0, deposit_percent: 100,
+          legal_fees: 0, arrangement_fee: 0, valuation_fee: 0,
+          completion_lag_months: 0, onboarding_void_months: 0,
+        }),
+      })],
+      BASE_CONFIG
+    )
+    const last = months[months.length - 1]
+    expect(last.property_count).toBe(2)
+    expect(last.mortgage_count).toBe(0)
+  })
+
+  it('a mortgaged purchase raises both', () => {
+    const { months } = buildProjection(
+      makeMap(makeState({ debt: 0, monthly_mortgage: 0 })),
+      [makeEvent({
+        event_type: 'buy_property', date: '2026-02-01',
+        parameters_json: JSON.stringify({
+          purchase_price: 100000, monthly_rent: 700, monthly_expenses: 0, deposit_percent: 25,
+          mortgage_rate: 5.5, mortgage_term_years: 25,
+          legal_fees: 0, arrangement_fee: 0, valuation_fee: 0,
+          completion_lag_months: 0, onboarding_void_months: 0,
+        }),
+      })],
+      BASE_CONFIG
+    )
+    const last = months[months.length - 1]
+    expect(last.property_count).toBe(2)
+    expect(last.mortgage_count).toBe(1)
+  })
+
+  it('paying off a mortgage drops mortgage_count while property_count holds', () => {
+    const { months } = buildProjection(
+      makeMap(makeState({ id: 1, debt: 120000 }), makeState({ id: 2, debt: 80000 })),
+      [makeEvent({ event_type: 'payoff_mortgage', date: '2026-06-01', property_id: 2 })],
+      BASE_CONFIG
+    )
+    expect(months[0].mortgage_count).toBe(2)
+    const last = months[months.length - 1]
+    expect(last.property_count).toBe(2)   // still owned…
+    expect(last.mortgage_count).toBe(1)   // …but no longer mortgaged
+  })
+
+  it('never exceeds property_count', () => {
+    const { months } = buildProjection(
+      makeMap(makeState({ id: 1, debt: 120000 }), makeState({ id: 2, debt: 80000 })),
+      [makeEvent({ event_type: 'payoff_mortgage', date: '2026-06-01', property_id: 1 })],
+      BASE_CONFIG
+    )
+    for (const m of months) expect(m.mortgage_count).toBeLessThanOrEqual(m.property_count)
+  })
+})
+
 // ─── Snapshot structure ───────────────────────────────────────────────────────
 
 describe('buildProjection — output structure', () => {
