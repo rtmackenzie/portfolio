@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { queryAll, queryOne, execute, transaction } from '../db/database.ts'
 import { logActivity } from '../services/activityLogger.ts'
-import { loadPortfolioState } from '../services/scenarioEngine.ts'
+import { loadPortfolioState, type ScenarioEvent } from '../services/scenarioEngine.ts'
 import { generatePathways, rankPathways, numberOr, TEMPLATES, type Goal, type PropertyAssumptions, type RankablePathway, type RankingMode } from '../services/pathwayGenerator.ts'
 import { computeNearestFixes } from '../services/nearestFix.ts'
 import { loadTaxSettings, loadAssumptionSettings } from '../services/settings.ts'
@@ -10,7 +10,8 @@ import { computeGoalWarnings } from '../services/goalValidation.ts'
 const router = Router()
 
 const GOAL_SELECT = `
-  SELECT g.*, s.name as scenario_name
+  SELECT g.*, s.name as scenario_name,
+         (SELECT COUNT(*) FROM scenario_events se WHERE se.scenario_id = g.scenario_id) AS committed_event_count
   FROM goals g
   LEFT JOIN scenarios s ON s.id = g.scenario_id
 `
@@ -152,6 +153,7 @@ router.post('/:id/pathways/generate', (req, res) => {
       director_loan_annual: number | null; director_loan_start_date: string | null;
       starting_cash: number | null; mortgage_reprice_years: number | null; mortgage_reprice_uplift_bps: number | null;
       min_cash_reserve_months: number | null; capex_reserve_per_property: number | null; erc_pct: number | null;
+      scenario_id: number | null;
     }>('SELECT * FROM goals WHERE id=?', [id])
     if (!goal) return res.status(404).json({ message: 'Goal not found' })
 
@@ -172,6 +174,28 @@ router.post('/:id/pathways/generate', (req, res) => {
 
     const { initialState, propertyLabels, activeMortgageCount } = loadPortfolioState()
 
+    // A linked scenario's events are treated as decisions already committed to: every strategy
+    // plans on top of them, sharing one cash pot and timeline, rather than starting from today's
+    // portfolio alone. Same ordering the scenarios route uses when it projects a scenario.
+    const committedEvents = goal.scenario_id
+      ? queryAll<ScenarioEvent>(
+          'SELECT * FROM scenario_events WHERE scenario_id=? ORDER BY date, sort_order',
+          [goal.scenario_id]
+        )
+      : []
+
+    // sim_property_id targets a property bought inside the simulation. Those ids are assigned
+    // sequentially at projection time, so interleaved generated buys would shift what a committed
+    // event points at. Hand-built scenarios target real properties via property_id and never set
+    // this, but drop any that do rather than silently re-target the wrong property.
+    const retargetable = committedEvents.filter(ev => {
+      try { return JSON.parse(ev.parameters_json || '{}').sim_property_id != null }
+      catch { return false }
+    })
+    const safeCommittedEvents = retargetable.length > 0
+      ? committedEvents.filter(ev => !retargetable.includes(ev))
+      : committedEvents
+
     const tax = loadTaxSettings()
     const pathways = generatePathways(
       goal as Parameters<typeof generatePathways>[0],
@@ -180,7 +204,8 @@ router.post('/:id/pathways/generate', (req, res) => {
       projectionYears,
       activeMortgageCount,
       tax,
-      assumptionSettings
+      assumptionSettings,
+      safeCommittedEvents
     )
 
     // Nearest-feasible hints (§P2-8c): computed once here, where the full generation context
@@ -190,7 +215,7 @@ router.post('/:id/pathways/generate', (req, res) => {
       if (pw.reaches_goal) continue
       const t = TEMPLATES.find(tpl => tpl.template_name === pw.template_name)
       if (!t) continue
-      fixesByTemplate.set(pw.template_name, computeNearestFixes(pw, t, goal as Parameters<typeof generatePathways>[0], initialState, assumptions, projectionYears, tax, assumptionSettings))
+      fixesByTemplate.set(pw.template_name, computeNearestFixes(pw, t, goal as Parameters<typeof generatePathways>[0], initialState, assumptions, projectionYears, tax, assumptionSettings, safeCommittedEvents))
     }
 
     const created = transaction(() => {
@@ -202,6 +227,10 @@ router.post('/:id/pathways/generate', (req, res) => {
         [id]
       )
       for (const row of existing) {
+        // Never delete the goal's own linked scenario — that is a hand-built scenario the user
+        // owns, not a generated one. It should only ever appear here via a stale/mislinked row,
+        // but deleting it would be silent data loss.
+        if (goal.scenario_id != null && row.scenario_id === goal.scenario_id) continue
         execute('DELETE FROM scenarios WHERE id = ?', [row.scenario_id])
       }
       execute('DELETE FROM goal_pathways WHERE goal_id = ?', [id])

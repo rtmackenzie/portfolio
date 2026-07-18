@@ -1,4 +1,4 @@
-import type { PropertyState } from './scenarioEngine.ts'
+import type { PropertyState, ScenarioEvent } from './scenarioEngine.ts'
 import { icrThresholdPct, type TaxSettings } from './tax.ts'
 import type { AssumptionSettings } from './assumptions.ts'
 import {
@@ -87,6 +87,9 @@ interface FixContext {
   projectionYears: number
   tax?: TaxSettings
   settings?: AssumptionSettings
+  // Must match the committed (linked-scenario) events the pathway itself was generated with,
+  // or every probe would be re-simulated against a different baseline than the hint annotates.
+  committedEvents?: ScenarioEvent[]
 }
 
 function runsWith(t: StrategyTemplate, ctx: FixContext, overrides: { goal?: Partial<Goal>; assumptions?: Partial<PropertyAssumptions>; projectionYears?: number }): GeneratedPathway {
@@ -97,7 +100,8 @@ function runsWith(t: StrategyTemplate, ctx: FixContext, overrides: { goal?: Part
     { ...ctx.assumptions, ...overrides.assumptions },
     overrides.projectionYears ?? ctx.projectionYears,
     ctx.tax,
-    ctx.settings
+    ctx.settings,
+    ctx.committedEvents ?? []
   )
 }
 
@@ -269,11 +273,12 @@ export function computeNearestFixes(
   assumptions: PropertyAssumptions,
   projectionYears: number,
   tax?: TaxSettings,
-  settings?: AssumptionSettings
+  settings?: AssumptionSettings,
+  committedEvents: ScenarioEvent[] = []
 ): NearestFix[] {
   if (pathway.reaches_goal) return []
 
-  const ctx: FixContext = { goal, initialState, assumptions, projectionYears, tax, settings }
+  const ctx: FixContext = { goal, initialState, assumptions, projectionYears, tax, settings, committedEvents }
   const icrFloor = positiveOr(goal.min_icr, icrThresholdPct(tax))
 
   type Lever = () => NearestFix | null

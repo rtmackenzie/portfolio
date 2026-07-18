@@ -266,6 +266,8 @@ export interface Goal {
   min_annual_cashflow?: number | null
   scenario_id?: number | null
   scenario_name?: string | null
+  /** Events in the linked scenario, treated as already-committed when generating pathways. */
+  committed_event_count?: number | null
   director_loan_annual?: number | null
   director_loan_start_date?: string | null
   starting_cash?: number | null

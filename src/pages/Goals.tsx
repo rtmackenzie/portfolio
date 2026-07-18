@@ -322,14 +322,14 @@ function GoalForm({ goal, scenarios, onSaved, onDeleted }: {
 
       {/* Linked scenario */}
       <div>
-        <label className={labelCls}><Tip text="Optionally tie a manually-built What-If scenario to this goal so you can track progress against it.">Linked scenario (optional)</Tip></label>
+        <label className={labelCls}><Tip text="Treats the chosen scenario's events as decisions you've already committed to. Every generated pathway plans on top of them, sharing one cash pot and timeline.">Linked scenario (optional)</Tip></label>
         <select {...register('scenario_id')} className={inputCls}>
-          <option value="">None — or pick a scenario to represent this goal</option>
+          <option value="">None — plan from today's portfolio only</option>
           {scenarios.map(s => (
             <option key={s.id} value={s.id}>{s.name}</option>
           ))}
         </select>
-        <p className="text-xs text-muted-foreground mt-1">Link a manually-built What-If scenario to track progress toward this goal. Pathways generated in future will also link here.</p>
+        <p className="text-xs text-muted-foreground mt-1">The scenario's events are treated as already committed: generated pathways buy <em>on top of</em> them and share the same cash. Leave as None to plan purely from your current portfolio.</p>
       </div>
 
       {/* Notes */}
@@ -495,6 +495,18 @@ function PathwaysPanel({ goal }: { goal: Goal }) {
   return (
     <div className="mt-6 border-t border-border pt-6 space-y-5">
       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Generate pathways</p>
+
+      {/* Makes the linked scenario's effect visible — without this the generation looks identical
+          whether or not a scenario is linked, which is exactly how the no-op went unnoticed. */}
+      {goal.scenario_id && (
+        <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          Planning on top of <span className="font-medium text-foreground">{goal.scenario_name}</span>
+          {goal.committed_event_count != null && (
+            <> — {goal.committed_event_count} committed {goal.committed_event_count === 1 ? 'event' : 'events'}</>
+          )}
+          . These are treated as decisions already made; pathways below buy in addition to them and share the same cash.
+        </div>
+      )}
 
       {/* Assumptions form */}
       <form onSubmit={handleSubmit(onGenerate)} className="space-y-3">

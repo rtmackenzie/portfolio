@@ -322,7 +322,10 @@ function buildCashGatedEvents(
   projYears: number,
   a: PropertyAssumptions,
   initialState: Map<number, PropertyState>,
-  loanEvents: ScenarioEvent[],
+  // Committed events the generator must plan around but did not decide: director-loan
+  // injections plus any linked-scenario events. Merged into every re-projection below, and
+  // deliberately excluded from the decision `cap`.
+  externalEvents: ScenarioEvent[],
   tax: TaxSettings | undefined,
   goal: Goal,
   stopAtGoal: boolean,
@@ -401,7 +404,7 @@ function buildCashGatedEvents(
   let nextBuyEligibleMonth = 0
 
   while (decisions.length < cap) {
-    const events = [...loanEvents, ...decisions].sort((x, y) => x.date.localeCompare(y.date))
+    const events = [...externalEvents, ...decisions].sort((x, y) => x.date.localeCompare(y.date))
     const proj = buildProjection(cloneState(initialState), events, config) as ProjectionResult
 
     // Stop acquiring once the goal is met (+margin); the projection still runs to the horizon.
@@ -924,7 +927,10 @@ export function runTemplate(
   assumptions: PropertyAssumptions,
   projectionYears: number,
   tax?: TaxSettings,
-  settings?: AssumptionSettings
+  settings?: AssumptionSettings,
+  // Events from the goal's linked scenario, treated as already-committed decisions the
+  // generator plans on top of — same contract as director-loan events (see externalEvents below).
+  committedEvents: ScenarioEvent[] = []
 ): GeneratedPathway {
   const baseDate = new Date().toISOString().slice(0, 10)
   const monthlyExp = assumptions.monthly_expenses ?? 200
@@ -962,9 +968,14 @@ export function runTemplate(
     ? buildDirectorLoanEvents(baseDate, projectionYears, goal.director_loan_annual, goal.director_loan_start_date)
     : []
 
-  // Cash-gated decisions (buys/payoffs), then merge loan events for the final run
-  const { decisions, icrBlocked } = buildCashGatedEvents(t.strategy, baseDate, projectionYears, assumptions, initialState, loanEvents, tax, goal, t.stopAtGoal, t.interestOnly, startingCash, assumptionsJson, settings)
-  const allEvents = [...decisions, ...loanEvents].sort((a, b) => a.date.localeCompare(b.date))
+  // Everything the generator must plan around but did not decide: director-loan injections plus
+  // any events from the goal's linked scenario. These are merged into every re-projection of the
+  // decision loop (so each cash gate sees their effect) but never count against the decision cap.
+  const externalEvents = committedEvents.length > 0 ? [...loanEvents, ...committedEvents] : loanEvents
+
+  // Cash-gated decisions (buys/payoffs), then merge external events for the final run
+  const { decisions, icrBlocked } = buildCashGatedEvents(t.strategy, baseDate, projectionYears, assumptions, initialState, externalEvents, tax, goal, t.stopAtGoal, t.interestOnly, startingCash, assumptionsJson, settings)
+  const allEvents = [...decisions, ...externalEvents].sort((a, b) => a.date.localeCompare(b.date))
 
   const results = buildProjection(cloneState(initialState), allEvents, config) as ProjectionResult
   const feasible = checkConstraints(results.months, goal, monthlyExp, tax) && results.summary.min_cumulative_cashflow >= 0
@@ -1044,7 +1055,8 @@ export function runHybridTemplate(
   assumptions: PropertyAssumptions,
   projectionYears: number,
   tax?: TaxSettings,
-  settings?: AssumptionSettings
+  settings?: AssumptionSettings,
+  committedEvents: ScenarioEvent[] = []
 ): GeneratedPathway | null {
   const phase1Template = TEMPLATES.find(t => t.template_name === h.phase1TemplateName)
   if (!phase1Template) return null
@@ -1068,13 +1080,16 @@ export function runHybridTemplate(
   const loanEvents = goal.director_loan_annual
     ? buildDirectorLoanEvents(baseDate, projectionYears, goal.director_loan_annual, goal.director_loan_start_date)
     : []
+  // See runTemplate: committed (linked-scenario) events ride alongside the director-loan events
+  // through both phases, so the switch month is computed against the same merged timeline.
+  const externalEvents = committedEvents.length > 0 ? [...loanEvents, ...committedEvents] : loanEvents
 
   // Phase 1: the base strategy, stopped at goal so the switch has a clean cutoff.
   const { decisions: phase1Decisions } = buildCashGatedEvents(
-    phase1Template.strategy, baseDate, projectionYears, assumptions, initialState, loanEvents, tax, goal,
+    phase1Template.strategy, baseDate, projectionYears, assumptions, initialState, externalEvents, tax, goal,
     /* stopAtGoal */ true, phase1Template.interestOnly, startingCash, assumptionsJson, settings
   )
-  const phase1Events = [...phase1Decisions, ...loanEvents].sort((a, b) => a.date.localeCompare(b.date))
+  const phase1Events = [...phase1Decisions, ...externalEvents].sort((a, b) => a.date.localeCompare(b.date))
   const phase1Results = buildProjection(cloneState(initialState), phase1Events, config) as ProjectionResult
   const { reached: phase1Reached, monthIndex: m } = checkGoalReached(phase1Results.months, withMargin(goal))
   if (!phase1Reached || m == null) return null   // Degeneration: no switch point exists.
@@ -1094,7 +1109,7 @@ export function runHybridTemplate(
     finalDecisions = [...phase1Decisions, ...switchEvents]
   } else {
     const { decisions: phase2Decisions } = buildCashGatedEvents(
-      'de_gear', baseDate, projectionYears, assumptions, initialState, loanEvents, tax, goal,
+      'de_gear', baseDate, projectionYears, assumptions, initialState, externalEvents, tax, goal,
       /* stopAtGoal */ false, /* interestOnly */ false, startingCash, assumptionsJson, settings,
       phase1Decisions, m
     )
@@ -1102,7 +1117,7 @@ export function runHybridTemplate(
     finalDecisions = phase2Decisions
   }
 
-  const allEvents = [...finalDecisions, ...loanEvents].sort((a, b) => a.date.localeCompare(b.date))
+  const allEvents = [...finalDecisions, ...externalEvents].sort((a, b) => a.date.localeCompare(b.date))
   const results = buildProjection(cloneState(initialState), allEvents, config) as ProjectionResult
   const feasible = checkConstraints(results.months, goal, monthlyExp, tax) && results.summary.min_cumulative_cashflow >= 0
   const { reached, monthIndex } = checkGoalReached(results.months, goal)
@@ -1135,11 +1150,14 @@ export function generatePathways(
   projectionYears: number,
   _activeMortgageCount: number,  // retained for API stability; recycler now reads live debt
   tax?: TaxSettings,             // global tax settings → post-tax goal solving
-  settings?: AssumptionSettings  // global assumption defaults (growth/void/inflation/ICR stress)
+  settings?: AssumptionSettings, // global assumption defaults (growth/void/inflation/ICR stress)
+  // Events from the goal's linked scenario (goals.scenario_id), treated as already-committed:
+  // every strategy plans on top of them rather than from today's portfolio alone.
+  committedEvents: ScenarioEvent[] = []
 ): GeneratedPathway[] {
-  const basePathways = TEMPLATES.map(t => runTemplate(t, goal, initialState, assumptions, projectionYears, tax, settings))
+  const basePathways = TEMPLATES.map(t => runTemplate(t, goal, initialState, assumptions, projectionYears, tax, settings, committedEvents))
   const hybridPathways = HYBRID_TEMPLATES
-    .map(h => runHybridTemplate(h, goal, initialState, assumptions, projectionYears, tax, settings))
+    .map(h => runHybridTemplate(h, goal, initialState, assumptions, projectionYears, tax, settings, committedEvents))
     .filter((p): p is GeneratedPathway => p != null)
   return [...basePathways, ...hybridPathways]
 }

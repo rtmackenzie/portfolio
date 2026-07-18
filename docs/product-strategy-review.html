@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Product Strategy Review — Bloomberg Terminal for UK Property Investors</title>
+<style>
+:root{
+  --navy:#0b2545;--navy-2:#13315c;--teal:#0d9488;--teal-2:#0f766e;
+  --bg:#f4f6fb;--surface:#fff;--surface-2:#f8fafc;--surface-3:#eef2f8;
+  --ink:#0f1b2d;--ink-soft:#3b4a60;--ink-mute:#64748b;
+  --line:#e2e8f0;--line-2:#cbd5e1;
+  --accent:#0d9488;--accent-soft:#ccfbf1;--accent-ink:#115e59;
+  --gold:#b45309;--gold-soft:#fef3c7;--or:#c2410c;--or-soft:#fde4d3;
+  --good:#16a34a;--good-soft:#dcfce7;--warn:#d97706;--warn-soft:#fef3c7;
+  --bad:#dc2626;--bad-soft:#fee2e2;--info:#2563eb;--info-soft:#dbeafe;
+  --shadow:0 1px 2px rgba(15,27,45,.06),0 8px 24px rgba(15,27,45,.06);
+  --shadow-lg:0 12px 40px rgba(15,27,45,.12);
+  --radius:14px;--radius-sm:9px;--maxw:1180px;
+  --mono:"SFMono-Regular",ui-monospace,"Cascadia Code",Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+[data-theme="dark"]{
+  --navy:#0a1426;--navy-2:#0f2444;--teal:#2dd4bf;--teal-2:#14b8a6;
+  --bg:#0a1120;--surface:#111c30;--surface-2:#0d1628;--surface-3:#16233b;
+  --ink:#e8eef7;--ink-soft:#b6c2d4;--ink-mute:#8595ad;
+  --line:#22324c;--line-2:#2c405f;
+  --accent:#2dd4bf;--accent-soft:#0c3b36;--accent-ink:#5eead4;
+  --gold:#fbbf24;--gold-soft:#3a2c08;--or:#fdba74;--or-soft:#3d2710;
+  --good:#34d399;--good-soft:#0e3a2a;--warn:#fbbf24;--warn-soft:#3a2c08;
+  --bad:#f87171;--bad-soft:#3d1717;--info:#60a5fa;--info-soft:#13294d;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+  --shadow-lg:0 12px 40px rgba(0,0,0,.5);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15.5px;line-height:1.62;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{line-height:1.22;color:var(--ink);font-weight:700;letter-spacing:-.01em}
+h2{font-size:1.6rem;margin:0 0 .25em}
+h3{font-size:1.16rem;margin:1.5em 0 .4em}
+h4{font-size:1rem;margin:1.1em 0 .4em;color:var(--ink-soft)}
+p{margin:.5em 0 .9em;color:var(--ink-soft)}
+a{color:var(--teal);text-decoration:none}a:hover{text-decoration:underline}
+strong{color:var(--ink);font-weight:650}em{color:var(--ink-soft)}
+code{font-family:var(--mono);font-size:.84em;background:var(--surface-3);padding:.1em .42em;border-radius:5px;color:var(--accent-ink)}
+small{color:var(--ink-mute)}
+ul,ol{margin:.5em 0 1em;padding-left:1.25em}
+li{margin:.32em 0;color:var(--ink-soft)}li::marker{color:var(--teal)}
+
+.topbar{position:sticky;top:0;z-index:50;background:var(--navy);color:#fff;border-bottom:1px solid rgba(255,255,255,.08);box-shadow:0 2px 14px rgba(0,0,0,.18)}
+.topbar-in{max-width:var(--maxw);margin:0 auto;padding:11px 22px;display:flex;align-items:center;gap:16px}
+.brand{display:flex;align-items:center;gap:11px;font-weight:700;font-size:.97rem;letter-spacing:.02em;color:#fff}
+.brand .dot{width:11px;height:11px;border-radius:50%;background:linear-gradient(135deg,var(--teal),#67e8f9);box-shadow:0 0 12px var(--teal)}
+.brand small{color:#9fb3cf;font-weight:500}
+.topbar .spacer{flex:1}
+.tb-meta{color:#9fb3cf;font-size:.8rem;display:flex;gap:14px;align-items:center}
+.tb-meta .pin{color:#cbd9ec}
+.toggle{appearance:none;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:#fff;font:inherit;font-size:.8rem;padding:6px 12px;border-radius:999px;cursor:pointer;display:flex;align-items:center;gap:7px;transition:.18s}
+.toggle:hover{background:rgba(255,255,255,.14)}
+
+.layout{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:248px minmax(0,1fr);gap:34px;padding:0 22px}
+.sidenav{position:sticky;top:74px;align-self:start;height:calc(100vh - 90px);overflow-y:auto;padding:22px 4px 40px;font-size:.86rem}
+.sidenav .nav-head{font-size:.7rem;text-transform:uppercase;letter-spacing:.13em;color:var(--ink-mute);font-weight:700;margin:0 10px 8px}
+.sidenav a{display:flex;gap:10px;align-items:baseline;padding:6.5px 10px;border-radius:8px;color:var(--ink-soft);text-decoration:none;border-left:2px solid transparent;transition:.14s;line-height:1.3}
+.sidenav a .n{color:var(--ink-mute);font-variant-numeric:tabular-nums;font-size:.78rem;font-weight:600;min-width:16px}
+.sidenav a:hover{background:var(--surface-3);color:var(--ink);text-decoration:none}
+.sidenav a.active{background:var(--accent-soft);color:var(--accent-ink);border-left-color:var(--teal);font-weight:600}
+.sidenav a.active .n{color:var(--teal)}
+.content{padding:30px 0 90px;min-width:0}
+
+.hero{background:linear-gradient(140deg,var(--navy) 0%,var(--navy-2) 62%,var(--teal-2) 165%);color:#fff;border-radius:var(--radius);padding:40px 40px 34px;margin:8px 0 14px;box-shadow:var(--shadow-lg);position:relative;overflow:hidden}
+.hero::after{content:"";position:absolute;right:-90px;top:-90px;width:340px;height:340px;background:radial-gradient(circle,rgba(45,212,191,.28),transparent 65%);pointer-events:none}
+.hero .eyebrow{text-transform:uppercase;letter-spacing:.2em;font-size:.72rem;color:#7fd9cb;font-weight:700;margin-bottom:14px}
+.hero h1{font-size:2.3rem;color:#fff;margin:0 0 .25em;max-width:24ch}
+.hero .lede{color:#c6d4e8;font-size:1.04rem;max-width:66ch;margin:0}
+.hero .hero-meta{display:flex;flex-wrap:wrap;gap:9px;margin-top:20px}
+.hero .chip{background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.16);color:#dce6f5;font-size:.76rem;padding:5px 11px;border-radius:999px}
+.hero .chip b{color:#fff}
+
+.glance{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin:18px 0 6px}
+.glance .g{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);padding:13px 14px;box-shadow:var(--shadow)}
+.glance .g .v{font-size:1.28rem;font-weight:750;color:var(--ink);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.glance .g .k{font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-mute);margin-top:3px;font-weight:600;line-height:1.3}
+.glance .g.accent .v{color:var(--teal)}
+
+.content section{padding:30px 0 8px;border-top:1px solid var(--line);margin-top:18px;scroll-margin-top:78px}
+.content section:first-of-type{border-top:none}
+.content section .wrap{display:block}
+h2 .sec-num{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:7px;background:var(--navy);color:#fff;font-size:.85rem;font-weight:700;margin-right:11px;vertical-align:middle}
+.lead{font-size:1.04rem;color:var(--ink-soft);max-width:78ch}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow);margin:14px 0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+table{border-collapse:collapse;width:100%;font-size:.88rem;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);margin:14px 0}
+thead th{background:var(--surface-3);text-align:left;font-weight:700;color:var(--ink);padding:11px 13px;border-bottom:1px solid var(--line-2);font-size:.74rem;text-transform:uppercase;letter-spacing:.04em}
+tbody td{padding:10px 13px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-soft)}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--surface-2)}
+td strong,td b{color:var(--ink)}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+caption{caption-side:bottom;font-size:.76rem;color:var(--ink-mute);padding-top:8px;text-align:left}
+
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:.7rem;font-weight:700;padding:2.5px 9px;border-radius:999px;letter-spacing:.03em;white-space:nowrap}
+.p-crit{background:var(--bad-soft);color:var(--bad)}
+.p-high{background:var(--or-soft);color:var(--or)}
+.p-med{background:var(--warn-soft);color:var(--warn)}
+.p-low{background:var(--good-soft);color:var(--good)}
+.p-ok{background:var(--good-soft);color:var(--good)}
+.p-info{background:var(--info-soft);color:var(--info)}
+
+.callout{border-radius:var(--radius-sm);padding:14px 17px;margin:16px 0;border:1px solid var(--line);background:var(--surface-2)}
+.callout h4{margin:0 0 4px;color:var(--ink)}
+.callout.crit{background:var(--bad-soft);border-color:transparent}
+.callout.warn{background:var(--warn-soft);border-color:transparent}
+.callout.good{background:var(--good-soft);border-color:transparent}
+
+.verdict{display:flex;gap:18px;align-items:center;background:var(--or-soft);border:1px solid transparent;border-left:5px solid var(--or);border-radius:var(--radius);padding:20px 22px;margin:18px 0;box-shadow:var(--shadow)}
+.verdict .dot{font-size:34px;line-height:1}
+.verdict h3{margin:0 0 4px;color:var(--or);font-size:1.2rem}
+.verdict p{margin:0;color:var(--ink-soft)}
+
+footer{max-width:var(--maxw);margin:0 auto;padding:34px 22px 60px;color:var(--ink-mute);font-size:.82rem;border-top:1px solid var(--line)}
+footer .wrap{display:block}
+
+@media(max-width:980px){
+  .layout{grid-template-columns:1fr;gap:0}
+  .sidenav{position:static;height:auto;padding:14px 0 6px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;gap:4px}
+  .sidenav .nav-head{width:100%}
+  .sidenav a{border-left:none;border-bottom:2px solid transparent;padding:6px 9px}
+  .sidenav a.active{border-left:none;border-bottom-color:var(--teal)}
+  .glance{grid-template-columns:repeat(3,1fr)}
+  .grid2{grid-template-columns:1fr}
+  .hero h1{font-size:1.9rem}
+}
+@media(max-width:600px){.glance{grid-template-columns:1fr 1fr}.topbar .tb-meta{display:none}}
+
+@media print{
+  :root{--bg:#fff}
+  .topbar{position:static;box-shadow:none}.toggle,.tb-meta{display:none}
+  .layout{grid-template-columns:1fr;display:block}.sidenav{display:none}.content{padding:0}
+  .content section{break-inside:avoid;border-top:1px solid #ccc}
+  .card,table,.callout,.verdict{box-shadow:none;break-inside:avoid}
+  .hero{box-shadow:none;color:#000;background:#eef2f8;border:1px solid #ccc}
+  .hero h1,.hero .lede,.hero .eyebrow{color:#000}
+  a{color:inherit}body{font-size:11pt}
+  @page{size:A4;margin:14mm}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="brand"><span class="dot"></span>Portfolio Intelligence&nbsp;<small>· Product Strategy Review</small></div>
+    <div class="spacer"></div>
+    <div class="tb-meta"><span class="pin">v1.0</span><span>Confidential</span><span>Jul 2026</span></div>
+    <button class="toggle" id="themeBtn" onclick="toggleTheme()" aria-label="Toggle dark mode"><span id="themeIco">🌙</span><span id="themeTxt">Dark</span></button>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="sidenav" id="sidenav" aria-label="Table of contents">
+    <div class="nav-head">Contents</div>
+    <a href="#top"><span class="n">—</span><span>Overview</span></a>
+    <a href="#summary"><span class="n">1</span><span>Executive Summary</span></a>
+    <a href="#standing"><span class="n">2</span><span>Where The Product Stands</span></a>
+    <a href="#competitive"><span class="n">3</span><span>Competitive Analysis</span></a>
+    <a href="#thesis"><span class="n">4</span><span>The Strategic Thesis</span></a>
+    <a href="#whatif"><span class="n">5</span><span>What-If Engine</span></a>
+    <a href="#market"><span class="n">6</span><span>Market Intelligence</span></a>
+    <a href="#discovery"><span class="n">7</span><span>Opportunity Discovery</span></a>
+    <a href="#areas"><span class="n">8</span><span>Area Tracking &amp; Alerts</span></a>
+    <a href="#portfolio"><span class="n">9</span><span>Portfolio Intelligence</span></a>
+    <a href="#ai"><span class="n">10</span><span>AI Features</span></a>
+    <a href="#data"><span class="n">11</span><span>Data Strategy</span></a>
+    <a href="#commercial"><span class="n">12</span><span>Commercial Viability</span></a>
+    <a href="#scoring"><span class="n">13</span><span>Feature Scoring</span></a>
+    <a href="#roadmap"><span class="n">14</span><span>Product Roadmap</span></a>
+    <a href="#backlog"><span class="n">15</span><span>Development Backlog</span></a>
+    <a href="#five"><span class="n">16</span><span>If Only Five Things</span></a>
+  </nav>
+
+  <main class="content" id="top">
+    <div class="hero">
+      <div class="eyebrow">Senior Product Management · 12-Month Strategy &amp; Investment Plan</div>
+      <h1>From Portfolio Tool to Property Intelligence Platform</h1>
+      <p class="lede">A complete product review of the Portfolio Intelligence platform, and a costed 12-month plan to deploy £500,000 of development budget against a single vision: the Bloomberg Terminal for UK property investors.</p>
+      <div class="hero-meta">
+        <span class="chip">Budget: <b>£500,000 / 12 months</b></span>
+        <span class="chip">Verdict: <b>🟠 Strong engine, wrong centre of gravity</b></span>
+        <span class="chip">Evidence: <b>live codebase + schema audit</b></span>
+      </div>
+      <div class="hero-meta">
+        <span class="chip">Zoopla</span><span class="chip">Rightmove</span><span class="chip">Bloomberg Terminal</span>
+        <span class="chip">Morningstar</span><span class="chip">PropertyData</span><span class="chip">Portfolio Planner</span>
+        <span class="chip">Wealth Management</span>
+      </div>
+    </div>
+
+    <div class="glance">
+      <div class="g accent"><div class="v">0</div><div class="k">Rows ever read from the market_data table</div></div>
+      <div class="g"><div class="v">1</div><div class="k">Candidate deals a goal plan can model</div></div>
+      <div class="g"><div class="v">0</div><div class="k">Users the platform can bill today</div></div>
+      <div class="g"><div class="v">£190k</div><div class="k">Proposed spend on the data layer</div></div>
+      <div class="g"><div class="v">3 of 5</div><div class="k">Top-five bets are data, not modelling</div></div>
+      <div class="g accent"><div class="v">£468k</div><div class="k">Allocated of £500k (6% held back)</div></div>
+    </div>
+
+<section id="summary"><div class="wrap">
+  <h2><span class="sec-num">1</span>Executive Summary</h2>
+  <p class="lead">The platform has built a genuinely excellent financial modelling engine on top of almost no data. That is the whole product review in one sentence, and the £500,000 should be spent correcting the imbalance rather than deepening it.</p>
+
+  <p>Three consecutive investment-committee reviews have hardened the scenario and goal engines to a standard I have rarely seen in this category: a pure, tested projection function; seven distinct generated strategies including two-phase hybrids; a bounded 0–100 risk score whose ordering matches an expert panel's independent assessment; seeded Monte-Carlo bands; a standing downturn case; verified nearest-feasible fix hints. Measured as modelling software, this is ahead of every UK competitor I have benchmarked, including PropertyData.</p>
+
+  <p>Measured as an <em>intelligence</em> product, it barely exists. The audit finding that should reframe the next twelve months is this: <strong>the <code>market_data</code> table is declared in the schema and is read by nothing.</strong> Not one route, not one service, not one component. Every sophisticated projection the engine produces is driven by a single candidate deal that the investor typed in by hand — one price, one rent, one yield, cloned sixteen to twenty-four times and indexed forward at an assumed growth rate. The engine can tell you, to the month, when a hand-typed assumption reaches £5,000/month. It cannot tell you whether that assumption is available anywhere in Britain.</p>
+
+  <div class="callout crit"><h4>The central strategic finding</h4>
+  <p style="margin:0"><strong>The product's modelling sophistication has outrun its inputs by roughly two years of development.</strong> Adding an eighth strategy, a finer risk decomposition or a better IRR fallback compounds a diminishing return. The binding constraint on investor value is no longer <em>how well we model a deal</em> — it is <em>that we have no idea what deals exist</em>. Until a market data layer lands, every improvement to the engine is leverage applied to a guess.</p></div>
+
+  <p>The second finding is commercial rather than technical, and it is a hard gate. The platform is a single-user, locally-hosted application: SQLite on the filesystem, no users table, no authentication, no tenancy boundary, no billing. There is no sense in which it can currently take money from anyone. "Commercial viability" is not a feature on this roadmap — it is a prerequisite that must be built before any feature can be sold, and it is unglamorous enough that it will be deferred forever unless it is explicitly funded. I have funded it.</p>
+
+  <p>The third finding is the opportunity. The competitive map (§3) has a hole in exactly the shape of this product. PropertyData knows the market but not your portfolio. Landlord Vision, Hammock and Portfolio Planner know your portfolio but not the market. Rightmove and Zoopla own the audience but serve buyers, not investors. <strong>Nobody credibly joins market intelligence to portfolio-level financial modelling</strong> — and the join is worth more than either half, because it is the only way to answer the question every investor actually asks, which is not "what is Sunderland's yield" but <em>"given what I already own, what should I buy next, and what does it do to my plan?"</em> The engine to answer the second half is already built and paid for. The first half is what £500,000 buys.</p>
+
+  <h3>What the money does</h3>
+  <table>
+    <thead><tr><th>Workstream</th><th class="num">Budget</th><th>What it buys</th><th>Why now</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Market data layer</strong> (§6, §11)</td><td class="num">£190,000</td><td>Ingestion pipeline, postcode-level metrics warehouse, licensed rental comparables, area scoring</td><td>The binding constraint. Everything else on this list is downstream of it.</td></tr>
+      <tr><td><strong>Opportunity discovery</strong> (§7)</td><td class="num">£95,000</td><td>Area ranking, strategy matching, deal scoring against the investor's actual portfolio and goal</td><td>The join no competitor has. This is the differentiated product.</td></tr>
+      <tr><td><strong>Commercial foundation</strong> (§12)</td><td class="num">£85,000</td><td>Multi-tenancy, auth, hosted deployment, billing, onboarding</td><td>Gate to any revenue at all. Must be funded explicitly or it never happens.</td></tr>
+      <tr><td><strong>Portfolio intelligence</strong> (§9)</td><td class="num">£58,000</td><td>Market-linked revaluation, underperformance detection, refinance radar, portfolio health v2</td><td>Converts the new data into value for the properties already owned.</td></tr>
+      <tr><td><strong>What-If engine gaps</strong> (§5)</td><td class="num">£40,000</td><td>Deal pipeline abstraction, refurb/BRRR model, jurisdiction switch, comparison upgrades</td><td>Targeted completion of a strong asset — not expansion.</td></tr>
+      <tr><td><em>Unallocated contingency</em></td><td class="num">£32,000</td><td>Data licensing overrun, discovery reserve</td><td>Rental-comp licensing is the largest commercial unknown in the plan.</td></tr>
+    </tbody>
+    <caption>£468,000 allocated, £32,000 (6%) held back. Notably, the modelling engine — the product's most impressive component — receives the smallest allocation of the five workstreams.</caption>
+  </table>
+
+  <h3>The five things, in one line each</h3>
+  <p>Detailed in §16 with full justification. Ranked:</p>
+  <ol>
+    <li><strong>The market data layer</strong> — postcode-level prices, rents, yields and trends, ingested and maintained. Nothing else matters until this exists.</li>
+    <li><strong>Opportunity discovery tied to the goal engine</strong> — "here are the areas that reach <em>your</em> £5k goal fastest", which only this product can compute.</li>
+    <li><strong>Commercial foundation</strong> — multi-tenant, hosted, authenticated, billable. The gate on every pound of revenue.</li>
+    <li><strong>Area watchlists and alerts</strong> — the retention mechanic, and the cheapest habit-forming surface in the plan.</li>
+    <li><strong>Market-linked portfolio valuation</strong> — makes the data earn its keep for the three properties already owned, on day one.</li>
+  </ol>
+
+  <p>Three of the five are data or distribution. One is commercial plumbing. Only one touches the modelling engine, and only to feed it. That allocation is the recommendation.</p>
+</div></section>
+
+<section id="standing"><div class="wrap">
+  <h2><span class="sec-num">2</span>Where The Product Stands</h2>
+  <p class="lead">An honest inventory, built from the live codebase rather than the feature list. The pattern that emerges is a product with a world-class back half and a missing front half.</p>
+
+  <h3>2.1 What is genuinely strong</h3>
+  <table>
+    <thead><tr><th>Capability</th><th>Assessment</th><th>Evidence</th></tr></thead>
+    <tbody>
+      <tr><td>Scenario projection engine</td><td><span class="pill p-ok">Category-leading</span></td><td>Pure, DB-free <code>buildProjection()</code>; every advanced feature (downturn, Monte-Carlo, stress, hybrids) is a caller of one tested function. This architecture is why the last three roadmaps shipped on time.</td></tr>
+      <tr><td>Goal pathway generation</td><td><span class="pill p-ok">Category-leading</span></td><td>Seven distinct strategies, cash-gated greedy generation that re-projects after every decision, lender-ICR gating, mandate-aware refinancing.</td></tr>
+      <tr><td>Risk quantification</td><td><span class="pill p-ok">Strong</span></td><td>Bounded 0–100 score with per-component breakdown; live spread 38–77 matched an expert panel's independent ordering and grades.</td></tr>
+      <tr><td>Uncertainty modelling</td><td><span class="pill p-ok">Strong</span></td><td>Seeded reproducible Monte-Carlo, versioned downturn transform, honest "model uncertainty, not probability of outcome" labelling.</td></tr>
+      <tr><td>Tax modelling</td><td><span class="pill p-low">Good</span></td><td>Corporation tax and S24 personal models, ICR thresholds derived from ownership structure. Purchase-tax jurisdiction switch outstanding.</td></tr>
+      <tr><td>Return metrics</td><td><span class="pill p-low">Good</span></td><td>IRR with a labelled fallback ladder, equity multiple, ROCE, cash-on-cash, payback.</td></tr>
+      <tr><td>Portfolio administration</td><td><span class="pill p-low">Adequate</span></td><td>Properties, tenants, mortgages, rent, expenses, maintenance, certificates, documents. Competent, unremarkable, and not a differentiator.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>2.2 What is missing, absent or dead</h3>
+  <table>
+    <thead><tr><th>Gap</th><th>Severity</th><th>Finding</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Market data</strong></td><td><span class="pill p-crit">Critical</span></td><td>The <code>market_data</code> table exists in <code>schema.sql</code> with columns for area, price, rent, yield and 1-year growth — and is referenced by <strong>zero</strong> routes, services or components. A grep across <code>server/</code> and <code>src/</code> returns nothing outside the schema file itself. The ambition was declared and never built.</td></tr>
+      <tr><td><strong>Deal supply model</strong></td><td><span class="pill p-crit">Critical</span></td><td>Every generated pathway buys the same deal repeatedly — one price, one rent, one expense figure, indexed forward. A 24-purchase plan is 24 clones of one hand-typed assumption. No availability constraint, no yield distribution, no geography.</td></tr>
+      <tr><td><strong>Multi-tenancy / auth / billing</strong></td><td><span class="pill p-crit">Critical</span></td><td>No users table among the 21. Single-user SQLite on the local filesystem. The product cannot be sold to a second person in its current form.</td></tr>
+      <tr><td><strong>Area intelligence</strong></td><td><span class="pill p-crit">Critical</span></td><td>No areas, watchlists, alerts, heatmaps, forecasts or trend history of any kind. The entire Market Intelligence and Area Tracking briefs are greenfield.</td></tr>
+      <tr><td><strong>Market-linked valuation</strong></td><td><span class="pill p-high">High</span></td><td><code>property_valuations</code> holds manually-entered figures. Portfolio equity — the platform's headline number — drifts from reality between manual updates and has no external anchor.</td></tr>
+      <tr><td><strong>Acquisition intelligence</strong></td><td><span class="pill p-high">High</span></td><td><code>acquisition_opportunities</code> plus <code>comparable_sales</code>/<code>comparable_rentals</code> exist and are used only by the acquisitions route — but every row is hand-entered. It is a CRM pipeline, not a discovery engine. The comparables tables are the right shape for market data and are being filled by typing.</td></tr>
+      <tr><td><strong>Event coverage</strong></td><td><span class="pill p-med">Medium</span></td><td>Nine scenario event types; no sell-and-replace, no refurbishment (cost + uplift), no rent review to market. The first two block honest BRRR modelling — the strategy the engine already generates and then indicts.</td></tr>
+      <tr><td><strong>Benchmarking</strong></td><td><span class="pill p-med">Medium</span></td><td>The investor cannot answer "is my 6.2% yield good for Stockport?" Every metric is absolute; none is relative to a market. This is table stakes for an intelligence product.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>2.3 Reading the pattern</h3>
+  <p>Lay the two tables side by side and the shape is unmistakable. Everything the product does <em>well</em> operates on numbers the investor supplied. Everything it does <em>badly or not at all</em> requires knowing something about the world outside the investor's own records. The team has repeatedly chosen depth over breadth at exactly the point where breadth was the constraint — and the review process reinforced it, because three consecutive due-diligence exercises graded the engine's internal consistency without ever asking whether its inputs were real.</p>
+
+  <div class="callout warn"><h4>The uncomfortable question the roadmap must answer</h4>
+  A goal plan currently states that buying an £85,000 property yielding 9.9% gross, twenty-two times over, reaches £5,000/month in month 131. Every step of that arithmetic has been verified to a professional standard. But the plan never asks whether twenty-two such properties exist, whether they exist in one town, whether that town's rents are rising or falling, or whether the yield survives the next tenant. <strong>An investor acting on this plan is taking a market view the software has no opinion on — while the software's polish implies that it does.</strong> That gap between apparent and actual authority is a product risk as much as a feature gap.</div>
+
+  <h3>2.4 The user we are actually building for</h3>
+  <p>The primary user — UK, limited company, three properties, growing to ten, long-term, data-driven — is well chosen, and worth stating plainly because it disqualifies several tempting directions. This investor is <strong>not</strong> a developer (so land, planning and GDV tooling is out of scope), <strong>not</strong> a flipper (so refurb-and-sell velocity tooling is secondary), and <strong>not</strong> a letting agent (so tenancy operations at scale are not the wedge). They are a portfolio builder making perhaps two to four acquisitions a year, each worth £60k–£250k, each irreversible for a decade.</p>
+  <p>That cadence has a sharp product implication. <strong>The investor uses the modelling engine a handful of times a year, at the moment of a decision.</strong> That is not enough to build a habit, and habit is what a subscription is sold on. Market intelligence, watchlists and alerts are used <em>weekly</em> — they are the retention layer that makes the annual decision moment monetisable. This is the same structural reason Bloomberg sells a terminal rather than a valuation model: the analytics justify the price, but the live data justifies the login.</p>
+</div></section>
+
+<section id="competitive"><div class="wrap">
+  <h2><span class="sec-num">3</span>Competitive Analysis</h2>
+  <p class="lead">The UK property-tech market is well served at both ends and empty in the middle. That emptiness is the entire commercial case for this product.</p>
+
+  <h3>3.1 The field</h3>
+  <table>
+    <thead><tr><th>Competitor</th><th>What they are</th><th>Strength</th><th>Weakness relative to us</th><th>Threat</th></tr></thead>
+    <tbody>
+      <tr><td><strong>PropertyData</strong></td><td>Area &amp; deal analytics for investors (subscription, roughly £30–£60/mo tiers)</td><td>The closest thing to a UK property Bloomberg today. Postcode-level yields, price/rent comparables, demand indicators, sourcing tools. Deep, well-maintained data.</td><td><strong>Stateless about you.</strong> It analyses areas and deals in isolation — it does not know what you own, your leverage, your tax structure, your goal, or what a purchase does to your portfolio. No projection engine, no goal planning, no scenario modelling.</td><td><span class="pill p-crit">Highest</span> — nearest competitor, and the one that could add portfolio modelling.</td></tr>
+      <tr><td><strong>Rightmove</strong></td><td>Consumer listings portal</td><td>Unmatched distribution and listing inventory; the default start of every UK property search. Sold-price and trend data as a consumer feature.</td><td>Built for buyers and renters, not investors. No yield, no portfolio, no modelling, no strategy. Their commercial customer is the agent, not the investor.</td><td><span class="pill p-med">Medium</span> — structurally unlikely to serve investors; owns the top of funnel.</td></tr>
+      <tr><td><strong>Zoopla</strong></td><td>Consumer portal + AVM heritage</td><td>Automated valuation estimates, sold prices, area statistics as consumer features. Strong brand recall for "what is my house worth".</td><td>Same as Rightmove: consumer-shaped. Investor tooling is shallow; public API access for third-party analytics has been withdrawn in favour of commercial arrangements.</td><td><span class="pill p-med">Medium</span> — a valuation-data supplier or partner more than a competitor.</td></tr>
+      <tr><td><strong>Portfolio Planner</strong></td><td>Portfolio tracking &amp; light projection</td><td>Speaks the portfolio-builder language; understands multi-property investors and growth planning.</td><td>Projection is comparatively shallow — no lender-affordability gating, no risk scoring, no Monte-Carlo, no generated strategies. No market data layer.</td><td><span class="pill p-high">High</span> — same customer, same story, weaker engine. A data layer would leapfrog us.</td></tr>
+      <tr><td><strong>Landlord Vision</strong></td><td>Landlord accounting &amp; compliance</td><td>Mature bookkeeping, tax-year reporting, tenancy and compliance workflow. Sticky through accounting obligation.</td><td>Backward-looking by design. It records what happened; it has no view on what to do next and no market intelligence at all.</td><td><span class="pill p-low">Low</span> — adjacent, complementary, plausible integration partner.</td></tr>
+      <tr><td colspan="5" style="background:var(--surface-3)"><em>Also monitored, outside the direct set:</em> <strong>Lendlord</strong> (portfolio + finance/refinance focus — closest to our refinance-radar idea), <strong>Hammock</strong> (banking &amp; bookkeeping for landlords), <strong>PaTMa</strong> (deal analysis &amp; sourcing), <strong>LandInsight / Nimbus</strong> (land &amp; planning — different customer), <strong>Stessa</strong> (US portfolio tracking — instructive on free-tool-plus-monetised-data models).</td></tr>
+    </tbody>
+  </table>
+
+  <h3>3.2 The capability map</h3>
+  <p>Scored on what each product does for our specific user — a limited-company portfolio builder going from three properties to ten.</p>
+  <table>
+    <thead><tr><th>Capability</th><th>Us today</th><th>PropertyData</th><th>Rightmove / Zoopla</th><th>Portfolio Planner</th><th>Landlord Vision</th></tr></thead>
+    <tbody>
+      <tr><td>Portfolio record-keeping</td><td><span class="pill p-ok">Good</span></td><td><span class="pill p-crit">None</span></td><td><span class="pill p-crit">None</span></td><td><span class="pill p-ok">Good</span></td><td><span class="pill p-ok">Excellent</span></td></tr>
+      <tr><td>Accounting &amp; tax filing</td><td><span class="pill p-med">Basic</span></td><td><span class="pill p-crit">None</span></td><td><span class="pill p-crit">None</span></td><td><span class="pill p-med">Basic</span></td><td><span class="pill p-ok">Excellent</span></td></tr>
+      <tr><td>Long-term financial modelling</td><td><span class="pill p-ok">Excellent</span></td><td><span class="pill p-crit">None</span></td><td><span class="pill p-crit">None</span></td><td><span class="pill p-med">Basic</span></td><td><span class="pill p-crit">None</span></td></tr>
+      <tr><td>Goal planning &amp; strategy generation</td><td><span class="pill p-ok">Excellent</span></td><td><span class="pill p-crit">None</span></td><td><span class="pill p-crit">None</span></td><td><span class="pill p-med">Basic</span></td><td><span class="pill p-crit">None</span></td></tr>
+      <tr><td>Risk quantification</td><td><span class="pill p-ok">Excellent</span></td><td><span class="pill p-med">Basic</span></td><td><span class="pill p-crit">None</span></td><td><span class="pill p-crit">None</span></td><td><span class="pill p-crit">None</span></td></tr>
+      <tr><td><strong>Area / market data</strong></td><td><span class="pill p-crit">None</span></td><td><span class="pill p-ok">Excellent</span></td><td><span class="pill p-ok">Good</span></td><td><span class="pill p-crit">None</span></td><td><span class="pill p-crit">None</span></td></tr>
+      <tr><td><strong>Opportunity discovery</strong></td><td><span class="pill p-crit">None</span></td><td><span class="pill p-ok">Good</span></td><td><span class="pill p-med">Listings only</span></td><td><span class="pill p-crit">None</span></td><td><span class="pill p-crit">None</span></td></tr>
+      <tr><td><strong>Watchlists &amp; alerts</strong></td><td><span class="pill p-crit">None</span></td><td><span class="pill p-low">Partial</span></td><td><span class="pill p-ok">Good <small>(listings)</small></span></td><td><span class="pill p-crit">None</span></td><td><span class="pill p-crit">None</span></td></tr>
+      <tr><td><strong>Market ↔ portfolio join</strong></td><td><span class="pill p-crit">None</span></td><td><span class="pill p-crit">None</span></td><td><span class="pill p-crit">None</span></td><td><span class="pill p-crit">None</span></td><td><span class="pill p-crit">None</span></td></tr>
+      <tr><td>Multi-user / commercial readiness</td><td><span class="pill p-crit">None</span></td><td><span class="pill p-ok">Yes</span></td><td><span class="pill p-ok">Yes</span></td><td><span class="pill p-ok">Yes</span></td><td><span class="pill p-ok">Yes</span></td></tr>
+    </tbody>
+    <caption>Read the bottom four rows as the strategy. Three of our four critical gaps are things competitors <em>do</em> have — and the fourth, the market↔portfolio join, is a row where every column reads "None".</caption>
+  </table>
+
+  <h3>3.3 Where we win, and where we are exposed</h3>
+  <div class="grid2">
+    <div class="card">
+      <h4 style="color:var(--good)">Defensible advantages</h4>
+      <ul>
+        <li><strong>The projection engine is two years ahead</strong> of the nearest portfolio competitor and is architecturally clean enough to extend cheaply. Rebuilding it is a serious undertaking, which is the definition of a moat.</li>
+        <li><strong>Institutional-grade credibility.</strong> Lender ICR gating, stress testing, tax-structure awareness and honest uncertainty labelling are rare in this market, where most tools quote gross yield and stop.</li>
+        <li><strong>The join is unclaimed.</strong> No competitor connects market signals to a personalised portfolio plan. Occupying it first, with the engine already built, is a genuine first-mover position.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--bad)">Exposures</h4>
+      <ul>
+        <li><strong>PropertyData could add portfolio modelling faster than we can add data.</strong> They already own the harder half. This is the single largest competitive risk in the plan and it argues for speed over polish on the data layer.</li>
+        <li><strong>No distribution.</strong> Rightmove and Zoopla own the investor's first search. We have no top-of-funnel and no acquisition channel budgeted beyond the product itself.</li>
+        <li><strong>Rental data has no free authoritative source</strong> at the granularity investors expect. This is a licensing cost and a commercial dependency, not an engineering problem (§11).</li>
+        <li><strong>Single-user architecture</strong> means every month before the commercial foundation lands is a month of zero revenue and zero market feedback.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout"><h4>Positioning statement</h4>
+  <p style="margin:0"><strong>For</strong> UK portfolio investors building toward a defined income or property-count goal, <strong>who</strong> must choose where to deploy each next £50k of capital, <strong>Portfolio Intelligence</strong> is the only platform that scores the market <em>through the lens of your own portfolio, leverage and tax position</em> — telling you not merely which areas are performing, but which purchase, in which postcode, gets <em>your</em> plan to <em>your</em> goal fastest, and what it does to your risk. <strong>Unlike</strong> PropertyData, it knows what you own; <strong>unlike</strong> Landlord Vision and Portfolio Planner, it knows what the market is doing.</p></div>
+</div></section>
+
+<section id="thesis"><div class="wrap">
+  <h2><span class="sec-num">4</span>The Strategic Thesis</h2>
+  <p class="lead">What "Bloomberg Terminal for UK property investors" actually commits us to — and what it rules out.</p>
+
+  <h3>4.1 What Bloomberg actually is</h3>
+  <p>The analogy is invoked loosely in this market, usually to mean "a lot of charts on a dark background". It is worth being precise, because the real structure of the Bloomberg product is a very specific and instructive three-layer stack:</p>
+  <table>
+    <thead><tr><th>Layer</th><th>Bloomberg</th><th>Us today</th><th>Us in 12 months</th></tr></thead>
+    <tbody>
+      <tr><td><strong>1. Data</strong> — comprehensive, timely, trusted, maintained</td><td>The actual product. Decades of instrument, pricing and fundamentals data, continuously maintained. This is what the $24k/year buys.</td><td><span class="pill p-crit">Absent</span></td><td><span class="pill p-ok">Postcode-level, monthly, versioned</span></td></tr>
+      <tr><td><strong>2. Analytics</strong> — models applied to that data</td><td>Yield curves, scenario analysis, risk decomposition, portfolio attribution.</td><td><span class="pill p-ok">Already strong</span></td><td><span class="pill p-ok">Same engine, real inputs</span></td></tr>
+      <tr><td><strong>3. Workflow</strong> — the reason to log in daily</td><td>Monitors, alerts, watchlists, messaging. The habit layer.</td><td><span class="pill p-crit">Absent</span></td><td><span class="pill p-ok">Watchlists + alerts + digest</span></td></tr>
+    </tbody>
+    <caption>We have built layer 2 first, which is the unusual order — and the reason the product feels more capable than it is useful.</caption>
+  </table>
+
+  <p>The instructive part is that Bloomberg's analytics are, in isolation, unremarkable; a competent quant can reproduce most of them. What cannot be reproduced is the data estate underneath and the workflow habit on top. <strong>We have inverted this: our analytics are the hardest part of our product to copy, and we have neither of the two layers that actually retain users.</strong> The twelve-month plan is, in essence, building layers 1 and 3 around an already-excellent layer 2.</p>
+
+  <h3>4.2 The thesis in one diagram</h3>
+  <div class="card">
+    <p style="margin-top:0"><strong>Market signal → personalised interpretation → plan impact → action.</strong></p>
+    <p>Every competitor stops after the first arrow. PropertyData tells you Sunderland yields 9.1%. It cannot tell you that, given your £47k available cash, your 145% company ICR floor, your existing £312k of debt and your £5,000/month goal, a Sunderland purchase brings your goal <em>fourteen months</em> closer while adding six points of risk — and that a Newcastle purchase at 6.2% does the opposite. <strong>That sentence is the product.</strong> It requires the market data we lack and the engine we already have, and it is computable today for a single hand-typed deal — which is precisely the proof that the architecture supports it.</p>
+    <p style="margin-bottom:0">Everything in this roadmap either produces the left-hand side of that sentence (§6, §7, §8, §11), strengthens the right-hand side (§5, §9, §10), or makes it sellable (§12).</p>
+  </div>
+
+  <h3>4.3 What the thesis rules out</h3>
+  <p>A strategy is only real if it declines things. On this thesis, the following are explicitly <em>not</em> funded in the next twelve months, despite being reasonable ideas:</p>
+  <table>
+    <thead><tr><th>Declined</th><th>Why not now</th></tr></thead>
+    <tbody>
+      <tr><td>Tenant portal, maintenance workflow, contractor management</td><td>Operational tooling for a 3–10 property investor is a low-value commodity, well served by incumbents, and pulls the product toward letting-agent software. It does not serve the intelligence thesis.</td></tr>
+      <tr><td>Full accounting / MTD-compliant bookkeeping</td><td>A serious regulatory and support burden that makes us a worse Landlord Vision. Better to integrate than to imitate. Revisit as a partnership.</td></tr>
+      <tr><td>Land, planning and development appraisal (GDV, residual valuation)</td><td>Different customer entirely (developers, not portfolio builders). LandInsight and Nimbus own it. A distraction with its own expensive data estate.</td></tr>
+      <tr><td>Mobile-first native apps</td><td>The decision workflow is desk-based and analytical. A responsive web surface for alerts and watchlists covers the mobile moments that matter. Revisit once retention is proven.</td></tr>
+      <tr><td>Marketplace / brokerage / deal transactions</td><td>Regulatory exposure and a fundamentally different business. Being trusted <em>because</em> we do not sell deals is a positioning asset worth protecting.</td></tr>
+      <tr><td>An eighth and ninth generated strategy</td><td>Diminishing returns against a single hand-typed candidate deal. More strategy variety on fictional inputs is precisely the trap §2 identifies.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout good"><h4>The one-sentence test for any future feature request</h4>
+  <p style="margin:0"><em>"Does this help the investor decide where to put their next £50,000 — using facts about the market, interpreted through their own portfolio?"</em> If a proposal fails that test, it belongs in the backlog, not the roadmap. Applied honestly, this test would have deferred roughly a third of the last two quarters' engine work.</p></div>
+</div></section>
+
+<section id="whatif"><div class="wrap">
+  <h2><span class="sec-num">5</span>What-If Scenario Engine — Review &amp; Recommendations</h2>
+  <p class="lead">The product's strongest asset, reviewed on its own terms. My conclusion differs from the three engineering reviews that preceded me: the engine's remaining weaknesses are almost entirely about <em>what goes into it</em>, not what it does.</p>
+
+  <h3>5.1 Existing capabilities</h3>
+  <table>
+    <thead><tr><th>Area</th><th>Capability</th><th>PM assessment</th></tr></thead>
+    <tbody>
+      <tr><td>Projection</td><td>Month-by-month cash, debt, value, equity; pure and DB-free</td><td><span class="pill p-ok">Excellent</span> — the architectural decision everything else rests on.</td></tr>
+      <tr><td>Events</td><td>9 types: buy, sell, remortgage, refinance, rent change, vacancy, major expense, rate change, payoff</td><td><span class="pill p-med">Adequate</span> — covers financing well, transactions poorly.</td></tr>
+      <tr><td>Strategies</td><td>7 generated pathways including 2 two-phase hybrids</td><td><span class="pill p-ok">Excellent</span>, and past the point of diminishing returns.</td></tr>
+      <tr><td>Risk</td><td>0–100 bounded score, per-component breakdown, banded</td><td><span class="pill p-ok">Excellent</span> — externally validated ordering.</td></tr>
+      <tr><td>Uncertainty</td><td>Seeded Monte-Carlo band, versioned downturn case, rate/rent stress shocks</td><td><span class="pill p-ok">Strong</span> — but Scenarios-only; the Goals page makes recommendations without it.</td></tr>
+      <tr><td>Ranking</td><td>Fastest / Balanced / Safest modes with stated provenance, Pareto frontier</td><td><span class="pill p-ok">Strong</span> — the governance model is genuinely good.</td></tr>
+      <tr><td>Guidance</td><td>Nearest-feasible fix hints, re-simulated not extrapolated</td><td><span class="pill p-ok">Strong</span> — hybrids not yet covered.</td></tr>
+      <tr><td>Comparison</td><td>Scenario compare table, printable briefs, PDF export</td><td><span class="pill p-med">Adequate</span> — see §5.4.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>5.2 Missing functionality — the deal supply problem</h3>
+  <div class="callout crit"><h4>The single most valuable change to the What-If engine is not a modelling change</h4>
+  <p>Every strategy buys clones of one hand-typed candidate deal. A 24-purchase pathway assumes twenty-four identical £85,000 properties yielding 9.9%, all available on demand, all in an unnamed location, differing only by an indexed price. No real portfolio was ever built this way.</p>
+  <p style="margin-bottom:0"><strong>Recommendation — Deal Pipeline Abstraction (P0).</strong> Replace the single candidate deal with a <em>deal set</em>: several archetypes, each with price, rent, expense profile, area, availability rate and yield distribution — sourced from the market data layer (§6) or the user's own pipeline. The generator then chooses <em>which</em> deal to buy at each decision point, not merely whether. This single change converts the engine from a calculator into an allocator, and it is the prerequisite for opportunity discovery (§7) to feed back into goal planning.</p></div>
+
+  <table>
+    <thead><tr><th>Missing functionality</th><th>Value</th><th>Complexity</th><th>Priority</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Deal pipeline abstraction</strong> — multiple candidate deals with distinct economics, geography and availability</td><td>Very high — unlocks §7 and makes every pathway credible</td><td><span class="pill p-high">High</span></td><td><span class="pill p-crit">P0</span></td></tr>
+      <tr><td><strong>Sell-and-replace event</strong> — dispose of a unit and redeploy proceeds, with CGT and costs</td><td>High — the most common real portfolio manoeuvre, entirely unmodellable today</td><td><span class="pill p-med">Medium</span></td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td><strong>Refurbishment event</strong> — capital cost, forced-appreciation uplift, void during works</td><td>High — the entire BRRR premise; the engine currently generates BRRR then indicts its own returns</td><td><span class="pill p-med">Medium</span></td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td><strong>Purchase-tax jurisdiction switch</strong> — SDLT/LTT/LBTT by nation</td><td>Medium — correctness; currently Scottish rates charged on English stock</td><td><span class="pill p-low">Low</span></td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td><strong>Rent review to market</strong> — reset rent to the area's market rate, not an assumed drift</td><td>High once market data exists — links the engine to reality annually</td><td><span class="pill p-low">Low</span></td><td><span class="pill p-med">P2</span></td></tr>
+      <tr><td><strong>Per-loan origination LTV cap</strong> and product menu (rate by LTV band, fee structures)</td><td>Medium — lender realism; today a 25% deposit implies a 75% loan regardless of product</td><td><span class="pill p-med">Medium</span></td><td><span class="pill p-med">P2</span></td></tr>
+      <tr><td><strong>Interest-rate path scenarios</strong> — user-defined forward curves, not a single uplift assumption</td><td>High — rates are the top sensitivity in every plan the engine produces</td><td><span class="pill p-med">Medium</span></td><td><span class="pill p-med">P2</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>5.3 Missing financial models</h3>
+  <table>
+    <thead><tr><th>Model</th><th>Why it matters</th><th>Priority</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Capital gains &amp; disposal</strong> — CGT (personal) / corporation tax on gains (Ltd), selling costs, ERC</td><td>No exit is modellable. A long-term investor's terminal value is currently pre-tax and therefore overstated. Pairs with sell-and-replace.</td><td><span class="pill p-crit">P0</span></td></tr>
+      <tr><td><strong>Refinance-cost model</strong> — product fees, valuation, legals, ERC, broker fees by product</td><td>Partially present. BRRR performs 37 refinances in some plans; the fee model materially drives whether that strategy is viable.</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td><strong>Void &amp; arrears as distributions</strong> rather than flat annual assumptions</td><td>Real voids are lumpy and correlated with area. Once area data exists, void should be an area-derived distribution, not a global 1 month/year.</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td><strong>Inflation-linked cost model</strong> — separate indices for maintenance, insurance, management, ground rent/service charge</td><td>Currently costs are a single figure drifting at one rate. Service charges on flats behave very differently from house maintenance.</td><td><span class="pill p-med">P2</span></td></tr>
+      <tr><td><strong>EPC / retrofit capital model</strong> — MEES compliance cost by property age and current rating</td><td>A known, dateable capital call for older stock that no plan currently reserves for.</td><td><span class="pill p-med">P2</span></td></tr>
+      <tr><td><strong>Liquidity &amp; time-to-sell</strong> — how long an exit actually takes by area and type</td><td>Turns "sell in month 84" from an instant event into a realistic 3–6 month process with carrying costs.</td><td><span class="pill p-low">P3</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>5.4 Missing visualisations</h3>
+  <p>The engine computes far more than it shows. These are cheap relative to their perceived value — the classic case of surfacing work already paid for.</p>
+  <table>
+    <thead><tr><th>Visualisation</th><th>What it answers</th><th>Effort</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Fan chart with confidence bands</strong> on every projection (P10/P50/P90)</td><td>"How wrong could this be?" — the Monte-Carlo data already exists; it renders on one page.</td><td><span class="pill p-low">Low</span></td></tr>
+      <tr><td><strong>Waterfall: goal gap attribution</strong></td><td>"Why does this plan miss by £233?" — decomposed into rent, voids, rates, tax, fees.</td><td><span class="pill p-med">Medium</span></td></tr>
+      <tr><td><strong>Debt maturity / refix timeline</strong></td><td>"When does my rate risk actually land?" — the single most useful risk visual for a leveraged portfolio, and currently absent.</td><td><span class="pill p-low">Low</span></td></tr>
+      <tr><td><strong>Cash runway ribbon</strong> — reserve headroom over time, shaded where it approaches the floor</td><td>"When am I tight?" — the reserve floor is enforced but invisible.</td><td><span class="pill p-low">Low</span></td></tr>
+      <tr><td><strong>Strategy comparison small-multiples</strong> — same axes, seven mini-charts</td><td>"How do these plans actually differ in shape?" — the compare table is numeric only.</td><td><span class="pill p-med">Medium</span></td></tr>
+      <tr><td><strong>Geographic plan map</strong> — where the plan buys, and when</td><td>Only meaningful after deal-pipeline abstraction; then it becomes the headline visual of the whole product.</td><td><span class="pill p-med">Medium</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>5.5 Missing risk analysis</h3>
+  <ul>
+    <li><strong>Downturn is not applied to goal pathways.</strong> The Safest ranking mode ranks on central-case numbers only — a "safest" plan that has never been stress-tested is safest by construction, not by evidence. The transform exists and is pure; this is a caller-side change and it is the highest-leverage risk item on the list.</li>
+    <li><strong>No correlation modelling.</strong> Voids, arrears, price falls and rate rises are simulated independently. In a real downturn they arrive together. Even a crude correlation matrix would materially improve the downturn case's honesty.</li>
+    <li><strong>No concentration risk on planned purchases.</strong> Concentration warnings cover the held portfolio only; a plan that buys 24 clones in one town raises no flag — the single largest unpriced risk in any generated pathway.</li>
+    <li><strong>No lender-appetite or refinance-availability risk.</strong> BRRR assumes 37 refinances all complete at the assumed valuation. There is no probability that a lender declines, or that a valuation comes in short — the most common real-world failure of that strategy.</li>
+    <li><strong>No personal/covenant risk.</strong> Income loss, s455 exposure on director loans, personal guarantee triggers. The plans assume the investor's own circumstances never change.</li>
+  </ul>
+
+  <h3>5.6 Missing comparisons</h3>
+  <p>Comparison is where an intelligence product proves its worth, and it is currently the thinnest surface in an otherwise deep engine. Five comparisons are missing, in value order:</p>
+  <ol>
+    <li><strong>Versus the market</strong> — "your Stockport house yields 6.2%; the SK postcode median is 7.1%." Requires §6, delivers the single most-requested feature in this category.</li>
+    <li><strong>Versus doing nothing</strong> — every plan should be benchmarked against holding the current portfolio untouched. Some plans will lose to it; the investor deserves to know which.</li>
+    <li><strong>Versus other asset classes</strong> — an honest comparison against a passive index or gilt yield over the same horizon, risk-adjusted. Bloomberg-grade credibility; nobody in UK proptech does it.</li>
+    <li><strong>Versus your own past plan</strong> — plan vs actual drift. The investor set a goal a year ago; are they on track? This is the retention hook hiding inside the goal engine.</li>
+    <li><strong>Versus peer portfolios</strong> — anonymised cohort benchmarking. Only viable at scale, but it becomes a compounding data moat once user count is meaningful.</li>
+  </ol>
+
+  <div class="callout"><h4>Net recommendation for the What-If engine</h4>
+  <p style="margin:0"><strong>£40,000 — the smallest allocation of the five workstreams, deliberately.</strong> Spend it on the deal pipeline abstraction, sell-and-replace with CGT, the refurb model and the jurisdiction fix — then stop. The engine's marginal return per pound is now lower than the data layer's, and will stay lower until the data layer exists. The right posture for the next twelve months is to <em>feed</em> this engine, not extend it.</p></div>
+</div></section>
+
+<section id="market"><div class="wrap">
+  <h2><span class="sec-num">6</span>Market Intelligence Module — Complete Design</h2>
+  <p class="lead">The largest single investment in the plan: £190,000, roughly 38% of budget. This is the layer the product does not have and cannot buy its way around.</p>
+
+  <h3>6.1 Design principles</h3>
+  <ol>
+    <li><strong>Postcode district is the unit of analysis.</strong> Outward-code granularity (<code>SR1</code>, <code>NE6</code>, <code>DH4</code>) is how investors actually think, is small enough to be actionable and large enough to have statistically meaningful sample sizes. Full postcodes are too sparse for rents; local authorities are too coarse to be useful.</li>
+    <li><strong>Every metric is a time series, never a snapshot.</strong> The existing <code>market_data</code> table's fatal design flaw is one row per area with a single <code>price_growth_1yr</code> column. Trend <em>is</em> the product — "which areas are improving" is unanswerable without history. Rebuild as an append-only monthly observation table.</li>
+    <li><strong>Provenance and freshness are first-class.</strong> Every figure carries its source, observation date and sample size, and the UI shows them. An intelligence product that cannot say where a number came from is a rumour engine.</li>
+    <li><strong>Confidence is displayed, not hidden.</strong> A yield computed from 4 rental comps is not the same as one from 400. Show the sample count; suppress or grey metrics below a threshold rather than printing a confident-looking number.</li>
+    <li><strong>Derived signals are versioned.</strong> Scores and forecasts change methodology over time; stamp them (<code>AREA_SCORE_V1</code>) exactly as the downturn transform already is, so historical outputs stay reproducible.</li>
+  </ol>
+
+  <h3>6.2 The metric taxonomy</h3>
+  <table>
+    <thead><tr><th>Domain</th><th>Metrics</th><th>Granularity</th><th>Refresh</th><th>Tier</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Prices</strong></td><td>Median sold price, £/sq ft, price by property type &amp; bed count, transaction volume, asking-vs-sold gap, time to sell</td><td>Postcode district</td><td>Monthly</td><td><span class="pill p-ok">Open</span></td></tr>
+      <tr><td><strong>Rents</strong></td><td>Median achieved rent by bed count &amp; type, rent per room, letting velocity, listing volume</td><td>Postcode district</td><td>Monthly</td><td><span class="pill p-med">Licensed</span></td></tr>
+      <tr><td><strong>Yields</strong></td><td>Gross yield, estimated net yield, yield distribution (not just median), yield vs national spread</td><td>Postcode district</td><td>Monthly</td><td><span class="pill p-info">Derived</span></td></tr>
+      <tr><td><strong>Growth &amp; momentum</strong></td><td>Price growth 1/3/5/10yr, rent growth 1/3/5yr, growth acceleration (2nd derivative), rank change vs prior period</td><td>Postcode district</td><td>Monthly</td><td><span class="pill p-info">Derived</span></td></tr>
+      <tr><td><strong>Supply &amp; demand</strong></td><td>Listings on market, new instructions, price reductions %, stock turnover, demand:supply ratio, months of inventory</td><td>Postcode district</td><td>Weekly</td><td><span class="pill p-med">Licensed</span></td></tr>
+      <tr><td><strong>Vacancy &amp; tenure</strong></td><td>Long-term vacant dwellings, PRS share, tenure mix, HMO licensing density, Article 4 coverage</td><td>Local authority → apportioned</td><td>Annual</td><td><span class="pill p-ok">Open</span></td></tr>
+      <tr><td><strong>Population</strong></td><td>Population, growth rate, age profile, household formation, net internal migration, student share</td><td>LSOA → aggregated</td><td>Annual</td><td><span class="pill p-ok">Open</span></td></tr>
+      <tr><td><strong>Employment &amp; economy</strong></td><td>Employment rate, median gross earnings, claimant count, occupational mix, major-employer presence</td><td>Local authority</td><td>Quarterly</td><td><span class="pill p-ok">Open</span></td></tr>
+      <tr><td><strong>Affordability</strong></td><td>Price-to-earnings ratio, rent-to-earnings, mortgage affordability at prevailing rates</td><td>Local authority</td><td>Quarterly</td><td><span class="pill p-info">Derived</span></td></tr>
+      <tr><td><strong>Schools</strong></td><td>Ofsted ratings within radius, % Good/Outstanding, catchment quality index, school density</td><td>Point → radius</td><td>Termly</td><td><span class="pill p-ok">Open</span></td></tr>
+      <tr><td><strong>Crime</strong></td><td>Crimes per 1,000 by category, 12-month trend, ASB rate, burglary rate (the categories that actually move rent)</td><td>Street → district</td><td>Monthly</td><td><span class="pill p-ok">Open</span></td></tr>
+      <tr><td><strong>Infrastructure</strong></td><td>Committed transport schemes, regeneration zones, major planning consents, new-build pipeline, freeport/investment-zone status</td><td>Point → radius</td><td>Event-driven</td><td><span class="pill p-high">Mixed</span></td></tr>
+      <tr><td><strong>Amenity &amp; connectivity</strong></td><td>Station proximity &amp; journey time to regional centre, broadband speed, retail density, green space</td><td>Point</td><td>Annual</td><td><span class="pill p-ok">Open</span></td></tr>
+      <tr><td><strong>Stock &amp; energy</strong></td><td>EPC rating distribution, dwelling age profile, floor-area distribution, retrofit exposure (sub-C share)</td><td>Address → district</td><td>Quarterly</td><td><span class="pill p-ok">Open</span></td></tr>
+    </tbody>
+    <caption>Tier legend: <span class="pill p-ok">Open</span> free/public source · <span class="pill p-med">Licensed</span> commercial contract required · <span class="pill p-info">Derived</span> computed by us · <span class="pill p-high">Mixed</span> partly open, partly commercial. Sourcing detail in §11.</caption>
+  </table>
+
+  <h3>6.3 Data model</h3>
+  <p>Four new tables, replacing the dead <code>market_data</code> stub. The append-only observation design is the critical choice — it makes every trend, forecast and alert computable from one table without destructive updates.</p>
+  <div class="card">
+    <p style="margin-top:0"><code>areas</code> — the canonical registry. Postcode district, region, local authority, centroid lat/long, population, dwelling count, active flag. One row per district (~2,900 in the UK), effectively static.</p>
+    <p><code>area_observations</code> — <strong>the heart of the module.</strong> Append-only: <code>(area_id, metric_key, period, value, sample_size, source_id, confidence, ingested_at)</code>. Every metric in §6.2 for every area for every period lands here. Unique on <code>(area_id, metric_key, period, source_id)</code> so re-ingestion is idempotent. Indexed on <code>(area_id, metric_key, period)</code> for trend queries.</p>
+    <p><code>area_scores</code> — versioned derived output: <code>(area_id, period, score_version, yield_score, growth_score, momentum_score, risk_score, fundamentals_score, composite, percentile_rank)</code>. Recomputed monthly, never mutated in place.</p>
+    <p style="margin-bottom:0"><code>data_sources</code> — provenance registry: name, licence terms, refresh cadence, last successful ingest, health status, cost. Drives both the UI's "as at" labelling and internal pipeline monitoring.</p>
+  </div>
+  <p>Two notes on fit with the existing codebase. First, this is additive — no existing table changes, so it ships behind a flag without risk to the working product. Second, <strong>SQLite will not survive this.</strong> Roughly 2,900 districts × ~60 metrics × 120 monthly periods is ~20 million observations before any user data. That is a PostgreSQL migration, and it should be sequenced with the multi-tenancy work in §12 so the database is moved once, not twice.</p>
+
+  <h3>6.4 The Area Score</h3>
+  <p>The composite signal that powers ranking, discovery and alerts. Deliberately transparent — a black-box score would fail the same credibility test the risk score passed.</p>
+  <table>
+    <thead><tr><th>Component</th><th class="num">Weight</th><th>Inputs</th><th>Rationale</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Income</strong></td><td class="num">30%</td><td>Gross yield vs national distribution, estimated net yield, yield stability over 3yr</td><td>The primary driver for this user's £5k/month income goal.</td></tr>
+      <tr><td><strong>Growth</strong></td><td class="num">20%</td><td>Price growth 3/5yr, rent growth 3yr, growth acceleration</td><td>Capital return and future rent — weighted below income for an income-goal investor.</td></tr>
+      <tr><td><strong>Momentum</strong></td><td class="num">15%</td><td>Demand:supply ratio, price-reduction rate, time to sell, letting velocity, rank change</td><td>Leading indicators — what the trailing metrics will say in twelve months.</td></tr>
+      <tr><td><strong>Fundamentals</strong></td><td class="num">20%</td><td>Employment, earnings growth, population/household growth, infrastructure commitments</td><td>Whether the trend has a real economic cause or is a statistical artefact.</td></tr>
+      <tr><td><strong>Risk</strong> <em>(negative)</em></td><td class="num">15%</td><td>Vacancy rate, crime trend, affordability stretch, oversupply, tenure concentration, EPC exposure</td><td>Discounts the yield traps — high yield is frequently compensation for risk, and this is the component that says so.</td></tr>
+    </tbody>
+    <caption><strong>Weights are user-adjustable by strategy</strong> (Income / Balanced / Growth / Value), mirroring the goal engine's Fastest / Balanced / Safest ranking modes — the same governance pattern that earned the risk score its credibility. Scores are percentile-ranked nationally, published as 0–100, and always shown with their component breakdown.</caption>
+  </table>
+
+  <div class="callout warn"><h4>The yield-trap problem, and why the risk component is non-negotiable</h4>
+  <p style="margin:0">A naive ranking sorted by gross yield will place the most economically distressed postcodes in Britain at the top of the list every single month, and an investor following it will buy illiquid stock into falling markets with hard-to-manage tenancies. This is the most likely way for this product to lose a user real money and it is a foreseeable, designable-around failure. The risk component, the confidence display, and a standing "high yield, weak fundamentals" flag on any area whose income score is top-decile while fundamentals are bottom-quartile are all mandatory, not enhancements.</p></div>
+
+  <h3>6.5 Module surfaces</h3>
+  <table>
+    <thead><tr><th>Surface</th><th>What it does</th><th>Priority</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Area Explorer</strong></td><td>Search or map-select any district; full metric dashboard with trend charts, national percentile rank, comparable areas, and the score breakdown.</td><td><span class="pill p-crit">P0</span></td></tr>
+      <tr><td><strong>Area Comparison</strong></td><td>Side-by-side of 2–5 areas across every metric, normalised, with the winning value highlighted per row.</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td><strong>National Heatmap</strong></td><td>Choropleth by any metric or by composite score; filter by region, price band, yield floor. The module's shop window.</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td><strong>Movers &amp; Shakers</strong></td><td>Biggest rank changes this period, both directions — directly answers "which areas are improving / becoming less attractive".</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td><strong>Undervaluation screen</strong></td><td>Areas whose price has lagged their own fundamentals — regression residual of price against employment, earnings, rent and momentum. Answers "which areas are underpriced".</td><td><span class="pill p-med">P2</span></td></tr>
+      <tr><td><strong>Forecasts</strong></td><td>12/24-month rent and price projections with explicit confidence intervals and a published back-test record.</td><td><span class="pill p-med">P2</span></td></tr>
+      <tr><td><strong>My Areas</strong></td><td>Market view filtered to the districts the investor already owns in — the bridge to §9.</td><td><span class="pill p-crit">P0</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout good"><h4>Sequencing note — the fastest path to value</h4>
+  <p style="margin:0">Build <strong>My Areas</strong> before the national explorer. The investor owns property in three or four districts; showing them market context for <em>those</em> districts — "your Stockport house yields 6.2%, the SK1 median is 7.1%, rents there rose 4.2% last year" — delivers the module's core value against a fraction of the data coverage, and can ship while national ingestion is still backfilling. It also proves the market↔portfolio join (§4.2) in the smallest possible increment.</p></div>
+</div></section>
+
+<section id="discovery"><div class="wrap">
+  <h2><span class="sec-num">7</span>Opportunity Discovery Engine</h2>
+  <p class="lead">£95,000. This is the module that no competitor can copy without first building both halves of our product — and therefore the one that defines the company.</p>
+
+  <h3>7.1 The question stack</h3>
+  <p>Discovery answers five questions, and the order matters because each is worth more than the last. PropertyData answers the first two well. <strong>Only we can answer the last three</strong>, because only we hold the portfolio, the leverage, the tax position and the goal.</p>
+  <table>
+    <thead><tr><th class="num">#</th><th>Question</th><th>Requires</th><th>Who else can answer it</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td>Which areas have the best yield / growth / fundamentals?</td><td>Market data (§6)</td><td>PropertyData, several others</td></tr>
+      <tr><td class="num">2</td><td>Which areas are improving or deteriorating?</td><td>Market data + trend history</td><td>PropertyData, partially</td></tr>
+      <tr><td class="num">3</td><td>Which areas match <em>my strategy</em>?</td><td>+ strategy profile &amp; constraints</td><td><strong>Nobody</strong></td></tr>
+      <tr><td class="num">4</td><td>Which purchase gets <em>my goal</em> closest, fastest?</td><td>+ goal engine &amp; pathway re-simulation</td><td><strong>Nobody</strong></td></tr>
+      <tr><td class="num">5</td><td>What does it do to <em>my portfolio's</em> risk, concentration and tax?</td><td>+ portfolio state &amp; risk model</td><td><strong>Nobody</strong></td></tr>
+    </tbody>
+  </table>
+
+  <h3>7.2 The pipeline</h3>
+  <div class="card">
+    <p style="margin-top:0"><strong>Stage 1 — Universe.</strong> All ~2,900 postcode districts with sufficient data confidence.</p>
+    <p><strong>Stage 2 — Hard filters.</strong> The investor's non-negotiables: maximum purchase price (derived from available cash and deposit percentage), minimum yield, regions in or out, property types, maximum distance from home or an existing holding, minimum data confidence.</p>
+    <p><strong>Stage 3 — Strategy scoring.</strong> Re-weight the Area Score (§6.4) to the investor's actual strategy. An income investor targeting £5,000/month weights yield and yield-stability; a capital-growth investor weights growth, momentum and fundamentals; a BRRR investor weights the price-to-refurbished-value spread and stock age.</p>
+    <p><strong>Stage 4 — Portfolio-aware adjustment.</strong> Where it becomes ours alone. Penalise districts that worsen geographic concentration; penalise those correlated with existing holdings (same employer base, same tenant demographic); flag Article 4 and licensing regimes that affect the investor's specific property type; adjust for the tax structure they actually use.</p>
+    <p style="margin-bottom:0"><strong>Stage 5 — Goal simulation.</strong> The differentiator. For each of the top ~20 candidate areas, construct a representative deal from that area's real medians (price, rent, expected void, expense ratio), inject it into the goal engine as a candidate, <strong>re-run pathway generation</strong>, and record months-to-goal, resulting risk score and end equity. Rank by goal impact, not by yield.</p>
+  </div>
+  <p>Stage 5 is computationally the expensive part and it is already solved: <code>buildProjection()</code> is pure and fast, and the nearest-feasible-fix machinery already re-simulates candidate variations rather than extrapolating them. This is the same pattern applied to areas instead of parameters — genuinely a caller-side extension of code that exists and is tested.</p>
+
+  <h3>7.3 Output — Top Opportunities</h3>
+  <p>The headline surface. Illustrative of format only; real values come from the ingested data.</p>
+  <table>
+    <thead><tr><th class="num">#</th><th>Area</th><th class="num">Yield</th><th class="num">Rent 1yr</th><th class="num">Price 1yr</th><th class="num">Score</th><th>Goal impact <small>(vs your current plan)</small></th><th>Watch</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td><strong>Sunderland</strong> <small>SR1</small></td><td class="num">9.1%</td><td class="num">+12%</td><td class="num">+8%</td><td class="num"><span class="pill p-ok">88</span></td><td><strong>−14 months</strong> to £5k goal · risk +6 · concentration <span class="pill p-low">improves</span></td><td><span class="pill p-med">Yield &gt; fundamentals</span></td></tr>
+      <tr><td class="num">2</td><td><strong>Middlesbrough</strong> <small>TS1</small></td><td class="num">8.7%</td><td class="num">+9%</td><td class="num">+4%</td><td class="num"><span class="pill p-ok">84</span></td><td><strong>−11 months</strong> · risk +8 · concentration <span class="pill p-low">improves</span></td><td><span class="pill p-med">Vacancy above median</span></td></tr>
+      <tr><td class="num">3</td><td><strong>Newcastle</strong> <small>NE6</small></td><td class="num">6.2%</td><td class="num">+6%</td><td class="num">+11%</td><td class="num"><span class="pill p-ok">81</span></td><td><strong>−4 months</strong> · risk <strong>−3</strong> · strongest fundamentals in the top 10</td><td><span class="pill p-low">—</span></td></tr>
+      <tr><td class="num">4</td><td><strong>Houghton-le-Spring</strong> <small>DH4</small></td><td class="num">7.8%</td><td class="num">+7%</td><td class="num">+6%</td><td class="num"><span class="pill p-ok">78</span></td><td><strong>−9 months</strong> · risk +2 · balanced income/growth</td><td><span class="pill p-low">—</span></td></tr>
+      <tr><td class="num">5</td><td><strong>Stockport</strong> <small>SK1</small></td><td class="num">7.1%</td><td class="num">+5%</td><td class="num">+7%</td><td class="num"><span class="pill p-med">72</span></td><td><strong>−6 months</strong> · risk +4 · <span class="pill p-med">concentration worsens</span> — you already own here</td><td><span class="pill p-med">Concentration</span></td></tr>
+    </tbody>
+    <caption><strong>Illustrative format, not research output.</strong> Note the third column group: no competitor can produce a "goal impact" column, because it requires simulating the purchase through the user's own portfolio, leverage, tax structure and goal. Note also row 1 carrying a yield-trap warning and row 5 a concentration warning — the product is expected to argue with its own ranking.</caption>
+  </table>
+
+  <h3>7.4 Property-level discovery</h3>
+  <p>Area discovery answers "where". Property discovery answers "which one", and it is a materially harder data problem because it requires live listings — which is exactly where Rightmove and Zoopla's terms of use bind hardest (§11.4). Phasing accordingly:</p>
+  <table>
+    <thead><tr><th>Phase</th><th>Approach</th><th>Data dependency</th><th>Timing</th></tr></thead>
+    <tbody>
+      <tr><td><strong>A — Manual, scored</strong></td><td>Investor enters or pastes a deal; we score it against area medians, model it through the goal engine, and return a full verdict with comparables. Extends the existing acquisitions pipeline rather than replacing it.</td><td>Market data only</td><td>Months 4–6</td></tr>
+      <tr><td><strong>B — Portfolio-aware deal analyser</strong></td><td>Adds the full stage-4/5 treatment to a specific address: concentration, tax, goal impact, ranked against the area's typical deal and against the investor's other live opportunities.</td><td>Market data + goal engine</td><td>Months 6–9</td></tr>
+      <tr><td><strong>C — Live listing feed</strong></td><td>Automated sourcing with a below-market-value screen against our own AVM. Commercially gated: requires a licensed listings feed or partner agreement. <strong>Do not build on scraped portal data</strong> — it is a terms-of-use breach and an existential dependency.</td><td>Licensed listings</td><td>Months 9–12, contract permitting</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout"><h4>Why phase A is not a compromise</h4>
+  <p style="margin:0">Our user makes two to four purchases a year and already finds candidate properties on Rightmove — that is not a problem worth solving. What they cannot do is <em>evaluate</em> what they find with any rigour. Phase A meets the investor exactly at their real workflow (they have a listing open in another tab), requires no listings licence, and delivers most of the value of phase C. Phase C is a convenience upgrade, not the product. Budgeting on that basis removes the plan's largest commercial dependency from its critical path.</p></div>
+</div></section>
+
+<section id="areas"><div class="wrap">
+  <h2><span class="sec-num">8</span>Area Tracking, Watchlists &amp; Alerts</h2>
+  <p class="lead">The cheapest module in the plan and the most important for retention. Analytics justify the subscription price; <strong>this</strong> is what makes the investor log in on a Tuesday.</p>
+
+  <h3>8.1 Why this matters disproportionately</h3>
+  <p>Our user makes two to four purchase decisions a year. A product used four times a year does not sustain a monthly subscription — the investor cancels in month three and returns when they next need it, if they remember it exists. Watchlists and alerts convert an episodic decision tool into a weekly habit, and they do so at a fraction of the cost of any other module here. Every subscription analytics business — Bloomberg, Morningstar, PropertyData alike — is built on this asymmetry.</p>
+
+  <h3>8.2 Saved areas &amp; watchlists</h3>
+  <div class="card">
+    <p style="margin-top:0"><strong>Watchlist</strong> — named collections of districts (<code>DH4</code>, <code>NE6</code>, <code>SR1</code>, <code>TS1</code>), each row showing current yield, rent and price growth, score, rank change since last view, and any triggered alerts. Multiple lists per user: "North East targets", "Where I own", "Long shots".</p>
+    <p><strong>Auto-lists</strong> — system-maintained and always present: <em>Where I Own</em> (derived from the portfolio, zero effort to populate) and <em>Recently Viewed</em>. These matter because an empty watchlist on day one is a dead feature; the investor's own portfolio seeds it immediately.</p>
+    <p style="margin-bottom:0"><strong>Notes &amp; verdicts</strong> — per-area private notes and a personal rating. Small feature, disproportionate stickiness: accumulated notes are switching costs, and they are the beginning of the proprietary data set described in §11.5.</p>
+  </div>
+
+  <h3>8.3 Alerts</h3>
+  <table>
+    <thead><tr><th>Alert type</th><th>Trigger</th><th>Why an investor cares</th><th>Priority</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Threshold</strong></td><td>Rent growth &gt;5% · price growth &gt;10% · yield &gt;8% · score crosses 80</td><td>The explicit brief. Simple, predictable, user-defined.</td><td><span class="pill p-crit">P0</span></td></tr>
+      <tr><td><strong>Trend reversal</strong></td><td>A metric changes direction after 3+ consecutive periods</td><td>Higher signal than thresholds — catches turning points rather than states, and turning points are where money is made and lost.</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td><strong>Rank movement</strong></td><td>Area moves ±20 percentile places nationally</td><td>Relative movement surfaces areas the investor was not already watching.</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td><strong>Infrastructure</strong></td><td>New committed scheme, regeneration designation or major consent within radius</td><td>The highest-value alert in the product — genuine early-mover information, and the one investors will talk about.</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td><strong>Opportunity</strong></td><td>A new area enters the investor's personal top 10 (§7)</td><td>Portfolio-aware and personalised — impossible for a competitor to send.</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td><strong>Portfolio</strong></td><td>An owned property's area yield drifts &gt;15% from the investor's actual achieved yield</td><td>"Your Leeds flat is now 1.4% below its market" — a rent-review prompt worth real money each year.</td><td><span class="pill p-crit">P0</span></td></tr>
+      <tr><td><strong>Refinance</strong></td><td>LTV band crossed, fixed-rate expiry approaching, better product available</td><td>Directly actionable, directly monetisable (§9.4), and time-critical in a way market alerts are not.</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td><strong>Risk</strong></td><td>Vacancy, crime or affordability deteriorating in an owned area</td><td>Defensive intelligence — the reason to keep paying when not buying.</td><td><span class="pill p-med">P2</span></td></tr>
+    </tbody>
+  </table>
+  <p><strong>Delivery:</strong> in-app notification centre (P0), weekly email digest (P0), immediate email for high-severity only (P1). The weekly digest is the single highest-ROI retention artefact in this plan — one templated email containing watchlist movements, triggered alerts, portfolio drift and the current top three opportunities. It is roughly two engineer-weeks and it is what keeps the product alive between decisions.</p>
+
+  <div class="callout warn"><h4>Alert fatigue is the failure mode</h4>
+  <p style="margin:0">A product that emails an investor daily about statistical noise gets filtered within a fortnight and never recovers. Three design rules, from the outset: <strong>(1)</strong> default to weekly batching, not real-time; <strong>(2)</strong> suppress triggers that fall inside the metric's own confidence interval — if the yield moved 0.3% and the standard error is 0.5%, that is not an event; <strong>(3)</strong> cap volume per user per week and rank by materiality, sending the top N rather than all. Retention is measured on the digest's open rate, and open rate dies of over-sending long before it dies of under-sending.</p></div>
+
+  <h3>8.4 Heatmaps &amp; forecasts</h3>
+  <ul>
+    <li><strong>Heatmap</strong> — national choropleth, switchable metric, with the investor's holdings and watchlist pinned on top. Zoom from region to district. This is the product's most screenshot-able surface and therefore its cheapest marketing asset; budget design time accordingly.</li>
+    <li><strong>Rent &amp; price forecasts</strong> — 12 and 24-month projections per area, always with confidence intervals, always with a visible back-test record. A forecast without a published accuracy history is marketing, not intelligence, and this product's entire credibility position depends on not crossing that line.</li>
+    <li><strong>Forecast methodology</strong> — start deliberately simple (trend + seasonality + fundamentals regression, published as <code>FORECAST_V1</code>). Resist ML until there is a back-test proving it beats the simple model. The versioning discipline already applied to the downturn transform applies here unchanged.</li>
+  </ul>
+</div></section>
+
+<section id="portfolio"><div class="wrap">
+  <h2><span class="sec-num">9</span>Portfolio Intelligence Improvements</h2>
+  <p class="lead">£58,000. What the market data layer does for the properties the investor <em>already owns</em> — the half of the value that lands without them buying anything.</p>
+
+  <h3>9.1 Goal Engine</h3>
+  <table>
+    <thead><tr><th>Improvement</th><th>Description</th><th>Value</th><th>Priority</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Market-sourced candidate deals</strong></td><td>Replace the hand-typed deal with real area medians; let the investor pick target areas and have the engine generate plans against genuine local economics.</td><td>Transforms every output from hypothetical to actionable. The highest-value change to the goal engine, and it is a data change, not a modelling one.</td><td><span class="pill p-crit">P0</span></td></tr>
+      <tr><td><strong>Geographic pathways</strong></td><td>Plans that state <em>where</em> to buy and when, not merely how many. Requires the deal pipeline abstraction (§5.2).</td><td>The plan becomes a shopping list rather than a count.</td><td><span class="pill p-crit">P0</span></td></tr>
+      <tr><td><strong>Downturn on every pathway</strong></td><td>Apply the existing versioned transform per generated pathway; show ending cashflow under stress beside each card.</td><td>Makes "Safest" mean safest-under-stress. Pure caller-side; the machinery exists.</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td><strong>Plan vs actual tracking</strong></td><td>Freeze an accepted plan as a baseline; track real portfolio performance against it monthly, with drift attribution.</td><td>Converts the goal engine from a one-off calculator into a recurring reason to return. Strong retention mechanic hiding in plain sight.</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td><strong>Multi-goal &amp; sequencing</strong></td><td>Goals that coexist and compete (income <em>and</em> mortgage-free by 60), with explicit trade-off surfacing.</td><td>Matches how investors actually think; today each goal is modelled in isolation.</td><td><span class="pill p-med">P2</span></td></tr>
+      <tr><td><strong>Life-event constraints</strong></td><td>School fees in 2031, retirement at 62, a known capital call — as scheduled cash requirements the plan must survive.</td><td>Wealth-management-grade planning, and a natural bridge to an adviser-facing tier.</td><td><span class="pill p-med">P2</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>9.2 Portfolio Health &amp; Valuation</h3>
+  <div class="callout good"><h4>Market-linked revaluation — the highest value-per-pound item in the entire plan</h4>
+  <p style="margin:0">Portfolio equity is the platform's headline number, and it is currently driven by manually-entered valuations that decay from the day they are typed. Once area price indices exist, every property can be indexed monthly from its last known valuation or purchase price, giving a continuously current, defensible equity figure with a stated confidence band and provenance. <strong>It is roughly three engineer-weeks on top of data the module already ingests, it improves the accuracy of every downstream metric at once — LTV, ROCE, equity multiple, risk scoring, refinance detection — and it visibly changes the dashboard on day one for a user who has bought nothing.</strong> If only one thing from §9 ships, it is this.</p></div>
+  <ul>
+    <li><strong>Benchmarked scorecard</strong> — every health metric expressed against its market, not in isolation. "Your 6.2% yield ranks in the 38th percentile for SK1" is a fundamentally different statement from "your yield is 6.2%", and it is the difference between a dashboard and an intelligence product.</li>
+    <li><strong>Portfolio-level market exposure</strong> — which area factors the portfolio is actually levered to (one employer, one tenant demographic, one transport corridor). The concentration service exists but reasons about towns and types, not economic drivers.</li>
+    <li><strong>Equity release capacity</strong> — continuously computed headroom to the investor's LTV mandate across the whole portfolio, using live indexed valuations. Answers "what could I raise if I wanted to?" without running a scenario.</li>
+  </ul>
+
+  <h3>9.3 Underperformance detection</h3>
+  <p>A ranked, explained list of the portfolio's weakest assets — and the product's most emotionally compelling surface, because it finds money the investor is already losing.</p>
+  <table>
+    <thead><tr><th>Signal</th><th>Detection</th><th>Recommended action</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Rent below market</strong></td><td>Achieved rent vs area median for type and bed count, adjusted for condition</td><td>Rent review at renewal — typically the fastest cash win available, and quantifiable to the pound</td></tr>
+      <tr><td><strong>Yield below area</strong></td><td>Property net yield vs area distribution</td><td>Investigate cost base, or flag as a disposal candidate</td></tr>
+      <tr><td><strong>Capital drag</strong></td><td>Property price growth trailing its own area index over 3 years</td><td>Condition, EPC or structural issue — or the wrong micro-location within a good district</td></tr>
+      <tr><td><strong>Cost outlier</strong></td><td>Maintenance or management cost per £ of rent vs portfolio and market norms</td><td>Renegotiate management, or investigate an underlying building problem</td></tr>
+      <tr><td><strong>Void pattern</strong></td><td>Void frequency above the area's letting-velocity norm</td><td>Pricing, presentation or a demand problem the area data can distinguish between</td></tr>
+      <tr><td><strong>Trapped equity</strong></td><td>LTV well below mandate, with the released capital's modelled return exceeding its cost</td><td>Refinance and redeploy — quantified through the goal engine (§9.4)</td></tr>
+      <tr><td><strong>Sell candidate</strong></td><td>Composite: weak yield, weak growth, deteriorating area fundamentals, high forward capex exposure</td><td>Model a sell-and-replace against a §7 opportunity — the flagship use of the new event type</td></tr>
+    </tbody>
+  </table>
+
+  <h3>9.4 Refinance radar</h3>
+  <p>A standing monitor across every mortgage in the portfolio: fixed-rate expiry countdown, current LTV band versus product thresholds using <em>indexed</em> valuations, and modelled benefit of remortgaging now against ERC and fees. Where the modelled benefit is positive, the engine states it in pounds per month and shows the payback period.</p>
+  <p>Two reasons this earns its place well above its complexity. First, it is <strong>unambiguously actionable</strong> — unlike most analytics, it produces a decision with a deadline, and deadlines drive logins. Second, it is <strong>the clearest commercial adjacency in the product</strong>: broker referral is a natural, disclosed, non-conflicted revenue line (§12.3), and it is the one place where the platform can earn without charging the investor more.</p>
+
+  <h3>9.5 Recommendation engine</h3>
+  <p>The unifying surface — a single prioritised "what should I do next" list spanning every module, each item stating its modelled impact and its evidence.</p>
+  <div class="card">
+    <p style="margin-top:0"><strong>Illustrative output:</strong></p>
+    <ol style="margin-bottom:0">
+      <li><strong>Review the rent on 14 Mill Lane</strong> — £795 vs an SK1 median of £890 for a comparable 3-bed. <em>+£1,140/year; goal 3 months closer.</em> <span class="pill p-ok">Act at renewal, Nov</span></li>
+      <li><strong>Refinance the Leeds flat</strong> — indexed LTV now 58%, crossing into a better product band; fix expires in 4 months. <em>−£84/month after fees; 9-month payback.</em> <span class="pill p-med">Start now</span></li>
+      <li><strong>Consider SR1 for your next purchase</strong> — enters your top 3 this month; 9.1% yield brings your £5k goal 14 months closer and improves geographic concentration. <em>Carries a yield-vs-fundamentals caution.</em> <span class="pill p-info">Research</span></li>
+      <li><strong>Your Sheffield HMO is your weakest asset</strong> — yield in the area's 22nd percentile, £4.2k forward EPC exposure, area fundamentals softening two periods running. <em>Model a sell-and-replace.</em> <span class="pill p-med">Review</span></li>
+    </ol>
+  </div>
+  <p>Every item follows the same contract: <strong>a specific action, a modelled monetary impact, its effect on the stated goal, the evidence behind it, and a timing signal.</strong> That contract is what separates a recommendation engine from a tips widget, and it is enforceable in code — no recommendation renders without all five fields populated.</p>
+</div></section>
+
+<section id="ai"><div class="wrap">
+  <h2><span class="sec-num">10</span>AI Features</h2>
+  <p class="lead">Assessed sceptically, because this category attracts more budget than it returns. My position: AI is a <em>presentation and pattern layer</em> over a rigorous engine — never a replacement for it, and never the thing we sell.</p>
+
+  <div class="callout warn"><h4>The governing principle</h4>
+  <p style="margin:0">This product's competitive advantage is that its numbers are <strong>defensible</strong> — every figure traceable to a tested calculation with stated assumptions. A language model that generates plausible-sounding property advice destroys that advantage in a single hallucinated recommendation, and in a domain where users act with six-figure sums. <strong>Rule: the LLM may explain, summarise, translate and route. It may never compute a number that reaches the user, and it may never originate a recommendation.</strong> Every figure in AI-generated text is interpolated from an engine output, and the underlying calculation stays one click away.</p></div>
+
+  <h3>10.1 Assessment</h3>
+  <table>
+    <thead><tr><th>Feature</th><th>Approach</th><th>Investor value</th><th>Risk</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Best next property recommendation</strong></td><td><strong>Not AI.</strong> This is §7's deterministic pipeline — filter, score, re-simulate, rank. An LLM would make it less accurate and less explainable.</td><td>Very high</td><td><span class="pill p-low">Low</span></td><td><span class="pill p-ok">Build — as analytics</span></td></tr>
+      <tr><td><strong>Predict portfolio value in 10 years</strong></td><td><strong>Already built.</strong> The Monte-Carlo band is a better answer than any generative model: it gives a distribution with stated confidence rather than a false-precision point estimate. Needs surfacing (§5.4), not inventing.</td><td>High</td><td><span class="pill p-low">Low</span></td><td><span class="pill p-ok">Surface existing</span></td></tr>
+      <tr><td><strong>Detect underperforming properties</strong></td><td>Statistical, not generative — §9.3's benchmark comparisons. LLM used only to phrase the finding.</td><td>Very high</td><td><span class="pill p-low">Low</span></td><td><span class="pill p-ok">Build — as analytics</span></td></tr>
+      <tr><td><strong>Suggest refinancing opportunities</strong></td><td>Deterministic rules over indexed LTV, expiry dates and product bands (§9.4).</td><td>High</td><td><span class="pill p-low">Low</span></td><td><span class="pill p-ok">Build — as analytics</span></td></tr>
+      <tr><td><strong>Identify areas likely to outperform</strong></td><td>Regression / gradient-boosted model over the §6 metric set, back-tested and published. <em>Genuine</em> ML, and the only place it clearly earns its keep — but only once several years of history are ingested.</td><td>Very high</td><td><span class="pill p-med">Medium</span></td><td><span class="pill p-med">Build in year 2</span></td></tr>
+      <tr><td><strong>Optimal capital allocation</strong></td><td>Constrained optimisation over the goal engine — mathematically an allocation problem, not a language one. Depends on the deal pipeline abstraction.</td><td>Very high</td><td><span class="pill p-med">Medium</span></td><td><span class="pill p-med">Build after §5.2</span></td></tr>
+      <tr><td><strong>Natural-language portfolio Q&amp;A</strong></td><td>LLM translating questions into engine queries and narrating the results. "What if rates hit 8%?" → parameterises and runs a scenario → explains the output.</td><td>High <small>(discoverability)</small></td><td><span class="pill p-med">Medium</span></td><td><span class="pill p-ok">Build — thin layer</span></td></tr>
+      <tr><td><strong>Narrative plan explanation</strong></td><td>Turn a pathway's numbers into plain English. The <code>insights.ts</code> service already does a template-based version; an LLM makes it fluent.</td><td>Medium</td><td><span class="pill p-low">Low</span></td><td><span class="pill p-ok">Build — thin layer</span></td></tr>
+      <tr><td><strong>Document intelligence</strong></td><td>Extract terms from uploaded mortgage offers, tenancy agreements, EPCs; pre-fill records. Genuinely well-suited to an LLM and removes real onboarding friction.</td><td>Medium-high</td><td><span class="pill p-low">Low</span></td><td><span class="pill p-ok">Build — high ROI</span></td></tr>
+      <tr><td><strong>AI market commentary</strong></td><td>Generated narrative about area trends.</td><td>Low</td><td><span class="pill p-crit">High</span></td><td><span class="pill p-crit">Decline</span> — indistinguishable from content marketing, and the most likely source of a damaging hallucination</td></tr>
+      <tr><td><strong>Autonomous deal agent</strong></td><td>An agent that sources and evaluates deals unsupervised.</td><td>Speculative</td><td><span class="pill p-crit">High</span></td><td><span class="pill p-crit">Decline</span> — regulatory exposure and a trust catastrophe if wrong</td></tr>
+    </tbody>
+  </table>
+
+  <h3>10.2 What we actually fund</h3>
+  <p>Note that seven of the eleven rows above are <strong>not AI at all</strong> — they are deterministic analytics that the brief framed as AI features, and they are stronger for being built that way. The genuine AI allocation is deliberately modest: roughly £25,000 within the workstreams above, covering document extraction (highest ROI), narrative explanation, and a thin natural-language query layer over the existing engine.</p>
+  <p>The one item worth flagging as a real year-two opportunity is <strong>area outperformance prediction</strong>. It requires a multi-year ingested history before it can be honestly back-tested, which is itself an argument for starting ingestion in month one: <strong>the data layer is not just this year's product, it is the raw material for next year's models, and every month of delay costs a month of training history that cannot be bought back later.</strong></p>
+</div></section>
+
+<section id="data"><div class="wrap">
+  <h2><span class="sec-num">11</span>Data Strategy &amp; Sourcing</h2>
+  <p class="lead">The section most product plans in this category omit, and the one that determines whether the other fifteen are deliverable. Data is simultaneously the biggest cost, the longest lead time, the main legal exposure and the only durable moat.</p>
+
+  <h3>11.1 Source tiers</h3>
+  <table>
+    <thead><tr><th>Source</th><th>Provides</th><th>Cost</th><th>Lead time</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td colspan="5" style="background:var(--surface-3)"><strong>Tier 1 — Open / public.</strong> The backbone. Free, authoritative, and covering most of §6.2 outside rents and live supply.</td></tr>
+      <tr><td>HM Land Registry Price Paid</td><td>Address-level sold prices, monthly, full history</td><td>Free</td><td>Days</td><td>Open Government Licence. The single most important source in the plan — the price backbone.</td></tr>
+      <tr><td>UK House Price Index</td><td>Standardised price indices by area and property type</td><td>Free</td><td>Days</td><td>The correct basis for indexed revaluation (§9.2).</td></tr>
+      <tr><td>ONS — population, households, migration</td><td>Demographics, projections, household formation</td><td>Free</td><td>Days</td><td>Small-area statistics down to LSOA.</td></tr>
+      <tr><td>ONS / NOMIS — labour market</td><td>Employment, earnings, claimant count, industry mix</td><td>Free</td><td>Days</td><td>The fundamentals component of the Area Score.</td></tr>
+      <tr><td>ONS private rents statistics</td><td>Official rental price indices</td><td>Free</td><td>Days</td><td><strong>Regional/local-authority granularity only</strong> — good for trend calibration, insufficient alone for district-level yields.</td></tr>
+      <tr><td>EPC register (Open Data Communities)</td><td>Ratings, floor area, age, type, tenure — address-level</td><td>Free</td><td>Days</td><td>Quietly one of the richest sources available: enables £/sq ft, retrofit exposure and property-attribute normalisation.</td></tr>
+      <tr><td>Police.uk</td><td>Street-level crime by category, monthly</td><td>Free</td><td>Days</td><td>Open API. Aggregate to district and normalise per 1,000 population.</td></tr>
+      <tr><td>Ofsted</td><td>School ratings and inspection history</td><td>Free</td><td>Days</td><td>Geocode and compute radius-based catchment quality.</td></tr>
+      <tr><td>ONS Postcode Directory / OS Open data</td><td>Postcode↔area lookups, boundaries, centroids</td><td>Free</td><td>Days</td><td>The geographic spine every other source joins on. Build this first.</td></tr>
+      <tr><td colspan="5" style="background:var(--surface-3)"><strong>Tier 2 — Licensed.</strong> Where the money and the negotiation goes. These fill the gaps Tier 1 structurally cannot.</td></tr>
+      <tr><td><strong>Rental comparables</strong></td><td>Achieved/asking rents at district granularity by bed count and type</td><td><strong>£25k–£60k/yr</strong></td><td><strong>2–4 months</strong></td><td><strong>The critical dependency of the entire plan.</strong> No free source exists at the granularity investors expect. Options: a data provider (PropertyData-style API, PaTMa), a portal partnership, or an agency/licensing arrangement. Must be commercially secured in month 1.</td></tr>
+      <tr><td>Listings &amp; supply/demand</td><td>Live stock, new instructions, reductions, time on market</td><td>£15k–£40k/yr</td><td>2–4 months</td><td>Powers momentum metrics and phase-C discovery (§7.4). Deferrable — which is why phase C sits off the critical path.</td></tr>
+      <tr><td>Planning &amp; infrastructure</td><td>Applications, consents, major schemes</td><td>£10k–£30k/yr</td><td>1–3 months</td><td>No single national feed; per-authority or commercial aggregator. Start with major committed schemes, which are publishable and few.</td></tr>
+      <tr><td colspan="5" style="background:var(--surface-3)"><strong>Tier 3 — Proprietary.</strong> Costs engineering rather than licensing, and is the only part competitors cannot also buy.</td></tr>
+      <tr><td>Derived metrics &amp; Area Score</td><td>Yields, momentum, undervaluation residuals, composite scores</td><td>Engineering</td><td>—</td><td>Our methodology, versioned and back-tested.</td></tr>
+      <tr><td>Internal AVM</td><td>Property-level valuation from Price Paid + EPC attributes + indices</td><td>Engineering</td><td>—</td><td>Removes dependence on third-party valuation and powers below-market-value screening.</td></tr>
+      <tr><td>Behavioural &amp; outcome data</td><td>What users watch, model, buy — and how those purchases actually perform</td><td>Engineering</td><td>—</td><td><strong>The long-term moat (§11.5).</strong> Compounds with every user and cannot be bought at any price.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>11.2 Pipeline architecture</h3>
+  <p>Six stages, each independently monitored: <strong>ingest</strong> (per-source adapters on schedule) → <strong>normalise</strong> (to the common observation shape) → <strong>geocode &amp; join</strong> (everything onto the postcode spine) → <strong>aggregate</strong> (to district, with sample counts) → <strong>derive</strong> (yields, trends, scores, forecasts) → <strong>publish</strong> (versioned, timestamped, exposed to the app).</p>
+  <p>Non-negotiables, learned from the schema audit that found a dead table: <strong>idempotent re-ingestion</strong> (same input, same output, safe to replay); <strong>immutable observations</strong> (corrections are new rows with later <code>ingested_at</code>, never overwrites); <strong>a source health dashboard</strong> visible to the team from week one; and <strong>automated freshness alerts</strong> — a silently stale feed is worse than a missing one, because the UI keeps presenting it with confidence.</p>
+
+  <h3>11.3 Coverage &amp; quality</h3>
+  <p>Coverage will be uneven and the product must say so rather than paper over it. Rural districts will have thin rental samples; some metrics will lag by a quarter. Three rules: <strong>publish sample size alongside every metric</strong>; <strong>suppress rather than estimate</strong> below a confidence floor (an honest "insufficient data" outperforms a confident wrong number, and is far cheaper to recover from); and <strong>reconcile derived figures against official indices quarterly</strong>, publishing the variance internally as a data-quality KPI.</p>
+
+  <h3>11.4 Legal &amp; licensing</h3>
+  <div class="callout crit"><h4>Do not build on scraped portal data</h4>
+  <p style="margin:0">Scraping Rightmove or Zoopla listings breaches their terms of use and creates an existential single point of failure: the product dies the day a block or a letter arrives, and it is unsellable and un-fundable in due diligence with that dependency in it. Every rental and listing input must be either open-licensed or contractually licensed. <strong>This is why £25k–£60k/year of rental-comp licensing appears in the budget rather than a fortnight of scraper engineering</strong> — it is the difference between an asset and a liability, and the cheaper path is the one that ends the company.</p></div>
+  <p>Also required: attribution compliance for Open Government Licence sources; UK GDPR review before any personal or address-level data is retained (EPC and Price Paid both warrant a documented lawful-basis assessment); and a standing policy that redistribution terms are checked before any licensed figure is exposed through an export or API.</p>
+
+  <h3>11.5 The compounding moat</h3>
+  <p>Every source in Tier 1 is available to any competitor for free, and Tier 2 to anyone with a chequebook. Neither is a moat — they are the entry fee. Three things compound and cannot be bought:</p>
+  <ol>
+    <li><strong>Time series depth.</strong> Ingestion started today produces a five-year history in five years. A competitor starting in year three is permanently three years behind on every back-test and every model. This is the single strongest argument for beginning ingestion in month one even before the UI exists.</li>
+    <li><strong>Methodology, validated in public.</strong> A published, back-tested Area Score and forecast accuracy record becomes a reference point competitors are measured against — the Morningstar-rating position.</li>
+    <li><strong>Outcome data.</strong> Uniquely, we observe what users modelled, what they bought, and how it actually performed. That closed loop — prediction against realised outcome — is the foundation of a genuinely superior recommendation model and is structurally unavailable to any pure data vendor or any pure portfolio tracker. It is the reason to be both.</li>
+  </ol>
+</div></section>
+
+<section id="commercial"><div class="wrap">
+  <h2><span class="sec-num">12</span>Commercial Viability</h2>
+  <p class="lead">£85,000 on work no user will ever compliment. It is on the roadmap because without it every other pound in this plan returns zero revenue.</p>
+
+  <div class="callout crit"><h4>The gate</h4>
+  <p style="margin:0">The platform is a single-user application: SQLite on a local filesystem, no users table among the 21, no authentication, no tenancy boundary, no billing, no hosted deployment. <strong>It cannot today accept a second user, let alone a paying one.</strong> Every feature in §5–§10 is commercially inert until this changes. This work is invisible, unrewarding, and will be deferred indefinitely unless it is explicitly funded and scheduled — so it is scheduled early, in the 90-day window, alongside the PostgreSQL migration the market data layer forces anyway (§6.3). <strong>Moving the database once rather than twice is worth roughly £15,000 of rework and is the main reason these two workstreams are sequenced together.</strong></p></div>
+
+  <h3>12.1 The foundation</h3>
+  <table>
+    <thead><tr><th>Component</th><th>Scope</th><th class="num">Effort</th></tr></thead>
+    <tbody>
+      <tr><td>PostgreSQL migration</td><td>Schema port, query-helper layer swap, migration tooling, data volume testing at 20M+ observations</td><td class="num">4 weeks</td></tr>
+      <tr><td>Multi-tenancy</td><td>Users, organisations, per-row tenancy isolation across all 21 existing tables, tested at the query layer</td><td class="num">5 weeks</td></tr>
+      <tr><td>Authentication &amp; accounts</td><td>Sign-up, login, password reset, sessions, MFA, roles (owner / viewer / adviser)</td><td class="num">3 weeks</td></tr>
+      <tr><td>Hosted deployment</td><td>Cloud infrastructure, CI/CD, backups, monitoring, error tracking, status visibility</td><td class="num">3 weeks</td></tr>
+      <tr><td>Billing &amp; subscriptions</td><td>Payment provider integration, plan tiers, trials, upgrade/downgrade, dunning, invoicing</td><td class="num">3 weeks</td></tr>
+      <tr><td>Onboarding</td><td>Guided portfolio setup, sensible defaults, demo data, first-run experience to the first insight</td><td class="num">3 weeks</td></tr>
+    </tbody>
+    <caption>~21 engineer-weeks. Sequenced across the 30–180 day windows so it never fully blocks feature delivery, but the tenancy and database work must precede any external user.</caption>
+  </table>
+
+  <h3>12.2 Pricing</h3>
+  <p>Anchored against PropertyData (roughly £30–£60/month for market data alone) and the value of the decisions involved. An investor deploying £50,000 of capital on a ten-year hold does not optimise a £40 monthly bill — they optimise confidence. Price accordingly, and resist the instinct to undercut.</p>
+  <table>
+    <thead><tr><th>Tier</th><th class="num">Price</th><th>Includes</th><th>Target</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Free</strong></td><td class="num">£0</td><td>Portfolio tracking, basic dashboard, 1 area watched, 1 goal</td><td>Acquisition and habit formation. The portfolio data they enter is the switching cost.</td></tr>
+      <tr><td><strong>Investor</strong></td><td class="num">£39/mo</td><td>Full market intelligence, unlimited watchlists and alerts, scenario &amp; goal engines, opportunity discovery</td><td><strong>The core tier — our named user lives here.</strong></td></tr>
+      <tr><td><strong>Portfolio</strong></td><td class="num">£89/mo</td><td>+ unlimited properties, forecasts, plan-vs-actual, refinance radar, API access, priority data refresh</td><td>Investors with 10+ properties, semi-professional</td></tr>
+      <tr><td><strong>Adviser</strong></td><td class="num">£249/mo</td><td>+ multi-client management, white-labelled client reports, adviser-facing planning tools</td><td>Brokers, buying agents, wealth managers — the highest-value and least-served segment</td></tr>
+    </tbody>
+  </table>
+  <p>The <strong>Adviser tier deserves particular attention</strong>: a broker managing thirty investor clients is worth thirty times a single investor at four times the price, is far cheaper to acquire, and churns less. The existing printable scenario briefs and PDF export are already most of the way to a white-labelled client report — an underrated asset that this pricing structure monetises without new modelling work.</p>
+
+  <h3>12.3 Revenue lines beyond subscription</h3>
+  <ul>
+    <li><strong>Broker referral</strong> — the refinance radar (§9.4) identifies a qualified, timed, high-intent lead as a by-product of doing its job. Properly disclosed and never allowed to influence ranking, this is a clean and material revenue line.</li>
+    <li><strong>Data / API licensing</strong> — once the Area Score has a published track record, accountants, brokers and smaller proptech tools become buyers of the derived layer.</li>
+    <li><strong>White-labelled reports</strong> — per-report or bundled, sold through the Adviser tier.</li>
+    <li><strong>Explicitly declined:</strong> deal-sourcing commissions and lead-sale to agents. Both compromise the independence that makes the recommendations trustworthy, and trustworthiness is the product.</li>
+  </ul>
+
+  <h3>12.4 Unit economics sketch</h3>
+  <p>At £39/month, the £190,000 data layer needs roughly <strong>410 paying Investor-tier subscribers</strong> to cover its annual cost — before engineering. That is the number the whole plan turns on, and it has two implications worth stating plainly. First, <strong>data cost is largely fixed while revenue is linear</strong>: the same ingestion serves 400 users or 40,000, so the model is unattractive below roughly 500 subscribers and strongly attractive above 2,000. Second, it argues for launching the paid tier <em>early and narrow</em> rather than late and complete — real subscribers in month six, even at low volume, tell us whether the £39 price holds while there is still budget left to respond.</p>
+</div></section>
+
+<section id="scoring"><div class="wrap">
+  <h2><span class="sec-num">13</span>Feature Scoring</h2>
+  <p class="lead">Every recommendation scored on four axes, 1–10. Investor Value, Revenue Potential and Competitive Advantage are <em>higher is better</em>; <strong>Implementation Effort is higher = harder</strong>. Priority is the judgement that follows, not a formula — but where I have overridden the arithmetic I say so.</p>
+
+  <table>
+    <thead><tr><th>Feature</th><th>§</th><th class="num">Investor<br>value</th><th class="num">Revenue<br>potential</th><th class="num">Competitive<br>advantage</th><th class="num">Effort<br><small>(higher=harder)</small></th><th>Priority</th></tr></thead>
+    <tbody>
+      <tr><td colspan="7" style="background:var(--surface-3)"><strong>Market data &amp; intelligence</strong></td></tr>
+      <tr><td><strong>Market data ingestion pipeline</strong></td><td>6,11</td><td class="num">10</td><td class="num">10</td><td class="num">8</td><td class="num">9</td><td><span class="pill p-crit">P0</span></td></tr>
+      <tr><td><strong>Area Explorer &amp; metrics</strong></td><td>6.5</td><td class="num">9</td><td class="num">9</td><td class="num">6</td><td class="num">5</td><td><span class="pill p-crit">P0</span></td></tr>
+      <tr><td><strong>My Areas</strong> (owned-area market context)</td><td>6.5</td><td class="num">9</td><td class="num">7</td><td class="num">9</td><td class="num">3</td><td><span class="pill p-crit">P0</span></td></tr>
+      <tr><td>Area Score &amp; national ranking</td><td>6.4</td><td class="num">8</td><td class="num">8</td><td class="num">8</td><td class="num">5</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td>Heatmap</td><td>8.4</td><td class="num">7</td><td class="num">8</td><td class="num">5</td><td class="num">5</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td>Movers &amp; Shakers</td><td>6.5</td><td class="num">8</td><td class="num">7</td><td class="num">7</td><td class="num">3</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td>Area comparison</td><td>6.5</td><td class="num">7</td><td class="num">6</td><td class="num">5</td><td class="num">3</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td>Undervaluation screen</td><td>6.5</td><td class="num">8</td><td class="num">7</td><td class="num">9</td><td class="num">6</td><td><span class="pill p-med">P2</span></td></tr>
+      <tr><td>Rent &amp; price forecasts</td><td>8.4</td><td class="num">8</td><td class="num">8</td><td class="num">8</td><td class="num">7</td><td><span class="pill p-med">P2</span></td></tr>
+      <tr><td colspan="7" style="background:var(--surface-3)"><strong>Opportunity discovery</strong></td></tr>
+      <tr><td><strong>Area opportunity ranking</strong></td><td>7.2</td><td class="num">10</td><td class="num">9</td><td class="num">9</td><td class="num">5</td><td><span class="pill p-crit">P0</span></td></tr>
+      <tr><td><strong>Goal-impact simulation on candidates</strong></td><td>7.2</td><td class="num">10</td><td class="num">9</td><td class="num"><strong>10</strong></td><td class="num">6</td><td><span class="pill p-crit">P0</span></td></tr>
+      <tr><td>Strategy-matched weighting</td><td>7.2</td><td class="num">8</td><td class="num">7</td><td class="num">9</td><td class="num">4</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td>Deal analyser (manual entry)</td><td>7.4</td><td class="num">9</td><td class="num">8</td><td class="num">8</td><td class="num">4</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td>Live listing feed &amp; BMV screen</td><td>7.4</td><td class="num">8</td><td class="num">8</td><td class="num">6</td><td class="num">9</td><td><span class="pill p-med">P2</span></td></tr>
+      <tr><td colspan="7" style="background:var(--surface-3)"><strong>Tracking &amp; retention</strong></td></tr>
+      <tr><td><strong>Watchlists</strong></td><td>8.2</td><td class="num">8</td><td class="num">9</td><td class="num">5</td><td class="num">2</td><td><span class="pill p-crit">P0</span></td></tr>
+      <tr><td><strong>Threshold &amp; portfolio alerts</strong></td><td>8.3</td><td class="num">8</td><td class="num">9</td><td class="num">6</td><td class="num">3</td><td><span class="pill p-crit">P0</span></td></tr>
+      <tr><td><strong>Weekly email digest</strong></td><td>8.3</td><td class="num">7</td><td class="num"><strong>10</strong></td><td class="num">5</td><td class="num">2</td><td><span class="pill p-crit">P0</span></td></tr>
+      <tr><td>Infrastructure &amp; trend-reversal alerts</td><td>8.3</td><td class="num">9</td><td class="num">8</td><td class="num">9</td><td class="num">5</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td colspan="7" style="background:var(--surface-3)"><strong>Portfolio intelligence</strong></td></tr>
+      <tr><td><strong>Market-linked revaluation</strong></td><td>9.2</td><td class="num">9</td><td class="num">8</td><td class="num">7</td><td class="num">2</td><td><span class="pill p-crit">P0</span></td></tr>
+      <tr><td><strong>Benchmarked scorecard</strong></td><td>9.2</td><td class="num">9</td><td class="num">8</td><td class="num">8</td><td class="num">3</td><td><span class="pill p-crit">P0</span></td></tr>
+      <tr><td><strong>Underperformance detection</strong></td><td>9.3</td><td class="num">9</td><td class="num">8</td><td class="num">8</td><td class="num">4</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td>Refinance radar</td><td>9.4</td><td class="num">8</td><td class="num">9</td><td class="num">7</td><td class="num">4</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td>Recommendation engine</td><td>9.5</td><td class="num">9</td><td class="num">8</td><td class="num">9</td><td class="num">5</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td>Plan vs actual tracking</td><td>9.1</td><td class="num">8</td><td class="num">9</td><td class="num">8</td><td class="num">5</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td>Multi-goal &amp; life events</td><td>9.1</td><td class="num">6</td><td class="num">5</td><td class="num">6</td><td class="num">6</td><td><span class="pill p-med">P2</span></td></tr>
+      <tr><td colspan="7" style="background:var(--surface-3)"><strong>What-If engine</strong></td></tr>
+      <tr><td><strong>Deal pipeline abstraction</strong></td><td>5.2</td><td class="num">9</td><td class="num">7</td><td class="num">9</td><td class="num">6</td><td><span class="pill p-crit">P0</span></td></tr>
+      <tr><td>Sell-and-replace + CGT model</td><td>5.2</td><td class="num">8</td><td class="num">6</td><td class="num">7</td><td class="num">5</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td>Refurbishment event &amp; uplift</td><td>5.2</td><td class="num">7</td><td class="num">6</td><td class="num">6</td><td class="num">4</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td>Downturn on goal pathways</td><td>5.5</td><td class="num">7</td><td class="num">5</td><td class="num">8</td><td class="num">2</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td>Purchase-tax jurisdiction switch</td><td>5.2</td><td class="num">5</td><td class="num">3</td><td class="num">2</td><td class="num">2</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td>Fan charts &amp; debt-maturity visuals</td><td>5.4</td><td class="num">6</td><td class="num">5</td><td class="num">4</td><td class="num">3</td><td><span class="pill p-med">P2</span></td></tr>
+      <tr><td>Interest-rate path scenarios</td><td>5.2</td><td class="num">7</td><td class="num">5</td><td class="num">6</td><td class="num">5</td><td><span class="pill p-med">P2</span></td></tr>
+      <tr><td>Benchmark vs other asset classes</td><td>5.6</td><td class="num">6</td><td class="num">5</td><td class="num">8</td><td class="num">4</td><td><span class="pill p-med">P2</span></td></tr>
+      <tr><td colspan="7" style="background:var(--surface-3)"><strong>Commercial &amp; AI</strong></td></tr>
+      <tr><td><strong>Multi-tenancy, auth, hosting</strong></td><td>12.1</td><td class="num">3</td><td class="num"><strong>10</strong></td><td class="num">1</td><td class="num">8</td><td><span class="pill p-crit">P0</span></td></tr>
+      <tr><td><strong>Billing &amp; subscriptions</strong></td><td>12.1</td><td class="num">1</td><td class="num"><strong>10</strong></td><td class="num">1</td><td class="num">5</td><td><span class="pill p-crit">P0</span></td></tr>
+      <tr><td>Onboarding</td><td>12.1</td><td class="num">6</td><td class="num">8</td><td class="num">3</td><td class="num">4</td><td><span class="pill p-high">P1</span></td></tr>
+      <tr><td>Document intelligence (AI extraction)</td><td>10.1</td><td class="num">6</td><td class="num">6</td><td class="num">4</td><td class="num">4</td><td><span class="pill p-med">P2</span></td></tr>
+      <tr><td>Natural-language Q&amp;A</td><td>10.1</td><td class="num">6</td><td class="num">6</td><td class="num">5</td><td class="num">5</td><td><span class="pill p-med">P2</span></td></tr>
+      <tr><td>Area outperformance ML model</td><td>10.1</td><td class="num">9</td><td class="num">8</td><td class="num">9</td><td class="num">8</td><td><span class="pill p-low">P3 — year 2</span></td></tr>
+      <tr><td>Peer cohort benchmarking</td><td>5.6</td><td class="num">7</td><td class="num">7</td><td class="num">9</td><td class="num">5</td><td><span class="pill p-low">P3 — needs scale</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>13.1 Reading the scores</h3>
+  <ul>
+    <li><strong>The best value-per-effort items are unglamorous.</strong> Market-linked revaluation (9 value / 2 effort), watchlists (8/2), the weekly digest (7/2 with a revenue score of 10) and benchmarked scorecards (9/3) are the four cheapest wins in the plan and none of them involve new modelling. They should ship first for that reason alone.</li>
+    <li><strong>Two rows score 10 on competitive advantage:</strong> goal-impact simulation on candidate areas, and — jointly — the outcome-data flywheel it feeds. Both derive from the market↔portfolio join. That is the thesis validating itself against the scores.</li>
+    <li><strong>Billing and multi-tenancy score 1 and 3 on investor value</strong> and are nonetheless P0. This is the honest tension in the plan: the highest revenue-potential rows in the table are the ones no user asks for. Scoring them openly is how they survive prioritisation pressure.</li>
+    <li><strong>Where I have overridden the arithmetic:</strong> the live listing feed scores respectably but is P2, because its effort score of 9 is mostly <em>commercial</em> risk rather than engineering — and §7.4 shows phase A captures most of its value without the dependency. Conversely the jurisdiction switch scores poorly on every axis and stays P1 purely because it is a correctness defect, and shipping known-wrong tax figures is not a trade-off I will make.</li>
+  </ul>
+</div></section>
+
+<section id="roadmap"><div class="wrap">
+  <h2><span class="sec-num">14</span>Product Roadmap</h2>
+  <p class="lead">Twelve months, four windows, one sequencing principle: <strong>secure the data dependency first, prove the join early, monetise before the budget is spent.</strong></p>
+
+  <div class="callout"><h4>Assumed team</h4>
+  <p style="margin:0">£500,000 buys approximately <strong>3.5 engineering FTE plus fractional design and product</strong> for twelve months, after the £75k–£130k of data licensing and infrastructure is taken out. Roughly: 2 full-stack engineers, 1 data engineer, 0.5 front-end/visualisation specialist, 0.5 design, with product management provided. The data engineer is the critical hire and should be the first one made — the plan's whole critical path runs through that role.</p></div>
+
+  <h3>Next 30 days — Foundations &amp; the critical dependency</h3>
+  <p><em>Theme: start the clocks that cannot be started later.</em></p>
+  <table>
+    <thead><tr><th>Workstream</th><th>Deliverable</th><th>Why in this window</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Data licensing</strong></td><td>Rental-comparables provider shortlisted, evaluated, contract in negotiation</td><td><strong>The single highest-risk item in the plan.</strong> 2–4 month lead time means a month-1 start is already the critical path. Nothing else here matters if this slips to month 6.</td></tr>
+      <tr><td><strong>Data engineering</strong></td><td>Geographic spine (postcode/area registry); Land Registry Price Paid + UK HPI ingested with full history; <code>areas</code> and <code>area_observations</code> live</td><td>Every month of ingestion is a month of history that cannot be bought back (§11.5). Start before the UI exists.</td></tr>
+      <tr><td><strong>Data engineering</strong></td><td>PostgreSQL migration completed</td><td>SQLite will not carry 20M observations. Move once, now, before both tenancy and market data depend on it.</td></tr>
+      <tr><td><strong>Engine</strong></td><td>Purchase-tax jurisdiction switch; downturn applied to goal pathways</td><td>Two small, known, already-designed items. Clears the correctness backlog while the data layer spins up.</td></tr>
+      <tr><td><strong>Product</strong></td><td>Pricing validated with 10–15 target investors; Area Score methodology drafted</td><td>Cheapest possible test of the £39 assumption the whole model rests on.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Next 90 days — First intelligence &amp; the commercial gate</h3>
+  <p><em>Theme: the investor sees market data about their own portfolio, and the product becomes sellable.</em></p>
+  <table>
+    <thead><tr><th>Workstream</th><th>Deliverable</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Market Intelligence</strong></td><td>ONS, EPC, Police.uk, Ofsted ingested; derived yields and trends; <strong>My Areas</strong> shipped — market context for owned districts</td></tr>
+      <tr><td><strong>Portfolio Intelligence</strong></td><td><strong>Market-linked revaluation</strong> live — indexed valuations across the portfolio with confidence bands; <strong>benchmarked scorecard</strong> — every metric against its market</td></tr>
+      <tr><td><strong>Tracking</strong></td><td><strong>Watchlists</strong>, threshold and portfolio alerts, <strong>weekly email digest</strong></td></tr>
+      <tr><td><strong>Commercial</strong></td><td>Multi-tenancy, authentication, hosted deployment. <span class="pill p-crit">Gate: a second user can log in</span></td></tr>
+      <tr><td><strong>Engine</strong></td><td>Deal pipeline abstraction — plans buy from a deal <em>set</em>, not one cloned assumption</td></tr>
+    </tbody>
+  </table>
+  <div class="callout good"><h4>The 90-day proof point</h4>
+  <p style="margin:0">By day 90 the investor should open the dashboard and see: <em>"Your portfolio is worth £X — indexed to last month's market, not the figure you typed in January. Your Stockport yield ranks in the 38th percentile for SK1. Your Leeds rent is £95 below the local median."</em> <strong>That is the entire thesis demonstrated, for a user who has bought nothing and against a fraction of the eventual data coverage.</strong> If this does not land by day 90, the plan is behind and the remedy is scope, not schedule.</p></div>
+
+  <h3>Next 6 months — The differentiator</h3>
+  <p><em>Theme: opportunity discovery — the thing only we can build.</em></p>
+  <table>
+    <thead><tr><th>Workstream</th><th>Deliverable</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Discovery</strong></td><td><strong>Top Opportunities</strong> — area ranking with strategy weighting and hard filters; <strong>goal-impact simulation</strong> on every candidate area (the §4.2 sentence, shipped); manual <strong>deal analyser</strong></td></tr>
+      <tr><td><strong>Market Intelligence</strong></td><td>National Area Explorer; Area Score published; heatmap; Movers &amp; Shakers; area comparison</td></tr>
+      <tr><td><strong>Portfolio Intelligence</strong></td><td>Underperformance detection; refinance radar; unified recommendation engine</td></tr>
+      <tr><td><strong>Tracking</strong></td><td>Infrastructure alerts; trend-reversal and rank-movement alerts; opportunity alerts</td></tr>
+      <tr><td><strong>Commercial</strong></td><td>Billing live; tiers active; onboarding. <span class="pill p-crit">Gate: first paying subscriber</span></td></tr>
+      <tr><td><strong>Engine</strong></td><td>Sell-and-replace with CGT; refurbishment event and uplift; fan charts and debt-maturity visuals</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Next 12 months — Depth, forecasting &amp; scale</h3>
+  <p><em>Theme: from useful to authoritative.</em></p>
+  <table>
+    <thead><tr><th>Workstream</th><th>Deliverable</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Market Intelligence</strong></td><td>Rent and price forecasts with published back-test record; undervaluation screen; supply/demand momentum metrics (licence permitting)</td></tr>
+      <tr><td><strong>Discovery</strong></td><td>Portfolio-aware deal analyser at address level; internal AVM; live listing feed and BMV screen <em>if</em> licensing completed</td></tr>
+      <tr><td><strong>Portfolio Intelligence</strong></td><td>Plan vs actual tracking; portfolio market-exposure analysis; multi-goal and life-event constraints</td></tr>
+      <tr><td><strong>Commercial</strong></td><td>Adviser tier with white-labelled client reports; API access; broker referral integration</td></tr>
+      <tr><td><strong>AI</strong></td><td>Document extraction; narrative explanation; natural-language query layer</td></tr>
+      <tr><td><strong>Engine</strong></td><td>Interest-rate path scenarios; asset-class benchmarking; per-loan origination LTV and product menu</td></tr>
+    </tbody>
+  </table>
+
+  <h3>14.1 Sequencing risks</h3>
+  <table>
+    <thead><tr><th>Risk</th><th>Impact</th><th>Mitigation</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Rental-comp licensing slips past month 4</strong></td><td><span class="pill p-crit">Critical</span> — yields are uncomputable; §7 slides a quarter</td><td>Start month 1; run two providers in parallel to contract stage; interim fallback to ONS regional rent indices with coverage explicitly labelled as approximate</td></tr>
+      <tr><td>Data quality worse than expected at district level</td><td><span class="pill p-high">High</span> — thin samples in rural areas</td><td>Confidence thresholds and suppression designed in from the start (§11.3); launch coverage weighted to urban districts where our user actually buys</td></tr>
+      <tr><td>Multi-tenancy destabilises the working single-user product</td><td><span class="pill p-med">Medium</span></td><td>Tenancy enforced at the query-helper layer, which is already centralised in <code>database.ts</code> — the existing architecture makes this materially cheaper than it would otherwise be</td></tr>
+      <tr><td>PropertyData ships portfolio modelling first</td><td><span class="pill p-high">High</span> — erodes the join before we occupy it</td><td>Speed over polish on §7; ship goal-impact simulation as soon as it is credible rather than complete</td></tr>
+      <tr><td>Team over-invests in the engine out of habit</td><td><span class="pill p-med">Medium</span> — the most likely failure mode, given the last two quarters</td><td>The §4.3 test applied at every planning session; engine budget explicitly capped at £40k</td></tr>
+    </tbody>
+  </table>
+</div></section>
+
+<section id="backlog"><div class="wrap">
+  <h2><span class="sec-num">15</span>Development Backlog</h2>
+  <p class="lead">The full ordered backlog. Complexity is engineering size (S/M/L/XL); Impact is expected effect on investor value and revenue combined.</p>
+  <table>
+    <thead><tr><th class="num">#</th><th>Feature</th><th>Priority</th><th>Complexity</th><th>Impact</th><th>Window</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td>Rental-comparables licensing secured</td><td><span class="pill p-crit">P0</span></td><td>—<small> commercial</small></td><td><span class="pill p-crit">Critical</span></td><td>30d</td></tr>
+      <tr><td class="num">2</td><td>Geographic spine + area registry</td><td><span class="pill p-crit">P0</span></td><td>M</td><td><span class="pill p-crit">Critical</span></td><td>30d</td></tr>
+      <tr><td class="num">3</td><td>PostgreSQL migration</td><td><span class="pill p-crit">P0</span></td><td>L</td><td><span class="pill p-crit">Critical</span></td><td>30d</td></tr>
+      <tr><td class="num">4</td><td>Price Paid + UK HPI ingestion</td><td><span class="pill p-crit">P0</span></td><td>L</td><td><span class="pill p-crit">Critical</span></td><td>30d</td></tr>
+      <tr><td class="num">5</td><td>Purchase-tax jurisdiction switch</td><td><span class="pill p-high">P1</span></td><td>S</td><td><span class="pill p-med">Medium</span></td><td>30d</td></tr>
+      <tr><td class="num">6</td><td>Downturn applied to goal pathways</td><td><span class="pill p-high">P1</span></td><td>S</td><td><span class="pill p-high">High</span></td><td>30d</td></tr>
+      <tr><td class="num">7</td><td>ONS / EPC / Police / Ofsted ingestion</td><td><span class="pill p-crit">P0</span></td><td>L</td><td><span class="pill p-crit">Critical</span></td><td>90d</td></tr>
+      <tr><td class="num">8</td><td><strong>Market-linked revaluation</strong></td><td><span class="pill p-crit">P0</span></td><td>S</td><td><span class="pill p-crit">Critical</span></td><td>90d</td></tr>
+      <tr><td class="num">9</td><td><strong>My Areas</strong> — owned-area market context</td><td><span class="pill p-crit">P0</span></td><td>M</td><td><span class="pill p-crit">Critical</span></td><td>90d</td></tr>
+      <tr><td class="num">10</td><td>Benchmarked portfolio scorecard</td><td><span class="pill p-crit">P0</span></td><td>M</td><td><span class="pill p-crit">Critical</span></td><td>90d</td></tr>
+      <tr><td class="num">11</td><td>Watchlists</td><td><span class="pill p-crit">P0</span></td><td>S</td><td><span class="pill p-high">High</span></td><td>90d</td></tr>
+      <tr><td class="num">12</td><td>Threshold &amp; portfolio alerts</td><td><span class="pill p-crit">P0</span></td><td>M</td><td><span class="pill p-high">High</span></td><td>90d</td></tr>
+      <tr><td class="num">13</td><td>Weekly email digest</td><td><span class="pill p-crit">P0</span></td><td>S</td><td><span class="pill p-crit">Critical</span></td><td>90d</td></tr>
+      <tr><td class="num">14</td><td>Multi-tenancy + authentication</td><td><span class="pill p-crit">P0</span></td><td>XL</td><td><span class="pill p-crit">Critical</span></td><td>90d</td></tr>
+      <tr><td class="num">15</td><td>Hosted deployment &amp; CI/CD</td><td><span class="pill p-crit">P0</span></td><td>M</td><td><span class="pill p-crit">Critical</span></td><td>90d</td></tr>
+      <tr><td class="num">16</td><td><strong>Deal pipeline abstraction</strong></td><td><span class="pill p-crit">P0</span></td><td>L</td><td><span class="pill p-crit">Critical</span></td><td>90d</td></tr>
+      <tr><td class="num">17</td><td>Area Score + national ranking</td><td><span class="pill p-high">P1</span></td><td>M</td><td><span class="pill p-high">High</span></td><td>6mo</td></tr>
+      <tr><td class="num">18</td><td>National Area Explorer</td><td><span class="pill p-crit">P0</span></td><td>L</td><td><span class="pill p-high">High</span></td><td>6mo</td></tr>
+      <tr><td class="num">19</td><td><strong>Top Opportunities ranking</strong></td><td><span class="pill p-crit">P0</span></td><td>M</td><td><span class="pill p-crit">Critical</span></td><td>6mo</td></tr>
+      <tr><td class="num">20</td><td><strong>Goal-impact simulation on candidates</strong></td><td><span class="pill p-crit">P0</span></td><td>L</td><td><span class="pill p-crit">Critical</span></td><td>6mo</td></tr>
+      <tr><td class="num">21</td><td>Billing &amp; subscription tiers</td><td><span class="pill p-crit">P0</span></td><td>M</td><td><span class="pill p-crit">Critical</span></td><td>6mo</td></tr>
+      <tr><td class="num">22</td><td>Onboarding flow</td><td><span class="pill p-high">P1</span></td><td>M</td><td><span class="pill p-high">High</span></td><td>6mo</td></tr>
+      <tr><td class="num">23</td><td>Underperformance detection</td><td><span class="pill p-high">P1</span></td><td>M</td><td><span class="pill p-high">High</span></td><td>6mo</td></tr>
+      <tr><td class="num">24</td><td>Refinance radar</td><td><span class="pill p-high">P1</span></td><td>M</td><td><span class="pill p-high">High</span></td><td>6mo</td></tr>
+      <tr><td class="num">25</td><td>Recommendation engine</td><td><span class="pill p-high">P1</span></td><td>M</td><td><span class="pill p-high">High</span></td><td>6mo</td></tr>
+      <tr><td class="num">26</td><td>Heatmap</td><td><span class="pill p-high">P1</span></td><td>M</td><td><span class="pill p-med">Medium</span></td><td>6mo</td></tr>
+      <tr><td class="num">27</td><td>Movers &amp; Shakers</td><td><span class="pill p-high">P1</span></td><td>S</td><td><span class="pill p-high">High</span></td><td>6mo</td></tr>
+      <tr><td class="num">28</td><td>Deal analyser (manual)</td><td><span class="pill p-high">P1</span></td><td>M</td><td><span class="pill p-high">High</span></td><td>6mo</td></tr>
+      <tr><td class="num">29</td><td>Infrastructure &amp; trend-reversal alerts</td><td><span class="pill p-high">P1</span></td><td>M</td><td><span class="pill p-high">High</span></td><td>6mo</td></tr>
+      <tr><td class="num">30</td><td>Sell-and-replace + CGT model</td><td><span class="pill p-high">P1</span></td><td>M</td><td><span class="pill p-med">Medium</span></td><td>6mo</td></tr>
+      <tr><td class="num">31</td><td>Refurbishment event &amp; uplift</td><td><span class="pill p-high">P1</span></td><td>M</td><td><span class="pill p-med">Medium</span></td><td>6mo</td></tr>
+      <tr><td class="num">32</td><td>Fan charts &amp; debt-maturity visuals</td><td><span class="pill p-med">P2</span></td><td>S</td><td><span class="pill p-med">Medium</span></td><td>6mo</td></tr>
+      <tr><td class="num">33</td><td>Rent &amp; price forecasts + back-test</td><td><span class="pill p-med">P2</span></td><td>L</td><td><span class="pill p-high">High</span></td><td>12mo</td></tr>
+      <tr><td class="num">34</td><td>Undervaluation screen</td><td><span class="pill p-med">P2</span></td><td>M</td><td><span class="pill p-high">High</span></td><td>12mo</td></tr>
+      <tr><td class="num">35</td><td>Plan vs actual tracking</td><td><span class="pill p-high">P1</span></td><td>M</td><td><span class="pill p-high">High</span></td><td>12mo</td></tr>
+      <tr><td class="num">36</td><td>Internal AVM</td><td><span class="pill p-med">P2</span></td><td>L</td><td><span class="pill p-high">High</span></td><td>12mo</td></tr>
+      <tr><td class="num">37</td><td>Adviser tier + white-label reports</td><td><span class="pill p-med">P2</span></td><td>L</td><td><span class="pill p-high">High</span></td><td>12mo</td></tr>
+      <tr><td class="num">38</td><td>Document intelligence (AI)</td><td><span class="pill p-med">P2</span></td><td>M</td><td><span class="pill p-med">Medium</span></td><td>12mo</td></tr>
+      <tr><td class="num">39</td><td>Natural-language Q&amp;A</td><td><span class="pill p-med">P2</span></td><td>M</td><td><span class="pill p-med">Medium</span></td><td>12mo</td></tr>
+      <tr><td class="num">40</td><td>Interest-rate path scenarios</td><td><span class="pill p-med">P2</span></td><td>M</td><td><span class="pill p-med">Medium</span></td><td>12mo</td></tr>
+      <tr><td class="num">41</td><td>Live listing feed &amp; BMV screen</td><td><span class="pill p-med">P2</span></td><td>XL</td><td><span class="pill p-high">High</span></td><td>12mo*</td></tr>
+      <tr><td class="num">42</td><td>Asset-class benchmarking</td><td><span class="pill p-med">P2</span></td><td>M</td><td><span class="pill p-med">Medium</span></td><td>12mo</td></tr>
+      <tr><td class="num">43</td><td>Multi-goal &amp; life-event constraints</td><td><span class="pill p-med">P2</span></td><td>L</td><td><span class="pill p-med">Medium</span></td><td>12mo</td></tr>
+      <tr><td class="num">44</td><td>Per-loan origination LTV &amp; product menu</td><td><span class="pill p-med">P2</span></td><td>M</td><td><span class="pill p-med">Medium</span></td><td>12mo</td></tr>
+      <tr><td class="num">45</td><td>Area outperformance ML model</td><td><span class="pill p-low">P3</span></td><td>XL</td><td><span class="pill p-high">High</span></td><td>Year 2</td></tr>
+      <tr><td class="num">46</td><td>Peer cohort benchmarking</td><td><span class="pill p-low">P3</span></td><td>M</td><td><span class="pill p-high">High</span></td><td>Year 2</td></tr>
+      <tr><td class="num">47</td><td>Broker referral integration</td><td><span class="pill p-low">P3</span></td><td>M</td><td><span class="pill p-med">Medium</span></td><td>Year 2</td></tr>
+      <tr><td class="num">48</td><td>Public API / data licensing</td><td><span class="pill p-low">P3</span></td><td>L</td><td><span class="pill p-med">Medium</span></td><td>Year 2</td></tr>
+    </tbody>
+    <caption>* Item 41 is conditional on listings licensing completing; it is deliberately off the critical path (§7.4). Items 45–48 are year-two candidates listed for continuity — 45 in particular depends on ingestion history that only starts accumulating in month 1 of this plan.</caption>
+  </table>
+</div></section>
+
+<section id="five"><div class="wrap">
+  <h2><span class="sec-num">16</span>If I Could Only Build Five Things</h2>
+  <p class="lead">The question that forces the strategy to declare itself. Ranked 1–5, with what each costs, what it unlocks, and what I would sacrifice to protect it.</p>
+
+  <div class="verdict" style="background:var(--accent-soft);border-left-color:var(--teal)">
+    <div class="dot">🎯</div>
+    <div>
+      <h3 style="color:var(--accent-ink)">Three of the five are data or distribution. One is commercial plumbing. Only one touches the modelling engine.</h3>
+      <p>That distribution is the entire recommendation of this review. The engine is the best thing about this product and it is not what should be built next.</p>
+    </div>
+  </div>
+
+  <h3><span class="pill p-crit">1</span> &nbsp;The Market Data Layer</h3>
+  <div class="card">
+    <p style="margin-top:0"><strong>£190,000 · months 1–6 · §6, §11</strong></p>
+    <p>Postcode-district prices, rents, yields, growth, demographics, employment, crime, schools and infrastructure — ingested monthly, versioned, with provenance and confidence on every figure. The <code>market_data</code> table that has been sitting in the schema unread since the product was built, made real.</p>
+    <p><strong>Why first:</strong> it is the binding constraint on everything else. Opportunity discovery, area tracking, benchmarking, revaluation, forecasting and the year-two ML model are all strictly downstream of it — none can start without it and all become straightforward once it exists. It is also the only item whose value <em>compounds with time</em>: every month of delay permanently costs a month of history that cannot be purchased retroactively (§11.5).</p>
+    <p style="margin-bottom:0"><strong>What I would sacrifice for it:</strong> every remaining item on the engine backlog, without hesitation.</p>
+  </div>
+
+  <h3><span class="pill p-crit">2</span> &nbsp;Opportunity Discovery, Tied To The Goal Engine</h3>
+  <div class="card">
+    <p style="margin-top:0"><strong>£95,000 · months 4–9 · §7</strong></p>
+    <p>Ranked areas matched to the investor's strategy and constraints, each candidate simulated <em>through their actual portfolio and goal</em>: "SR1 brings your £5,000/month goal fourteen months closer, adds six points of risk, and improves your geographic concentration."</p>
+    <p><strong>Why second:</strong> this is the product's reason to exist. It is the only feature in this document that <strong>no competitor can build without first building both halves of our product</strong> — PropertyData would need our engine, Portfolio Planner would need our data. It converts the existing modelling investment from an impressive calculator into a decision system, and it is the sentence the company should be described by.</p>
+    <p style="margin-bottom:0"><strong>Dependency:</strong> requires #1 and the deal pipeline abstraction (§5.2) — which is the one piece of engine work in the top five, and only because it feeds this.</p>
+  </div>
+
+  <h3><span class="pill p-crit">3</span> &nbsp;The Commercial Foundation</h3>
+  <div class="card">
+    <p style="margin-top:0"><strong>£85,000 · months 2–6 · §12</strong></p>
+    <p>Multi-tenancy, authentication, hosted deployment, billing, onboarding. A second person can log in; a first person can pay.</p>
+    <p><strong>Why third:</strong> it scores 1–3 out of 10 on investor value and 10 out of 10 on revenue potential, and that asymmetry is precisely why it needs protecting. <strong>Every pound spent on features 1, 2, 4 and 5 returns exactly zero revenue until this exists</strong>, and it is the kind of work that gets deferred quarter after quarter because no user ever asks for it. Naming it in the top five is the only reliable way to ensure it ships. Sequencing it with the PostgreSQL migration that #1 requires saves roughly £15,000 of duplicated database work.</p>
+    <p style="margin-bottom:0"><strong>Secondary benefit:</strong> real subscribers by month six means real pricing feedback while there is still budget left to act on it.</p>
+  </div>
+
+  <h3><span class="pill p-high">4</span> &nbsp;Area Watchlists &amp; Alerts</h3>
+  <div class="card">
+    <p style="margin-top:0"><strong>~£28,000 · months 3–6 · §8</strong></p>
+    <p>Saved areas, threshold and trend alerts, portfolio drift warnings, and a weekly email digest.</p>
+    <p><strong>Why fourth:</strong> the cheapest item in the top five by an order of magnitude, and the one that determines whether subscriptions survive month three. Our investor makes two to four decisions a year — <strong>a product used four times a year cannot sustain a monthly subscription.</strong> Watchlists and the weekly digest convert an episodic tool into a weekly habit, which is the mechanism every subscription analytics business in this category actually runs on. The digest alone is roughly two engineer-weeks and scores 10/10 on revenue potential.</p>
+    <p style="margin-bottom:0"><strong>Watch for:</strong> alert fatigue is the failure mode. Batch weekly, suppress noise inside confidence intervals, cap volume (§8.3).</p>
+  </div>
+
+  <h3><span class="pill p-high">5</span> &nbsp;Market-Linked Portfolio Valuation &amp; Benchmarking</h3>
+  <div class="card">
+    <p style="margin-top:0"><strong>~£30,000 · months 2–4 · §9.2</strong></p>
+    <p>Every property indexed monthly against its area's price index; every portfolio metric expressed as a percentile against its market rather than in isolation.</p>
+    <p><strong>Why fifth — and why it is not lower:</strong> it is the best value-per-pound item in the entire plan (9/10 investor value against 2/10 effort). It makes the market data earn its keep <strong>on day one for an investor who buys nothing</strong>, replacing a headline equity figure that decays from the moment it is typed with a continuously current, defensible one — and simultaneously improving the accuracy of LTV, ROCE, equity multiple, risk scoring and refinance detection, all of which read from valuations. It is also the fastest demonstration that the market↔portfolio join is real, which is what the 90-day proof point (§14) turns on.</p>
+    <p style="margin-bottom:0"><strong>Ranked fifth only</strong> because it is strictly downstream of #1 and cheap enough to fit alongside the others rather than compete with them.</p>
+  </div>
+
+  <h3>16.1 What did not make the five, and why</h3>
+  <table>
+    <thead><tr><th>Excluded</th><th>Reasoning</th></tr></thead>
+    <tbody>
+      <tr><td><strong>More scenario-engine depth</strong></td><td>The hardest exclusion emotionally and the easiest analytically. The engine is already ahead of the market and its marginal return per pound is now the lowest of any workstream, because it is leverage applied to a hand-typed guess. Feed it; do not extend it.</td></tr>
+      <tr><td><strong>Forecasting</strong></td><td>High value, but it requires ingestion history to back-test honestly. Publishing an unvalidated forecast would damage the credibility position that everything else depends on. Year two, correctly.</td></tr>
+      <tr><td><strong>AI features</strong></td><td>Seven of the eleven "AI" items in the brief are better built as deterministic analytics (§10), and they appear in the plan in that form. Genuine AI is ~£25k of supporting work, not a pillar.</td></tr>
+      <tr><td><strong>Live listing feeds</strong></td><td>Real value, but a commercial dependency severe enough that it must not sit on the critical path. Phase A of the deal analyser captures most of the benefit with none of the risk (§7.4).</td></tr>
+      <tr><td><strong>Adviser tier</strong></td><td>Probably the highest-revenue segment in the business and the strongest candidate for the sixth slot. Excluded only because it should be built once the core product is proven, not alongside it.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout good"><h4>Closing position</h4>
+  <p>This product has spent its development so far building the half of Bloomberg that Bloomberg finds easiest — the analytics — and none of the half that Bloomberg actually sells, which is the data and the daily habit around it. That inversion is why the platform can model a twenty-four property acquisition programme to the month, and cannot tell its owner whether a single one of those properties exists.</p>
+  <p style="margin-bottom:0">The £500,000 should be spent correcting that inversion. Build the data layer, join it to the engine that already works, make the result sellable, and give the investor a reason to log in on a Tuesday. <strong>Do those five things and the vision stops being an analogy: an investor opens the platform, sees what the market did this week, sees what it did to their portfolio, and sees which postcode gets them to £5,000 a month fastest — with the arithmetic behind every figure one click away.</strong> That product does not exist in the UK today, and every component required to build it is either already written or costed in this document.</p></div>
+</div></section>
+
+
+  </main>
+</div>
+
+<footer><div class="wrap">
+  Prepared as an internal product-strategy exercise. Feature scores, effort estimates and budget allocations are planning judgements, not commitments; data-source availability and licensing terms must be confirmed with each provider before contracting. Market examples used to illustrate output formats are illustrative and not research findings. This document is not investment advice.
+</div></footer>
+
+<script>
+function applyTheme(t){document.documentElement.setAttribute('data-theme',t);document.getElementById('themeIco').textContent=t==='dark'?'☀️':'🌙';document.getElementById('themeTxt').textContent=t==='dark'?'Light':'Dark';}
+function toggleTheme(){var c=document.documentElement.getAttribute('data-theme');var n=c==='dark'?'light':'dark';try{localStorage.setItem('psr-theme',n)}catch(e){}applyTheme(n);}
+(function(){var s;try{s=localStorage.getItem('psr-theme')}catch(e){}if(!s&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)s='dark';applyTheme(s||'light');})();
+(function(){var links=[].slice.call(document.querySelectorAll('.sidenav a'));var map={};links.forEach(function(a){map[a.getAttribute('href').slice(1)]=a;});var obs=new IntersectionObserver(function(es){es.forEach(function(en){if(en.isIntersecting){links.forEach(function(l){l.classList.remove('active');});var a=map[en.target.id];if(a)a.classList.add('active');}});},{rootMargin:'-40% 0px -55% 0px'});Object.keys(map).forEach(function(id){var el=document.getElementById(id);if(el)obs.observe(el);});})();
+</script>
+
+</body>
+</html>

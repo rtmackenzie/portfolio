@@ -75,6 +75,110 @@ function firstBuyDate(events: { event_type: string; date: string }[]): string | 
   return events.filter(e => e.event_type === 'buy_property').map(e => e.date).sort()[0]
 }
 
+describe("generatePathways — a goal's linked scenario is planned on top of, not ignored", () => {
+  // Committed events come from the goal's linked scenario (goals.scenario_id). They are decisions
+  // the investor has already made, so the generator must plan around them: they consume cash,
+  // count toward the goal, and are excluded from the decision cap.
+  const goal = { goal_type: 'count' as const, target_property_count: 6, director_loan_annual: 200000 }
+  // Cash-starved variant: without a director loan the plan can only fund a couple of purchases,
+  // so a committed buy is not silently substituted for one the generator would have made anyway.
+  const leanGoal = { goal_type: 'count' as const, target_property_count: 6 }
+
+  // Dates must fall after the projection's base_date, which runTemplate takes as today — so they
+  // are computed relative to now rather than hardcoded, or these tests would rot with the calendar.
+  function monthsFromNow(n: number): string {
+    const d = new Date()
+    d.setDate(1)
+    d.setMonth(d.getMonth() + n)
+    return d.toISOString().slice(0, 10)
+  }
+
+  function committedBuy(date: string): ScenarioEvent {
+    return {
+      event_type: 'buy_property',
+      property_id: null,
+      date,
+      parameters_json: JSON.stringify({
+        purchase_price: 100000, monthly_rent: 800, monthly_expenses: 200,
+        deposit_percent: 25, mortgage_rate: 5.5, mortgage_term_years: 25,
+        legal_fees: 0, arrangement_fee: 0, valuation_fee: 0,
+      }),
+    } as ScenarioEvent
+  }
+
+  const pick = (ps: ReturnType<typeof generatePathways>, name: string) => ps.find(x => x.template_name === name)!
+  const endCount = (ps: ReturnType<typeof generatePathways>, name: string) => {
+    const m = pick(ps, name).results.months
+    return m[m.length - 1].property_count
+  }
+
+  it('omitting committedEvents is identical to passing an empty array (regression guard)', () => {
+    const omitted = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const empty = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1, undefined, undefined, [])
+    expect(empty.map(p => p.events.length)).toEqual(omitted.map(p => p.events.length))
+    expect(empty.map(p => p.months_to_goal)).toEqual(omitted.map(p => p.months_to_goal))
+    expect(empty.map(p => p.risk_score)).toEqual(omitted.map(p => p.risk_score))
+  })
+
+  it('a committed buy is carried into the pathway and actually executes in the projection', () => {
+    // Target & Hold has no concurrent-mortgage cap (unlike the hold variants), so extra committed
+    // purchases show up in the ending portfolio rather than being absorbed by a strategy limit.
+    const dates = [monthsFromNow(2), monthsFromNow(5)]
+    const none = generatePathways(leanGoal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const withCommitted = generatePathways(
+      leanGoal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1, undefined, undefined, dates.map(committedBuy)
+    )
+    // Present in the event list…
+    for (const d of dates) {
+      expect(pick(withCommitted, 'target_hold').events.some(e => e.date === d && e.event_type === 'buy_property')).toBe(true)
+    }
+    // …and genuinely projected, not merely appended: more property and more equity at the horizon.
+    expect(endCount(withCommitted, 'target_hold')).toBeGreaterThan(endCount(none, 'target_hold'))
+    expect(pick(withCommitted, 'target_hold').results.summary.end_equity)
+      .toBeGreaterThan(pick(none, 'target_hold').results.summary.end_equity)
+  })
+
+  it('committed buys share the cash pot, so the generator decides fewer purchases of its own', () => {
+    const dates = [monthsFromNow(2), monthsFromNow(5)]
+    const none = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const withCommitted = generatePathways(
+      goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1, undefined, undefined, dates.map(committedBuy)
+    )
+    const ownBuys = (ps: ReturnType<typeof generatePathways>, name: string) =>
+      buyCount(pick(ps, name).events.filter(e => !dates.includes(e.date)))
+    // Target & Hold stops at the goal, so pre-committed purchases displace its own rather than
+    // adding to them — the clearest evidence the committed events were visible to the cash gates.
+    expect(ownBuys(withCommitted, 'target_hold')).toBeLessThan(ownBuys(none, 'target_hold'))
+  })
+
+  it('committed events do not consume the decision cap', () => {
+    const dates = [monthsFromNow(2), monthsFromNow(4), monthsFromNow(6)]
+    const ps = generatePathways(
+      goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1, undefined, undefined, dates.map(committedBuy)
+    )
+    const maxCf = pick(ps, 'max_cashflow')
+    const own = maxCf.events.filter(e => !dates.includes(e.date))
+    // The cap is projYears * 4 decisions; committed events ride alongside rather than counting
+    // against it, so the generator still decides a full slate of its own on top of them.
+    expect(own.length).toBeGreaterThan(PROJECTION_YEARS * 2)
+    expect(maxCf.events.length).toBeGreaterThan(own.length)
+  })
+
+  it('committed buys bring a property-count goal forward', () => {
+    const none = generatePathways(goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1)
+    const withCommitted = generatePathways(
+      goal, startingPortfolio(), ASSUMPTIONS, PROJECTION_YEARS, 1, undefined, undefined,
+      [monthsFromNow(2), monthsFromNow(5)].map(committedBuy)
+    )
+    const baseline = pick(none, 'target_hold').months_to_goal
+    const committed = pick(withCommitted, 'target_hold').months_to_goal
+    expect(baseline).not.toBeNull()
+    expect(committed).not.toBeNull()
+    // Two purchases already committed land sooner than the plan would have chosen them.
+    expect(committed!).toBeLessThan(baseline!)
+  })
+})
+
 describe('generatePathways — goal solver uses post-tax cashflow', () => {
   const incomeGoal = {
     goal_type: 'income' as const,
