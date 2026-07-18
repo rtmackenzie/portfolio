@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { queryAll, queryOne } from '../db/database.ts'
+import { queryAll, queryOne, NOT_SOLD, OWNED_PROPERTY_IDS } from '../db/database.ts'
 import { calculatePortfolioKPIs } from '../services/calculations.ts'
 import { computeScorecard } from '../services/scorecard.ts'
 import { computeRiskHeatmap } from '../services/risk.ts'
@@ -41,16 +41,17 @@ router.get('/insights', (_req, res) => {
 router.get('/kpis', (_req, res) => {
   try {
     const properties = queryAll<{ current_value: number | null; purchase_price: number | null; id: number; status: string }>(
-      'SELECT id, current_value, purchase_price, status FROM properties'
+      `SELECT id, current_value, purchase_price, status FROM properties WHERE ${NOT_SOLD}`
     )
     const mortgages = queryAll<{ current_balance: number; monthly_payment: number; is_active: number }>(
-      'SELECT current_balance, monthly_payment, is_active FROM mortgages'
+      `SELECT current_balance, monthly_payment, is_active FROM mortgages WHERE property_id IN ${OWNED_PROPERTY_IDS}`
     )
     const tenants = queryAll<{ rent_amount: number; status: string }>(
-      'SELECT rent_amount, status FROM tenants'
+      `SELECT rent_amount, status FROM tenants WHERE property_id IN ${OWNED_PROPERTY_IDS}`
     )
+    // property_id IS NULL = a portfolio-wide expense, which survives an individual sale.
     const expenses = queryAll<{ amount: number; frequency: string; active: number }>(
-      'SELECT amount, frequency, active FROM expenses'
+      `SELECT amount, frequency, active FROM expenses WHERE property_id IS NULL OR property_id IN ${OWNED_PROPERTY_IDS}`
     )
 
     const kpis = calculatePortfolioKPIs(properties, mortgages, tenants, expenses)

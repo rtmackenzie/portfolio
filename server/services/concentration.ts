@@ -6,7 +6,7 @@
 // Scoped to the starting/held portfolio only: a scenario's simulated future buy_property events
 // carry no address/area field (no such input exists on the event form), so concentration can't
 // be computed across simulated purchases without a schema/UI addition — out of scope here.
-import { queryAll } from '../db/database.ts'
+import { queryAll, NOT_SOLD } from '../db/database.ts'
 
 export interface ConcentrationWarning {
   field: string
@@ -62,6 +62,6 @@ export function computeConcentrationWarnings(properties: ConcentrationProperty[]
 }
 
 export function loadConcentrationWarnings(): ConcentrationWarning[] {
-  const properties = queryAll<ConcentrationProperty>('SELECT town, property_type, current_value, purchase_price FROM properties')
+  const properties = queryAll<ConcentrationProperty>(`SELECT town, property_type, current_value, purchase_price FROM properties WHERE ${NOT_SOLD}`)
   return computeConcentrationWarnings(properties)
 }

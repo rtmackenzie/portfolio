@@ -1,4 +1,4 @@
-import { queryAll } from '../db/database.ts'
+import { queryAll, NOT_SOLD } from '../db/database.ts'
 import { calcMonthlyPayment, calcTransactionCosts } from './calculations.ts'
 import { incomeTaxForMonth, disposalTax, icrThresholdPct, type TaxSettings } from './tax.ts'
 import { loadTaxSettings, loadAssumptionSettings } from './settings.ts'
@@ -664,7 +664,7 @@ export function loadPortfolioState(): {
 } {
   const dbProperties = queryAll<{
     id: number; current_value: number | null; purchase_price: number | null; address_line1: string; town: string;
-  }>('SELECT id, current_value, purchase_price, address_line1, town FROM properties')
+  }>(`SELECT id, current_value, purchase_price, address_line1, town FROM properties WHERE ${NOT_SOLD}`)
 
   const dbTenants = queryAll<{ property_id: number; rent_amount: number; status: string }>(
     "SELECT property_id, rent_amount, status FROM tenants WHERE status='active'"
