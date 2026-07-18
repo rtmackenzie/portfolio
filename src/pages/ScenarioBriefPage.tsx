@@ -17,6 +17,9 @@ export default function ScenarioBriefPage({ compare = false }: { compare?: boole
   const briefRef = useRef<HTMLDivElement>(null)
 
   const ids = compare ? (params.get('ids') ?? '') : ''
+  // Carried from the compare view so "Time to Target" prints the same figure the user was looking
+  // at; without it the row would always read "—".
+  const targetEquity = Number(params.get('target')) || 0
 
   const single = useQuery({
     queryKey: ['scenarios', 'detail', id],
@@ -36,14 +39,21 @@ export default function ScenarioBriefPage({ compare = false }: { compare?: boole
   const isLoading = (compare ? comparison.isLoading : single.isLoading) || risk.isLoading
   if (isLoading) return <PageLoader />
 
-  // Assemble brief items (scenarios that actually have results)
+  // Comparison keeps every selected scenario, including any never run — they render as a "(no run)"
+  // column, matching the on-screen table. Dropping them silently changed the column count between
+  // the screen and the PDF.
   const items: BriefItem[] = compare
     ? (comparison.data ?? [])
-        .filter((r): r is CompareRow & { results: ScenarioResults } => !!r.results)
+        // /scenarios/compare returns scenario: undefined for an id that no longer exists (a stale
+        // link); those are dropped, unlike un-run scenarios which are kept.
+        .filter(r => !!r.scenario)
         .map(r => ({ scenario: r.scenario, results: r.results }))
     : single.data?.results
       ? [{ scenario: single.data, results: single.data.results }]
       : []
+
+  // Nothing to brief only when no selected scenario has been run at all.
+  const hasAnyResults = items.some(it => it.results)
 
   const topRisks = [...(risk.data?.factors ?? [])].sort((a, b) => b.severity - a.severity).slice(0, 3)
 
@@ -63,7 +73,7 @@ export default function ScenarioBriefPage({ compare = false }: { compare?: boole
         </Link>
         <button
           onClick={download}
-          disabled={items.length === 0}
+          disabled={!hasAnyResults}
           className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-md text-sm font-medium disabled:opacity-50"
         >
           <Download size={15} /> Download PDF
@@ -71,13 +81,13 @@ export default function ScenarioBriefPage({ compare = false }: { compare?: boole
       </div>
 
       <div className="mx-auto w-[794px] shadow-lg">
-        {items.length === 0 ? (
+        {!hasAnyResults ? (
           <div className="bg-white p-8 text-sm text-gray-600">
             No projection results to brief. Run the projection on the scenario(s) first.
           </div>
         ) : (
           <div ref={briefRef}>
-            <ScenarioBrief items={items} topRisks={topRisks} />
+            <ScenarioBrief items={items} topRisks={topRisks} targetEquity={targetEquity} />
           </div>
         )}
       </div>

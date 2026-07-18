@@ -261,7 +261,10 @@ export default function Scenarios() {
               data={compareQuery.data ?? []}
               isLoading={compareQuery.isLoading}
               onExit={() => setCompareMode(false)}
-              onExport={() => window.open(`/brief/compare?ids=${[...compareIds].join(',')}`, '_blank')}
+              onExport={(targetEquity) => window.open(
+                `/brief/compare?ids=${[...compareIds].join(',')}${targetEquity > 0 ? `&target=${targetEquity}` : ''}`,
+                '_blank'
+              )}
             />
           ) : !selectedId ? (
             <div className="bg-card rounded-lg p-8 text-center text-muted-foreground">

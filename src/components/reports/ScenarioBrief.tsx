@@ -1,5 +1,5 @@
 import { ScenarioAreaChart, CHART_COLORS } from '@/components/charts'
-import { deriveMetrics, buildDiff } from '@/components/shared/ScenarioCompareTable'
+import { deriveMetrics, buildDiff, COMPARE_ROWS, winnerIndex } from '@/components/shared/ScenarioCompareTable'
 import { briefRiskMetrics } from '@/utils/briefMetrics'
 import { formatCurrency, formatPercent } from '@/utils/currency'
 import { formatDate } from '@/utils/dates'
@@ -7,7 +7,10 @@ import type { ScenarioResults, RiskFactor } from '@/types'
 
 export interface BriefItem {
   scenario: { id: number; name: string; base_date: string; projection_years: number }
-  results: ScenarioResults
+  // Nullable for comparison only: a scenario that has never been run still earns a column, marked
+  // "(no run)", exactly as the on-screen table shows it. The single-scenario brief requires results
+  // and its caller guards for that.
+  results: ScenarioResults | null
 }
 
 const BAND_CLS: Record<string, string> = {
@@ -85,13 +88,15 @@ function Header({ title, subtitle }: { title: string; subtitle: string }) {
   )
 }
 
-export function ScenarioBrief({ items, topRisks }: { items: BriefItem[]; topRisks: RiskFactor[] }) {
-  const isCompare = items.length === 2
+export function ScenarioBrief({ items, topRisks, targetEquity = 0 }: { items: BriefItem[]; topRisks: RiskFactor[]; targetEquity?: number }) {
+  // Any multi-scenario brief is a comparison. This was previously `=== 2`, so exporting a
+  // comparison of three or more silently rendered a single-scenario brief of the first one.
+  const isCompare = items.length >= 2
 
   return (
     <div className="light bg-white text-gray-900 w-[794px] p-8 space-y-5">
       {isCompare ? (
-        <CompareBrief items={items} topRisks={topRisks} />
+        <CompareBrief items={items} topRisks={topRisks} targetEquity={targetEquity} />
       ) : (
         <SingleBrief item={items[0]} topRisks={topRisks} />
       )}
@@ -104,6 +109,7 @@ export function ScenarioBrief({ items, topRisks }: { items: BriefItem[]; topRisk
 
 function SingleBrief({ item, topRisks }: { item: BriefItem; topRisks: RiskFactor[] }) {
   const { scenario, results } = item
+  if (!results) return null   // caller (ScenarioBriefPage) already renders an empty-state instead
   const chartData = results.months as unknown as Record<string, string | number | undefined>[]
   const keys = [
     { key: 'total_equity', name: 'Equity', color: CHART_COLORS.success },
@@ -123,48 +129,81 @@ function SingleBrief({ item, topRisks }: { item: BriefItem; topRisks: RiskFactor
   )
 }
 
-const COMPARE_ROWS: { label: string; key: string; fmt: (v: number) => string }[] = [
-  { label: 'End Equity', key: 'end_equity', fmt: v => formatCurrency(v) },
-  { label: 'Equity Growth', key: 'equity_growth_pct', fmt: v => formatPercent(v) },
-  { label: 'Total Cashflow', key: 'total_cashflow', fmt: v => formatCurrency(v) },
-  { label: 'Avg Monthly CF', key: 'avg_monthly_cf', fmt: v => formatCurrency(v) },
-  { label: 'Peak LTV', key: 'peak_ltv', fmt: v => `${v.toFixed(1)}%` },
-  { label: 'Cover Ratio', key: 'min_cover_ratio', fmt: v => `${v.toFixed(2)}×` },
-  { label: 'Liquidity (min cash)', key: 'liquidity', fmt: v => formatCurrency(v) },
-  { label: 'Final Properties', key: 'final_properties', fmt: v => String(v) },
-]
+function CompareBrief({ items, topRisks, targetEquity }: { items: BriefItem[]; topRisks: RiskFactor[]; targetEquity: number }) {
+  const metrics = items.map(it => deriveMetrics(it.results, targetEquity))
 
-function CompareBrief({ items, topRisks }: { items: BriefItem[]; topRisks: RiskFactor[] }) {
-  const a = deriveMetrics(items[0].results, 0)
-  const b = deriveMetrics(items[1].results, 0)
-  const diff = a && b ? buildDiff(a, b) : []
+  // The page is a fixed 794px, so unlike the on-screen table there is nothing to scroll into.
+  // Tighten type and padding as columns are added so 5-6 scenarios still fit the width.
+  const n = items.length
+  const cell = n >= 5 ? 'text-[10px] px-1.5' : n === 4 ? 'text-[11px] px-2' : 'text-xs px-3'
+  const head = n >= 5 ? 'text-[10px] px-1.5' : n === 4 ? 'text-[11px] px-2' : 'text-sm px-3'
+
+  // The narrative diff is inherently pairwise, so it only applies to an exact pair — same rule the
+  // on-screen table uses.
+  const pairDiff = n === 2 && metrics[0] && metrics[1] ? buildDiff(metrics[0], metrics[1]) : null
+  const firstWithResults = items.find(it => it.results)
+
   return (
     <>
-      <Header title="Scenario Comparison" subtitle={`${items[0].scenario.name} vs ${items[1].scenario.name}`} />
-      <table className="w-full text-sm border-collapse">
+      <Header
+        title="Scenario Comparison"
+        subtitle={n === 2
+          ? `${items[0].scenario.name} vs ${items[1].scenario.name}`
+          : `${n} scenarios · ${items.map(it => it.scenario.name).join(' · ')}`}
+      />
+
+      <table className="w-full border-collapse">
         <thead>
           <tr className="border-b border-gray-200">
-            <th className="text-left py-2 pr-4 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Metric</th>
-            {items.map(it => <th key={it.scenario.id} className="text-right py-2 px-3 font-semibold text-gray-900">{it.scenario.name}</th>)}
+            <th className="text-left py-2 pr-3 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Metric</th>
+            {items.map(it => (
+              <th key={it.scenario.id} className={`text-right py-2 font-semibold text-gray-900 ${head}`}>
+                {it.scenario.name}
+                {!it.results && <span className="ml-1 font-normal text-gray-400">(no run)</span>}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
-          {COMPARE_ROWS.map(row => (
-            <tr key={row.key} className="border-b border-gray-100">
-              <td className="py-1.5 pr-4 text-xs text-gray-500">{row.label}</td>
-              <td className="py-1.5 px-3 text-right tabular-nums text-gray-900">{a ? row.fmt(a[row.key as keyof typeof a] as number) : '—'}</td>
-              <td className="py-1.5 px-3 text-right tabular-nums text-gray-900">{b ? row.fmt(b[row.key as keyof typeof b] as number) : '—'}</td>
-            </tr>
-          ))}
+          {COMPARE_ROWS.map(row => {
+            const winner = row.bestHighest !== null ? winnerIndex(metrics, row.key, row.bestHighest) : -1
+            return (
+              <tr key={row.key} className="border-b border-gray-100">
+                <td className="py-1.5 pr-3 text-[11px] text-gray-500 whitespace-nowrap">{row.label}</td>
+                {metrics.map((m, i) => {
+                  const isWinner = winner === i && m !== null
+                  return (
+                    <td
+                      key={i}
+                      className={`py-1.5 text-right tabular-nums whitespace-nowrap ${cell} ${
+                        isWinner ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-gray-900'
+                      }`}
+                    >
+                      {m ? row.format(m[row.key] as number) : '—'}
+                      {isWinner && <span className="ml-1 opacity-70">★</span>}
+                    </td>
+                  )
+                })}
+              </tr>
+            )
+          })}
         </tbody>
       </table>
-      <div className="border border-gray-200 rounded-md p-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{items[1].scenario.name} vs {items[0].scenario.name}</p>
-        <p className="text-sm text-gray-800 mt-1">
-          {diff.length > 0 ? `${items[1].scenario.name} delivers ${diff.join(', ')} vs ${items[0].scenario.name}.` : 'No material differences between these two scenarios.'}
-        </p>
-      </div>
-      <RisksBlock results={items[0].results} topRisks={topRisks} />
+
+      <p className="text-[10px] text-gray-400">★ Best in row</p>
+
+      {pairDiff && (
+        <div className="border border-gray-200 rounded-md p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{items[1].scenario.name} vs {items[0].scenario.name}</p>
+          <p className="text-sm text-gray-800 mt-1">
+            {pairDiff.length > 0
+              ? `${items[1].scenario.name} delivers ${pairDiff.join(', ')} vs ${items[0].scenario.name}.`
+              : 'No material differences between these two scenarios.'}
+          </p>
+        </div>
+      )}
+
+      {firstWithResults && <RisksBlock results={firstWithResults.results!} topRisks={topRisks} />}
     </>
   )
 }

@@ -1,6 +1,15 @@
 import { defineConfig } from 'vitest/config'
+import path from 'path'
 
 export default defineConfig({
+  // Mirrors the '@' alias in vite.config.ts. Without it, any test importing a src module that
+  // itself uses '@/...' fails to resolve — which previously limited src coverage to modules with
+  // no alias imports of their own.
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
   test: {
     globals: true,
     environment: 'node',

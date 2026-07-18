@@ -12,7 +12,8 @@ interface Props {
   data: CompareResult[]
   isLoading: boolean
   onExit: () => void
-  onExport?: () => void
+  // Receives the live target-equity value so the exported brief can reproduce "Time to Target".
+  onExport?: (targetEquity: number) => void
 }
 
 export function deriveMetrics(results: ScenarioResults | null, targetEquity: number) {
@@ -32,10 +33,15 @@ export function deriveMetrics(results: ScenarioResults | null, targetEquity: num
     monthsToTarget = idx === -1 ? Infinity : idx
   }
   return {
+    // Taken from the projection itself rather than scenario.projection_years, which the
+    // /scenarios/compare endpoint doesn't return — and this is the span actually modelled.
+    projection_months: months.length,
     end_equity:        summary.end_equity,
     equity_growth_pct: summary.equity_growth_pct,
     total_cashflow:    summary.total_cashflow,
     avg_monthly_cf:    summary.avg_monthly_cashflow,
+    ending_monthly_cf: summary.ending_monthly_cashflow ?? 0,
+    ending_monthly_cf_posttax: summary.ending_monthly_cashflow_posttax ?? summary.ending_monthly_cashflow ?? 0,
     peak_ltv:          Math.round(peakLtv * 10) / 10,
     min_cover_ratio:   summary.min_cover_ratio ?? 0,
     liquidity:         summary.min_cumulative_cashflow ?? 0,
@@ -50,7 +56,7 @@ export function deriveMetrics(results: ScenarioResults | null, targetEquity: num
   }
 }
 
-type Metrics = NonNullable<ReturnType<typeof deriveMetrics>>
+export type Metrics = NonNullable<ReturnType<typeof deriveMetrics>>
 
 function formatMonths(v: number): string {
   if (Number.isNaN(v)) return '—'
@@ -62,16 +68,24 @@ function formatMonths(v: number): string {
   return `${years}y ${months}mo`
 }
 
-const ROWS: {
+// Exported so the printable brief (components/reports/ScenarioBrief.tsx) renders exactly the same
+// metrics as the on-screen table — the PDF previously kept its own reduced copy and drifted.
+export const COMPARE_ROWS: {
   label: string
   key: keyof Metrics
   format: (v: number) => string
   bestHighest: boolean | null  // null = no winner highlighted
 }[] = [
+  // Horizon first: end-of-projection figures below are only comparable between scenarios run over
+  // the same span, so a mismatch needs to be visible before anything else is read. No winner —
+  // a longer projection isn't better, just different.
+  { label: 'Projection Length',  key: 'projection_months', format: formatMonths,                    bestHighest: null  },
   { label: 'End Equity',         key: 'end_equity',        format: v => formatCurrency(v),         bestHighest: true  },
   { label: 'Equity Growth',      key: 'equity_growth_pct', format: v => formatPercent(v),           bestHighest: true  },
   { label: 'Total Cashflow',     key: 'total_cashflow',    format: v => formatCurrency(v),          bestHighest: true  },
   { label: 'Avg Monthly CF',     key: 'avg_monthly_cf',    format: v => formatCurrency(v),          bestHighest: true  },
+  { label: 'Ending CF / mo',     key: 'ending_monthly_cf', format: v => formatCurrency(v),          bestHighest: true  },
+  { label: 'Ending CF / mo (post-tax)', key: 'ending_monthly_cf_posttax', format: v => formatCurrency(v), bestHighest: true },
   { label: 'Peak LTV',           key: 'peak_ltv',          format: v => `${v.toFixed(1)}%`,         bestHighest: false },
   { label: 'Total Value',        key: 'total_value',       format: v => formatCurrency(v),          bestHighest: true  },
   { label: 'Outstanding Debt',   key: 'total_debt',        format: v => formatCurrency(v),          bestHighest: false },
@@ -85,7 +99,7 @@ const ROWS: {
   { label: 'Cash-on-Cash',       key: 'cash_on_cash_pct',  format: v => Number.isNaN(v) ? '—' : formatPercent(v),  bestHighest: true },
 ]
 
-function winnerIndex(metrics: (Metrics | null)[], key: keyof Metrics, bestHighest: boolean): number {
+export function winnerIndex(metrics: (Metrics | null)[], key: keyof Metrics, bestHighest: boolean): number {
   let best: number | null = null
   let idx = -1
   metrics.forEach((m, i) => {
@@ -169,7 +183,7 @@ export function ScenarioCompareTable({ data, isLoading, onExit, onExport }: Prop
         <div className="flex items-center gap-2">
           {onExport && (
             <button
-              onClick={onExport}
+              onClick={() => onExport(targetEquity)}
               className="flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-md text-xs text-muted-foreground hover:bg-accent"
             >
               <FileDown size={12} /> Export PDF
@@ -223,7 +237,7 @@ export function ScenarioCompareTable({ data, isLoading, onExit, onExport }: Prop
               </tr>
             </thead>
             <tbody>
-              {ROWS.map(row => {
+              {COMPARE_ROWS.map(row => {
                 const winner = row.bestHighest !== null
                   ? winnerIndex(allMetrics, row.key, row.bestHighest)
                   : -1
