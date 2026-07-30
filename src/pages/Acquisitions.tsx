@@ -21,8 +21,10 @@ const STAGES: { id: AcquisitionStage; label: string; color: string }[] = [
   { id: 'under_offer', label: 'Under Offer', color: 'border-t-orange-400' },
   { id: 'due_diligence', label: 'Due Diligence', color: 'border-t-yellow-400' },
   { id: 'exchanged', label: 'Exchanged', color: 'border-t-green-400' },
+  { id: 'completed', label: 'Completed', color: 'border-t-emerald-500' },
   { id: 'rejected', label: 'Rejected', color: 'border-t-red-400' },
 ]
+const STAGE_IDS = new Set<string>(STAGES.map(s => s.id))
 
 const oppSchema = z.object({
   address: z.string().min(1),
@@ -86,6 +88,11 @@ export default function Acquisitions() {
   const oppsByStage = (stage: AcquisitionStage) =>
     (opportunities ?? []).filter(o => o.stage === stage)
 
+  // Belt-and-braces: any opportunity whose stage isn't a known column (a NULL stage from the
+  // former edit bug, or a future/unhandled value) would otherwise be counted but rendered nowhere.
+  // Surface them in a catch-all column so a record can never silently disappear again.
+  const orphans = (opportunities ?? []).filter(o => !STAGE_IDS.has(o.stage as string))
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -104,8 +111,20 @@ export default function Acquisitions() {
           {STAGES.map(stage => (
             <StageColumn key={stage.id} stage={stage} cards={oppsByStage(stage.id)} onCardClick={setSelectedOpp} />
           ))}
+          {orphans.length > 0 && (
+            <StageColumn
+              stage={{ id: 'uncategorised' as AcquisitionStage, label: 'Uncategorised', color: 'border-t-red-500' }}
+              cards={orphans}
+              onCardClick={setSelectedOpp}
+            />
+          )}
         </div>
       </DndContext>
+      {orphans.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {orphans.length} opportunit{orphans.length === 1 ? 'y has' : 'ies have'} no pipeline stage set — drag {orphans.length === 1 ? 'it' : 'them'} into a column to restore.
+        </p>
+      )}
 
       {/* Detail sheet */}
       {selectedOpp && (

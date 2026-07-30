@@ -65,13 +65,17 @@ router.put('/:id', (req, res) => {
   try {
     const id = Number(req.params.id)
     const d = req.body
+    // stage is managed by drag-and-drop (PATCH /:id/stage), not the edit form — which sends no
+    // stage field. Binding an undefined d.stage here silently NULLed it (better-sqlite3 coerces
+    // undefined → NULL), and a NULL stage matches no Kanban column, so the card vanished while the
+    // count still included it. COALESCE keeps the existing stage whenever none is supplied.
     execute(
-      `UPDATE acquisition_opportunities SET address=?, town=?, postcode=?, stage=?, property_type=?,
+      `UPDATE acquisition_opportunities SET address=?, town=?, postcode=?, stage=COALESCE(?, stage), property_type=?,
         bedrooms=?, asking_price=?, estimated_value=?, expected_rent=?, repair_costs=?,
         deposit_percent=?, mortgage_rate=?, notes=?, agent_name=?, agent_phone=?,
         agent_email=?, source=?, updated_at=datetime('now')
        WHERE id=?`,
-      [d.address, d.town ?? null, d.postcode ?? null, d.stage, d.property_type,
+      [d.address, d.town ?? null, d.postcode ?? null, d.stage ?? null, d.property_type,
        d.bedrooms ?? null, d.asking_price ?? null, d.estimated_value ?? null,
        d.expected_rent ?? null, d.repair_costs ?? 0, d.deposit_percent ?? 25,
        d.mortgage_rate ?? 5.5, d.notes ?? null, d.agent_name ?? null,
